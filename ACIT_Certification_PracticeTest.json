@@ -1,0 +1,102 @@
+{
+    "1": {
+        "question": "Which organization oversees international trade rules and resolves disputes?",
+        "options": {
+            "a": "IMF",
+            "b": "WTO",
+            "c": "UNCTAD",
+            "d": "WCO"
+        },
+        "answer": "b"
+    },
+    "2": {
+        "question": "INCOTERMS are used to:",
+        "options": {
+            "a": "Determine quality standards",
+            "b": "Define trade tariffs",
+            "c": "Define responsibilities of buyers and sellers",
+            "d": "Determine customs duties"
+        },
+        "answer": "c"
+    },
+    "3": {
+        "question": "What is a Letter of Credit (LC)?",
+        "options": {
+            "a": "An invoice from the exporter",
+            "b": "A payment order from the importer",
+            "c": "A financial guarantee by a bank",
+            "d": "A receipt issued by customs"
+        },
+        "answer": "c"
+    },
+    "4": {
+        "question": "Which document is issued by a carrier as a receipt of cargo and contract of carriage?",
+        "options": {
+            "a": "Bill of Entry",
+            "b": "Commercial Invoice",
+            "c": "Certificate of Origin",
+            "d": "Bill of Lading"
+        },
+        "answer": "d"
+    },
+    "5": {
+        "question": "What is the primary goal of international trade agreements?",
+        "options": {
+            "a": "Increase tariffs",
+            "b": "Simplify domestic regulations",
+            "c": "Reduce trade barriers",
+            "d": "Promote regional monopolies"
+        },
+        "answer": "c"
+    },
+    "6": {
+        "question": "Which organization oversees international trade rules and resolves disputes?",
+        "options": {
+            "a": "IMF",
+            "b": "WTO",
+            "c": "UNCTAD",
+            "d": "WCO"
+        },
+        "answer": "b"
+    },
+    "7": {
+        "question": "INCOTERMS are used to:",
+        "options": {
+            "a": "Determine quality standards",
+            "b": "Define trade tariffs",
+            "c": "Define responsibilities of buyers and sellers",
+            "d": "Determine customs duties"
+        },
+        "answer": "c"
+    },
+    "8": {
+        "question": "What is a Letter of Credit (LC)?",
+        "options": {
+            "a": "An invoice from the exporter",
+            "b": "A payment order from the importer",
+            "c": "A financial guarantee by a bank",
+            "d": "A receipt issued by customs"
+        },
+        "answer": "c"
+    },
+    "9": {
+        "question": "Which document is issued by a carrier as a receipt of cargo and contract of carriage?",
+        "options": {
+            "a": "Bill of Entry",
+            "b": "Commercial Invoice",
+            "c": "Certificate of Origin",
+            "d": "Bill of Lading"
+        },
+        "answer": "d"
+    },
+    "10": {
+        "question": "What is the primary goal of international trade agreements?",
+        "options": {
+            "a": "Increase tariffs",
+            "b": "Simplify domestic regulations",
+            "c": "Reduce trade barriers",
+            "d": "Promote regional monopolies"
+        },
+        "answer": "c"
+    }
+}
