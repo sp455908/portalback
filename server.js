@@ -5,6 +5,7 @@ const app = require('./app');
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://localhost:8080",
   "https://iiftl-portal.vercel.app",
   "https://your-frontend-domain.onrender.com" // Add your frontend Render domain here
 ];

@@ -48,7 +48,10 @@ const corsOptions = {
     'Content-Type',
     'Authorization',
     'X-Requested-With',
-    'Accept'
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
   ],
   exposedHeaders: ['set-cookie', 'Authorization'],
   maxAge: 86400, // 24 hours
@@ -65,8 +68,11 @@ app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(cookieParser()); // Parse cookies
 
-// Apply CORS middleware - but don't handle OPTIONS here since it's handled in the serverless function
+// Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Handle CORS preflight requests
+app.options('*', cors(corsOptions));
 
 // API Routes
 app.use('/api/auth', authRoutes);
