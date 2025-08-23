@@ -1,0 +1,134 @@
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize');
+const xss = require('xss-clean');
+const hpp = require('hpp');
+
+// Rate limiting configuration
+const createRateLimiter = (windowMs, max, message) => {
+  return rateLimit({
+    windowMs,
+    max,
+    message: {
+      status: 'fail',
+      message: message || 'Too many requests from this IP, please try again later.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+};
+
+// Security middleware configuration
+const securityMiddleware = {
+  // Basic security headers
+  basic: helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+        scriptSrc: ["'self'"],
+        connectSrc: ["'self'", "https://iiftl-portal.vercel.app"],
+        frameSrc: ["'self'", "https://iiftl-portal.vercel.app"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }),
+
+  // Rate limiters
+  authLimiter: createRateLimiter(
+    15 * 60 * 1000, // 15 minutes
+    5, // 5 attempts
+    'Too many login attempts, please try again in 15 minutes.'
+  ),
+
+  generalLimiter: createRateLimiter(
+    15 * 60 * 1000, // 15 minutes
+    100, // 100 requests
+    'Too many requests from this IP, please try again later.'
+  ),
+
+  // Input sanitization
+  sanitize: [
+    mongoSanitize(), // Prevent NoSQL injection
+    xss(), // Prevent XSS attacks
+    hpp(), // Prevent HTTP Parameter Pollution
+  ],
+
+  // CSRF protection
+  csrf: (req, res, next) => {
+    // Skip CSRF for GET requests and public endpoints
+    if (req.method === 'GET' || req.path.startsWith('/api/health') || req.path.startsWith('/api/debug')) {
+      return next();
+    }
+
+    const token = req.headers['x-csrf-token'] || req.body._csrf;
+    const sessionToken = req.session?.csrfToken;
+
+    if (!token || !sessionToken || token !== sessionToken) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'CSRF token validation failed'
+      });
+    }
+
+    next();
+  },
+
+  // Input validation middleware
+  validateInput: (req, res, next) => {
+    // Sanitize and validate email
+    if (req.body.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(req.body.email)) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Invalid email format'
+        });
+      }
+      req.body.email = req.body.email.toLowerCase().trim();
+    }
+
+    // Sanitize and validate password
+    if (req.body.password) {
+      if (typeof req.body.password !== 'string' || req.body.password.length < 6) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Password must be at least 6 characters long'
+        });
+      }
+    }
+
+    // Sanitize string inputs
+    const stringFields = ['firstName', 'lastName', 'phone', 'address'];
+    stringFields.forEach(field => {
+      if (req.body[field] && typeof req.body[field] === 'string') {
+        req.body[field] = req.body[field].trim().replace(/[<>]/g, '');
+      }
+    });
+
+    next();
+  },
+
+  // Request logging for security monitoring
+  securityLog: (req, res, next) => {
+    const securityEvents = [
+      'login',
+      'register',
+      'password-reset',
+      'admin-action'
+    ];
+
+    if (securityEvents.some(event => req.path.includes(event))) {
+      console.log(`[SECURITY] ${req.method} ${req.path} from ${req.ip} at ${new Date().toISOString()}`);
+    }
+
+    next();
+  }
+};
+
+module.exports = securityMiddleware; 
