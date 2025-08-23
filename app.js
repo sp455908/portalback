@@ -21,9 +21,10 @@ const batchRoutes = require('./routes/batch.routes');
 
 const app = express();
 
-// Enhanced CORS configuration for Vercel deployment
+// Enhanced CORS configuration for Render deployment
 const allowedOrigins = [
   'https://iiftl-portal.vercel.app',
+  'https://your-frontend-domain.onrender.com', // Add your frontend Render domain here
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:8080'
@@ -61,11 +62,11 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 })); // Security headers first
 app.use(morgan('dev')); // Logging
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+app.use(express.json({ limit: '10mb' })); // Parse JSON bodies with size limit
+app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parse URL-encoded bodies
 app.use(cookieParser()); // Parse cookies
 
-// Apply CORS middleware - but don't handle OPTIONS here since it's handled in the serverless function
+// Apply CORS middleware
 app.use(cors(corsOptions));
 
 // API Routes
@@ -86,7 +87,19 @@ app.get('/api/health', (req, res) => {
     status: 'success',
     message: 'API is running',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || 3000
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'IIFTL Backend API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -98,8 +111,7 @@ app.use((req, res, next) => {
   });
 });
 
-// Global error handler
+// Error handling middleware
 app.use(errorHandler);
 
-// Export the configured app
 module.exports = app;
