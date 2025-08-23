@@ -18,6 +18,9 @@ const examRoutes = require('./routes/exam.routes');
 const materialRoutes = require('./routes/material.routes');
 const practiceTestRoutes = require('./routes/practiceTest.routes');
 const batchRoutes = require('./routes/batch.routes');
+const settingsRoutes = require('./routes/settings.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
+const securityRoutes = require('./routes/security.routes');
 
 const app = express();
 
@@ -85,6 +88,9 @@ app.use('/api/exams', examRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/practice-tests', practiceTestRoutes);
 app.use('/api/batches', batchRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/security', securityRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
