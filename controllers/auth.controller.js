@@ -77,6 +77,8 @@ exports.register = async (req, res, next) => {
     createSendToken(newUser, 201, res);
 
   } catch (err) {
+    console.error('Registration error:', err);
+    
     // Handle validation errors
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(val => val.message);
@@ -86,10 +88,27 @@ exports.register = async (req, res, next) => {
       });
     }
     
+    // Handle Sequelize validation errors
+    if (err.name === 'SequelizeValidationError') {
+      const messages = err.errors.map(val => val.message);
+      return res.status(400).json({
+        status: 'fail',
+        message: messages.join('. ')
+      });
+    }
+    
+    // Handle unique constraint violations
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Email already registered'
+      });
+    }
+    
     res.status(500).json({
       status: 'error',
       message: 'An error occurred during registration',
-      error: process.env.NODE_ENV === 'development' ? err : undefined
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };
@@ -110,7 +129,7 @@ exports.login = async (req, res, next) => {
     // 2) Check if user exists && password is correct
     const user = await User.findOne({ where: { email } });
     
-    if (!user || !(await user.comparePassword(password, user.password))) {
+    if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({
         status: 'fail',
         message: 'Incorrect email or password'
