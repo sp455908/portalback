@@ -55,19 +55,86 @@ router.get('/available', practiceTestController.getAvailablePracticeTests);
 
 // Debug route to check user authentication and role
 router.get('/debug-user', protect, (req, res) => {
+  console.log('🔍 Debug user endpoint called');
+  console.log('🔍 Request user object:', req.user);
+  console.log('🔍 User ID:', req.user?.id);
+  console.log('🔍 User role:', req.user?.role);
+  console.log('🔍 User type:', req.user?.userType);
+  
   res.json({
     status: 'success',
     data: {
       user: {
-        id: req.user._id,
+        id: req.user.id,
         role: req.user.role,
         userType: req.user.userType,
         email: req.user.email,
         firstName: req.user.firstName,
         lastName: req.user.lastName
-      }
+      },
+      headers: {
+        authorization: req.headers.authorization ? 'Present' : 'Missing',
+        contentType: req.headers['content-type']
+      },
+      url: req.url,
+      method: req.method
     }
   });
+});
+
+// Simple test endpoint to verify auth middleware
+router.get('/test-auth', protect, (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'Authentication working',
+    user: {
+      id: req.user.id,
+      role: req.user.role,
+      userType: req.user.userType
+    }
+  });
+});
+
+// Test endpoint that mimics the attempts endpoint but with more debugging
+router.get('/test-attempts', protect, (req, res) => {
+  console.log('🔍 /test-attempts endpoint called');
+  console.log('🔍 Headers:', req.headers);
+  console.log('🔍 User object:', req.user);
+  
+  res.json({
+    status: 'success',
+    message: 'Test attempts endpoint working',
+    user: {
+      id: req.user.id,
+      role: req.user.role,
+      userType: req.user.userType
+    },
+    headers: {
+      authorization: req.headers.authorization ? 'Present' : 'Missing',
+      contentType: req.headers['content-type']
+    }
+  });
+});
+
+// Health check endpoint to verify database connectivity
+router.get('/health', async (req, res) => {
+  try {
+    const { sequelize } = require('../models');
+    await sequelize.authenticate();
+    
+    res.json({
+      status: 'success',
+      message: 'Database connection healthy',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Database connection failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
 // POST /practice-tests/:testId/start
 // Starts a practice test for the user. If the user is on cooldown, returns 403 with { nextAvailableTime }.

@@ -2,6 +2,26 @@ require('dotenv').config();
 const app = require('./app');
 const { sequelize, testConnection, syncDatabase } = require('./config/database');
 
+// Validate critical environment variables
+const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars);
+  console.error('Please check your .env file or environment configuration');
+  process.exit(1);
+}
+
+// Validate JWT_SECRET strength
+if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+  console.error('❌ JWT_SECRET is too short. Must be at least 32 characters long');
+  process.exit(1);
+}
+
+console.log('✅ Environment variables validated successfully');
+console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Set' : 'Missing'} (${process.env.JWT_SECRET?.length || 0} chars)`);
+console.log(`🗄️  Database URL: ${process.env.DATABASE_URL ? 'Set' : 'Missing'}`);
+
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",

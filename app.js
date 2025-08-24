@@ -99,6 +99,22 @@ app.use(cors(corsOptions));
 // Handle CORS preflight requests
 app.options('*', cors(corsOptions));
 
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log('🌐 Incoming request:', {
+    method: req.method,
+    url: req.url,
+    path: req.path,
+    headers: {
+      authorization: req.headers.authorization ? 'Bearer token present' : 'No auth header',
+      origin: req.headers.origin,
+      'user-agent': req.headers['user-agent']
+    },
+    timestamp: new Date().toISOString()
+  });
+  next();
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

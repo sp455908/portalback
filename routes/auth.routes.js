@@ -39,10 +39,11 @@ router.get('/check-email', async (req, res) => {
   }
 });
 
-// Add this to auth.routes.js
+// Verify token endpoint
 router.post('/verify-token', protect, (req, res) => {
   res.status(200).json({ valid: true, user: req.user });
 });
+
 // Login user
 router.post('/login', authController.login);
 

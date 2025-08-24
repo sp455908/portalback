@@ -464,24 +464,70 @@ exports.submitPracticeTest = async (req, res) => {
 // Get user's test attempts
 exports.getUserTestAttempts = async (req, res) => {
   try {
+    console.log('🔍 getUserTestAttempts called');
+    console.log('🔍 Request user object:', req.user);
+    console.log('🔍 User ID:', req.user?.id);
+    console.log('🔍 User role:', req.user?.role);
+    console.log('🔍 User type:', req.user?.userType);
+    
+    if (!req.user || !req.user.id) {
+      console.log('❌ No user object or user ID found in request');
+      return res.status(401).json({
+        status: 'fail',
+        message: 'User not authenticated'
+      });
+    }
+
+    // Check if user has a valid role
+    const validRoles = ['student', 'corporate', 'government'];
+    if (!req.user.role || !validRoles.includes(req.user.role)) {
+      console.log('❌ User has invalid role:', req.user.role);
+      return res.status(403).json({
+        status: 'fail',
+        message: 'User role not authorized for this endpoint',
+        userRole: req.user.role,
+        allowedRoles: validRoles
+      });
+    }
+
+    console.log('🔍 Querying TestAttempt for user ID:', req.user.id);
+    
     const testAttempts = await TestAttempt.findAll({
       where: { userId: req.user.id },
       include: [{
         model: PracticeTest,
-        as: 'practiceTest',
+        as: 'test',
         attributes: ['title', 'category']
       }],
       order: [['createdAt', 'DESC']]
     });
+
+    console.log('✅ Found test attempts:', testAttempts.length);
 
     res.status(200).json({
       status: 'success',
       data: { testAttempts }
     });
   } catch (err) {
+    console.error('❌ Error in getUserTestAttempts:', err);
+    console.error('❌ Error details:', {
+      name: err.name,
+      message: err.message,
+      stack: err.stack
+    });
+    
+    // Check if it's a database connection error
+    if (err.name === 'SequelizeConnectionError' || err.name === 'SequelizeHostNotFoundError') {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Database connection error'
+      });
+    }
+    
     res.status(500).json({
       status: 'error',
-      message: 'Failed to fetch test attempts'
+      message: 'Failed to fetch test attempts',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };
