@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const { sequelize } = require('../config/database');
 
@@ -75,7 +75,7 @@ const User = sequelize.define('User', {
           where: {
             role: 'student',
             studentId: {
-              [sequelize.Op.like]: `IIFTL-${year}-%`
+              [Op.like]: `IIFTL-${year}-%`
             }
           }
         });
