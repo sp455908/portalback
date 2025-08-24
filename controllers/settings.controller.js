@@ -1,4 +1,4 @@
-const { Settings } = require('../models');
+const { Settings, User } = require('../models');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
@@ -9,7 +9,7 @@ if (!Settings) {
 
 exports.getSettings = catchAsync(async (req, res) => {
   try {
-    const settings = await Settings.getInstance();
+    const settings = await Settings.findOne();
     
     res.status(200).json({
       status: 'success',
@@ -28,22 +28,31 @@ exports.getSettings = catchAsync(async (req, res) => {
 });
 
 exports.updateSettings = catchAsync(async (req, res) => {
-  const settings = await Settings.getInstance();
-  
-  // Update settings with provided data
-  Object.assign(settings, req.body);
-  settings.updatedBy = req.user.id;
-  settings.updatedAt = new Date();
-  
-  await settings.save();
-  
-  res.status(200).json({
-    status: 'success',
-    message: 'Settings updated successfully',
-    data: {
-      settings
+  try {
+    let settings = await Settings.findOne();
+    
+    if (!settings) {
+      // Create default settings if none exist
+      settings = await Settings.create(req.body);
+    } else {
+      // Update existing settings
+      await settings.update(req.body);
     }
-  });
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Settings updated successfully',
+      data: {
+        settings
+      }
+    });
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to update settings'
+    });
+  }
 });
 
 // Get maintenance status
@@ -68,9 +77,9 @@ exports.getMaintenanceStatus = async (req, res) => {
 };
 
 exports.checkRegistrationEnabled = catchAsync(async (req, res, next) => {
-  const settings = await Settings.getInstance();
+  const settings = await Settings.findOne();
   
-  if (!settings.registrationEnabled) {
+  if (settings && !settings.registrationEnabled) {
     return next(new AppError('User registration is currently disabled', 403));
   }
   
@@ -78,9 +87,9 @@ exports.checkRegistrationEnabled = catchAsync(async (req, res, next) => {
 });
 
 exports.checkMaintenanceMode = catchAsync(async (req, res, next) => {
-  const settings = await Settings.getInstance();
+  const settings = await Settings.findOne();
   
-  if (settings.maintenanceMode) {
+  if (settings && settings.maintenanceMode) {
     return next(new AppError('Platform is currently under maintenance', 503));
   }
   
@@ -88,47 +97,66 @@ exports.checkMaintenanceMode = catchAsync(async (req, res, next) => {
 });
 
 exports.resetSettings = catchAsync(async (req, res) => {
-  const settings = await Settings.getInstance();
-  
-  // Reset to default values
-  settings.siteName = "IIFTL Portal";
-  settings.siteDescription = "Indian Institute of Foreign Trade & Logistics";
-  settings.contactEmail = "info@iiftl.com";
-  settings.supportPhone = "+91 9043575263";
-  settings.maintenanceMode = false;
-  settings.registrationEnabled = true;
-  settings.emailNotifications = true;
-  settings.smsNotifications = false;
-  settings.autoApproval = false;
-  settings.sessionTimeout = 30;
-  settings.maxFileSize = 10;
-  settings.updatedBy = req.user._id;
-  settings.updatedAt = new Date();
-  
-  await settings.save();
-  
-  res.status(200).json({
-    status: 'success',
-    message: 'Settings reset to defaults',
-    data: {
-      settings
+  try {
+    let settings = await Settings.findOne();
+    
+    if (!settings) {
+      // Create default settings
+      settings = await Settings.create({
+        siteName: "IIFTL Portal",
+        siteDescription: "Indian Institute of Foreign Trade & Logistics",
+        contactEmail: "info@iiftl.com",
+        supportPhone: "+91 9043575263",
+        maintenanceMode: false,
+        registrationEnabled: true,
+        emailNotifications: true,
+        smsNotifications: false,
+        autoApproval: false,
+        sessionTimeout: 30,
+        maxFileSize: 10
+      });
+    } else {
+      // Reset to default values
+      await settings.update({
+        siteName: "IIFTL Portal",
+        siteDescription: "Indian Institute of Foreign Trade & Logistics",
+        contactEmail: "info@iiftl.com",
+        supportPhone: "+91 9043575263",
+        maintenanceMode: false,
+        registrationEnabled: true,
+        emailNotifications: true,
+        smsNotifications: false,
+        autoApproval: false,
+        sessionTimeout: 30,
+        maxFileSize: 10
+      });
     }
-  });
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Settings reset to defaults',
+      data: {
+        settings
+      }
+    });
+  } catch (error) {
+    console.error('Error resetting settings:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to reset settings'
+    });
+  }
 }); 
 
 // Get single admin status
 exports.getSingleAdminStatus = async (req, res) => {
   try {
-    const setting = await Settings.findOne({ 
-      where: { key: 'single_admin_only' } 
-    });
-    
     const adminCount = await User.count({ where: { role: 'admin' } });
     
     res.status(200).json({
       status: 'success',
       data: {
-        singleAdminOnly: setting ? setting.value === 'true' : false,
+        singleAdminOnly: true,
         currentAdminCount: adminCount,
         canCreateAdmin: adminCount === 0,
         message: adminCount === 0 

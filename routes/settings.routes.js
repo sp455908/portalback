@@ -5,7 +5,7 @@ const { protect } = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/role.middleware');
 
 // Get all settings (admin only)
-router.get('/', protect, authorize('admin'), settingsController.getAllSettings);
+router.get('/', protect, authorize('admin'), settingsController.getSettings);
 
 // Get maintenance status (public)
 router.get('/maintenance-status', settingsController.getMaintenanceStatus);
