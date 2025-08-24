@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const settingsController = require('../controllers/settings.controller');
-const authMiddleware = require('../middlewares/auth.middleware');
-const roleMiddleware = require('../middlewares/role.middleware');
+const { protect } = require('../middlewares/auth.middleware');
+const authorize = require('../middlewares/role.middleware');
 
-// Get maintenance status (public endpoint) - no auth required
+// Get all settings (admin only)
+router.get('/', protect, authorize('admin'), settingsController.getAllSettings);
+
+// Get maintenance status (public)
 router.get('/maintenance-status', settingsController.getMaintenanceStatus);
 
-// Get settings (admin only)
-router.get('/', authMiddleware.protect, roleMiddleware('admin'), settingsController.getSettings);
+// Get single admin status (public)
+router.get('/single-admin-status', settingsController.getSingleAdminStatus);
 
 // Update settings (admin only)
-router.put('/', authMiddleware.protect, roleMiddleware('admin'), settingsController.updateSettings);
-
-// Reset settings to defaults (admin only)
-router.post('/reset', authMiddleware.protect, roleMiddleware('admin'), settingsController.resetSettings);
+router.put('/', protect, authorize('admin'), settingsController.updateSettings);
 
 module.exports = router; 

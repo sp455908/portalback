@@ -1,6 +1,7 @@
 const { User } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize'); // Added Op for the new updateUser function
 
 // Helper to sign JWT
 const signToken = (id) =>
@@ -34,26 +35,57 @@ exports.getUserById = async (req, res) => {
 // Update user (admin or self)
 exports.updateUser = async (req, res) => {
   try {
-    const updates = { ...req.body };
-    // Prevent role/email change unless admin
-    if (req.user.role !== 'admin') {
-      delete updates.role;
-      delete updates.email;
+    const { userId } = req.params;
+    const updates = req.body;
+
+    // Check if user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found'
+      });
     }
-    // If password is being updated, hash it
-    if (updates.password) {
-      updates.password = await bcrypt.hash(updates.password, 12);
+
+    // Check single admin rule when updating role to admin
+    if (updates.role === 'admin' && user.role !== 'admin') {
+      const adminCount = await User.count({ 
+        where: { 
+          role: 'admin',
+          id: { [Op.ne]: userId } // Exclude current user
+        } 
+      });
+      if (adminCount > 0) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Only one admin user is allowed in the system. Cannot create additional admin users.'
+        });
+      }
     }
-    const user = await User.findByPk(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    
+
+    // Update user
     await user.update(updates);
-    const updatedUser = await User.findByPk(req.params.id, {
-      attributes: { exclude: ['password'] }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'User updated successfully',
+      data: { user }
     });
-    res.json(updatedUser);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error updating user:', err);
+    
+    // Handle single admin rule violation
+    if (err.message === 'Only one admin user is allowed in the system') {
+      return res.status(400).json({
+        status: 'fail',
+        message: err.message
+      });
+    }
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to update user'
+    });
   }
 };
 

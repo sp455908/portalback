@@ -94,7 +94,6 @@ exports.createPracticeTest = async (req, res) => {
 // Get all practice tests (Admin)
 exports.getAllPracticeTests = async (req, res) => {
   try {
-    console.log('getAllPracticeTests called by user:', req.user);
     const practiceTests = await PracticeTest.findAll({
       include: [{
         model: User,
@@ -104,13 +103,11 @@ exports.getAllPracticeTests = async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    console.log('Found practice tests:', practiceTests.length);
     res.status(200).json({
       status: 'success',
       data: { practiceTests }
     });
   } catch (err) {
-    console.error('Error in getAllPracticeTests:', err);
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch practice tests'
@@ -238,13 +235,6 @@ exports.getAvailablePracticeTests = async (req, res) => {
 exports.startPracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
-    console.log('startPracticeTest called:', { 
-      testId, 
-      user: req.user, 
-      userRole: req.user?.role,
-      userType: req.user?.userType 
-    });
-
     // Check if test exists and is active
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest || !practiceTest.isActive) {
@@ -464,14 +454,7 @@ exports.submitPracticeTest = async (req, res) => {
 // Get user's test attempts
 exports.getUserTestAttempts = async (req, res) => {
   try {
-    console.log('🔍 getUserTestAttempts called');
-    console.log('🔍 Request user object:', req.user);
-    console.log('🔍 User ID:', req.user?.id);
-    console.log('🔍 User role:', req.user?.role);
-    console.log('🔍 User type:', req.user?.userType);
-    
     if (!req.user || !req.user.id) {
-      console.log('❌ No user object or user ID found in request');
       return res.status(401).json({
         status: 'fail',
         message: 'User not authenticated'
@@ -481,17 +464,12 @@ exports.getUserTestAttempts = async (req, res) => {
     // Check if user has a valid role
     const validRoles = ['student', 'corporate', 'government'];
     if (!req.user.role || !validRoles.includes(req.user.role)) {
-      console.log('❌ User has invalid role:', req.user.role);
       return res.status(403).json({
         status: 'fail',
-        message: 'User role not authorized for this endpoint',
-        userRole: req.user.role,
-        allowedRoles: validRoles
+        message: 'User role not authorized for this endpoint'
       });
     }
 
-    console.log('🔍 Querying TestAttempt for user ID:', req.user.id);
-    
     const testAttempts = await TestAttempt.findAll({
       where: { userId: req.user.id },
       include: [{
@@ -502,32 +480,14 @@ exports.getUserTestAttempts = async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    console.log('✅ Found test attempts:', testAttempts.length);
-
     res.status(200).json({
       status: 'success',
       data: { testAttempts }
     });
   } catch (err) {
-    console.error('❌ Error in getUserTestAttempts:', err);
-    console.error('❌ Error details:', {
-      name: err.name,
-      message: err.message,
-      stack: err.stack
-    });
-    
-    // Check if it's a database connection error
-    if (err.name === 'SequelizeConnectionError' || err.name === 'SequelizeHostNotFoundError') {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Database connection error'
-      });
-    }
-    
     res.status(500).json({
       status: 'error',
-      message: 'Failed to fetch test attempts',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: 'Failed to fetch test attempts'
     });
   }
 };
@@ -573,7 +533,7 @@ exports.getTestStatistics = async (req, res) => {
   try {
     const { testId } = req.params;
 
-    const test = await PracticeTest.findById(testId);
+    const test = await PracticeTest.findByPk(testId);
     if (!test) {
       return res.status(404).json({
         status: 'fail',
@@ -636,8 +596,6 @@ exports.updatePracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
     const updates = req.body;
-    console.log('Update payload for practice test:', updates);
-
     // If questions are being updated, validate them
     if (updates.questions) {
       if (updates.questions.length < 10) {
@@ -689,7 +647,6 @@ exports.updatePracticeTest = async (req, res) => {
     }
     
     await practiceTest.update({ ...updates, updatedAt: new Date() });
-    console.log('Updated practice test:', practiceTest && practiceTest.targetUserType);
 
     if (!practiceTest) {
       return res.status(404).json({
@@ -1038,7 +995,7 @@ exports.updateTestWithExcel = async (req, res) => {
     }
 
     // Find the existing test
-    const practiceTest = await PracticeTest.findById(testId);
+    const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({
         status: 'fail',
@@ -1168,7 +1125,7 @@ exports.updateTestWithJSON = async (req, res) => {
     const { questionsData, questionsPerTest, duration, passingScore } = req.body;
 
     // Find the existing test
-    const practiceTest = await PracticeTest.findById(testId);
+    const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({
         status: 'fail',
@@ -1254,24 +1211,21 @@ exports.updateTestActiveStatus = async (req, res) => {
       });
     }
 
-    // Update the test active status
-    const updatedTest = await PracticeTest.findByIdAndUpdate(
-      testId,
-      { isActive: Boolean(isActive) },
-      { new: true }
-    );
-
-    if (!updatedTest) {
+    // Find and update the test active status
+    const practiceTest = await PracticeTest.findByPk(testId);
+    if (!practiceTest) {
       return res.status(404).json({
         status: 'fail',
         message: 'Practice test not found'
       });
     }
 
+    await practiceTest.update({ isActive: Boolean(isActive) });
+
     res.status(200).json({
       status: 'success',
       message: `Test ${isActive ? 'activated' : 'archived'} successfully`,
-      data: { test: updatedTest }
+      data: { test: practiceTest }
     });
   } catch (err) {
     res.status(500).json({
@@ -1296,8 +1250,8 @@ exports.setUserCooldown = async (req, res) => {
     }
 
     // Check if user and test exist
-    const user = await User.findById(userId);
-    const test = await PracticeTest.findById(testId);
+    const user = await User.findByPk(userId);
+    const test = await PracticeTest.findByPk(testId);
     
     if (!user || !test) {
       return res.status(404).json({
@@ -1336,24 +1290,29 @@ exports.getTestUsers = async (req, res) => {
     }
 
     // Get all attempts for this test with user details
-    const attempts = await TestAttempt.find({ practiceTestId: testId })
-      .populate('userId', 'firstName lastName email')
-      .sort({ completedAt: -1 });
+    const attempts = await TestAttempt.findAll({
+      where: { practiceTestId: testId },
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['firstName', 'lastName', 'email']
+      }]
+    });
 
     // Group by user and get latest attempt
     const userMap = new Map();
     attempts.forEach(attempt => {
-      if (!userMap.has(attempt.userId._id.toString())) {
-        userMap.set(attempt.userId._id.toString(), {
-          userId: attempt.userId._id,
-          user: attempt.userId,
+      if (!userMap.has(attempt.userId.toString())) {
+        userMap.set(attempt.userId.toString(), {
+          userId: attempt.userId,
+          user: attempt.user,
           lastAttempt: attempt,
           totalAttempts: 1,
           bestScore: attempt.score,
           averageScore: attempt.score
         });
       } else {
-        const userData = userMap.get(attempt.userId._id.toString());
+        const userData = userMap.get(attempt.userId.toString());
         userData.totalAttempts++;
         userData.averageScore = (userData.averageScore + attempt.score) / 2;
         if (attempt.score > userData.bestScore) {
@@ -1393,28 +1352,25 @@ exports.updateTestSettings = async (req, res) => {
       });
     }
 
-    // Update test settings
-    const updatedTest = await PracticeTest.findByIdAndUpdate(
-      testId,
-      { 
-        allowRepeat, 
-        repeatAfterHours, 
-        enableCooldown: enableCooldown !== undefined ? enableCooldown : true 
-      },
-      { new: true }
-    );
-
-    if (!updatedTest) {
+    // Find and update test settings
+    const practiceTest = await PracticeTest.findByPk(testId);
+    if (!practiceTest) {
       return res.status(404).json({
         status: 'fail',
         message: 'Test not found'
       });
     }
 
+    await practiceTest.update({ 
+      allowRepeat, 
+      repeatAfterHours, 
+      enableCooldown: enableCooldown !== undefined ? enableCooldown : true 
+    });
+
     res.status(200).json({
       status: 'success',
       message: 'Test settings updated successfully',
-      data: { test: updatedTest }
+      data: { test: practiceTest }
     });
   } catch (err) {
     res.status(500).json({
@@ -1433,7 +1389,7 @@ exports.updateTestQuestion = async (req, res) => {
     if (isNaN(index)) {
       return res.status(400).json({ status: 'fail', message: 'Invalid question index' });
     }
-    const practiceTest = await PracticeTest.findById(testId);
+    const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({ status: 'fail', message: 'Practice test not found' });
     }
@@ -1463,7 +1419,7 @@ exports.updateTestQuestion = async (req, res) => {
 exports.deleteAttempt = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const attempt = await TestAttempt.findById(attemptId);
+    const attempt = await TestAttempt.findByPk(attemptId);
     if (!attempt) {
       return res.status(404).json({ status: 'fail', message: 'Attempt not found' });
     }
@@ -1471,7 +1427,7 @@ exports.deleteAttempt = async (req, res) => {
     if (String(attempt.userId) !== String(req.user._id)) {
       return res.status(403).json({ status: 'fail', message: 'Not authorized' });
     }
-    await TestAttempt.deleteOne({ _id: attemptId });
+    await TestAttempt.destroy({ where: { id: attemptId } });
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to delete attempt' });
@@ -1494,11 +1450,12 @@ exports.bulkUpdateTestSettings = async (req, res) => {
     if (typeof allowRepeat !== 'undefined') update.allowRepeat = allowRepeat;
     if (typeof repeatAfterHours !== 'undefined') update.repeatAfterHours = repeatAfterHours;
     if (typeof enableCooldown !== 'undefined') update.enableCooldown = enableCooldown;
-    const result = await PracticeTest.updateMany({}, update);
+    
+    const result = await PracticeTest.update(update, { where: {} });
     res.status(200).json({
       status: 'success',
       message: 'Bulk test settings updated',
-      data: { modifiedCount: result.modifiedCount }
+      data: { modifiedCount: result[0] }
     });
   } catch (err) {
     res.status(500).json({
@@ -1511,14 +1468,14 @@ exports.bulkUpdateTestSettings = async (req, res) => {
 exports.downloadAttemptPDF = async (req, res) => {
   try {
     const { testAttemptId } = req.params;
-    const attempt = await TestAttempt.findById(testAttemptId);
+    const attempt = await TestAttempt.findByPk(testAttemptId);
     if (!attempt) return res.status(404).json({ status: 'fail', message: 'Attempt not found' });
 
-    const test = await PracticeTest.findById(attempt.practiceTestId);
+    const test = await PracticeTest.findByPk(attempt.practiceTestId);
     if (!test) return res.status(404).json({ status: 'fail', message: 'Test not found' });
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="PracticeTest_Result_${attempt._id}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="PracticeTest_Result_${attempt.id}.pdf"`);
 
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
     doc.pipe(res);

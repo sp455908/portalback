@@ -46,31 +46,26 @@ exports.updateSettings = catchAsync(async (req, res) => {
   });
 });
 
-exports.getMaintenanceStatus = catchAsync(async (req, res) => {
+// Get maintenance status
+exports.getMaintenanceStatus = async (req, res) => {
   try {
-    console.log('getMaintenanceStatus called');
-    const settings = await Settings.getInstance();
-    console.log('Settings loaded:', settings);
+    const settings = await Settings.findOne();
     
     res.status(200).json({
       status: 'success',
       data: {
-        maintenanceMode: settings.maintenanceMode || false,
-        registrationEnabled: settings.registrationEnabled !== false // Default to true
+        maintenanceMode: settings?.maintenanceMode || false,
+        maintenanceMessage: settings?.maintenanceMessage || '',
+        maintenanceEndTime: settings?.maintenanceEndTime || null
       }
     });
-  } catch (error) {
-    console.error('Error in getMaintenanceStatus:', error);
-    // Return default values if settings can't be loaded
-    res.status(200).json({
-      status: 'success',
-      data: {
-        maintenanceMode: false,
-        registrationEnabled: true
-      }
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch maintenance status'
     });
   }
-});
+};
 
 exports.checkRegistrationEnabled = catchAsync(async (req, res, next) => {
   const settings = await Settings.getInstance();
@@ -120,3 +115,31 @@ exports.resetSettings = catchAsync(async (req, res) => {
     }
   });
 }); 
+
+// Get single admin status
+exports.getSingleAdminStatus = async (req, res) => {
+  try {
+    const setting = await Settings.findOne({ 
+      where: { key: 'single_admin_only' } 
+    });
+    
+    const adminCount = await User.count({ where: { role: 'admin' } });
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        singleAdminOnly: setting ? setting.value === 'true' : false,
+        currentAdminCount: adminCount,
+        canCreateAdmin: adminCount === 0,
+        message: adminCount === 0 
+          ? 'No admin user exists. You can create one.' 
+          : 'Admin user already exists. Only one admin allowed.'
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to get single admin status'
+    });
+  }
+}; 

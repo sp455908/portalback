@@ -68,6 +68,14 @@ const User = sequelize.define('User', {
   timestamps: true, // This will create createdAt and updatedAt
   hooks: {
     beforeCreate: async (user) => {
+      // Check single admin rule
+      if (user.role === 'admin') {
+        const adminCount = await User.count({ where: { role: 'admin' } });
+        if (adminCount > 0) {
+          throw new Error('Only one admin user is allowed in the system');
+        }
+      }
+      
       // Generate student ID for new students
       if (user.role === 'student' && !user.studentId) {
         const year = new Date().getFullYear();
@@ -88,6 +96,19 @@ const User = sequelize.define('User', {
       }
     },
     beforeUpdate: async (user) => {
+      // Check single admin rule when updating role to admin
+      if (user.changed('role') && user.role === 'admin') {
+        const adminCount = await User.count({ 
+          where: { 
+            role: 'admin',
+            id: { [Op.ne]: user.id } // Exclude current user
+          } 
+        });
+        if (adminCount > 0) {
+          throw new Error('Only one admin user is allowed in the system');
+        }
+      }
+      
       // Hash password if it's being updated
       if (user.changed('password')) {
         user.password = await bcrypt.hash(user.password, 12);

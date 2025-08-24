@@ -52,6 +52,17 @@ exports.register = async (req, res, next) => {
       });
     }
 
+    // Check single admin rule
+    if (role === 'admin') {
+      const adminCount = await User.count({ where: { role: 'admin' } });
+      if (adminCount > 0) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Only one admin user is allowed in the system. Admin user already exists.'
+        });
+      }
+    }
+
     // 1) Check if user already exists
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
@@ -105,9 +116,17 @@ exports.register = async (req, res, next) => {
       });
     }
     
+    // Handle single admin rule violation
+    if (err.message === 'Only one admin user is allowed in the system') {
+      return res.status(400).json({
+        status: 'fail',
+        message: err.message
+      });
+    }
+    
     res.status(500).json({
       status: 'error',
-      message: 'An error occurred during registration',
+      message: 'Registration failed',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
