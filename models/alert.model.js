@@ -1,21 +1,54 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const alertSchema = new mongoose.Schema({
-  title:      { type: String, required: true, trim: true },
-  content:    { type: String, required: true },
-  category:   { type: String, required: true }, // e.g., Policy Update, Tax Update, Documentation, etc.
-  priority:   { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
-  date:       { type: Date, default: Date.now },
-  impact:     { type: String },
-  tags:       { type: [String], default: [] },
-  isActive:   { type: Boolean, default: true },
-  createdAt:  { type: Date, default: Date.now },
-  updatedAt:  { type: Date, default: Date.now }
+const Alert = sequelize.define('Alert', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  category: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  priority: {
+    type: DataTypes.ENUM('high', 'medium', 'low'),
+    defaultValue: 'medium'
+  },
+  date: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  impact: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tags: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  }
+}, {
+  timestamps: true,
+  hooks: {
+    beforeUpdate: (alert) => {
+      alert.updatedAt = new Date();
+    }
+  }
 });
 
-alertSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-module.exports = mongoose.model('Alert', alertSchema);
+module.exports = Alert;

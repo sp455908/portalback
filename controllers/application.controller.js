@@ -1,6 +1,4 @@
-const Application = require('../models/application.model');
-const User = require('../models/user.model');
-const Course = require('../models/course.model');
+const { Application, User, Course } = require('../models');
 
 // Create a new application (admission form)
 exports.createApplication = async (req, res) => {
@@ -31,7 +29,7 @@ exports.createApplication = async (req, res) => {
     } = req.body;
 
     // Optionally, associate with logged-in user
-    const userId = req.user ? req.user._id : null;
+    const userId = req.user ? req.user.id : null;
 
     const application = await Application.create({
       userId,
@@ -70,7 +68,9 @@ exports.createApplication = async (req, res) => {
 // Get all applications (admin only)
 exports.getAllApplications = async (req, res) => {
   try {
-    const applications = await Application.find().sort({ submittedAt: -1 });
+    const applications = await Application.findAll({
+      order: [['submittedAt', 'DESC']]
+    });
     res.json(applications);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -80,13 +80,13 @@ exports.getAllApplications = async (req, res) => {
 // Get application by ID (admin or owner)
 exports.getApplicationById = async (req, res) => {
   try {
-    const application = await Application.findById(req.params.id);
+    const application = await Application.findByPk(req.params.id);
     if (!application) return res.status(404).json({ message: "Application not found" });
 
     // Only admin or owner can view
     if (
       req.user.role !== "admin" &&
-      (!application.userId || application.userId.toString() !== req.user._id.toString())
+      (!application.userId || application.userId.toString() !== req.user.id.toString())
     ) {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -101,11 +101,9 @@ exports.getApplicationById = async (req, res) => {
 exports.updateApplicationStatus = async (req, res) => {
   try {
     const { status, notes } = req.body;
-    const application = await Application.findByIdAndUpdate(
-      req.params.id,
-      { status, notes },
-      { new: true }
-    );
+    const application = await Application.findByPk(req.params.id);
+    if (!application) return res.status(404).json({ message: "Application not found" });
+    await application.update({ status, notes });
     if (!application) return res.status(404).json({ message: "Application not found" });
     res.json(application);
   } catch (err) {
@@ -116,7 +114,9 @@ exports.updateApplicationStatus = async (req, res) => {
 // Delete application (admin only)
 exports.deleteApplication = async (req, res) => {
   try {
-    const application = await Application.findByIdAndDelete(req.params.id);
+    const application = await Application.findByPk(req.params.id);
+    if (!application) return res.status(404).json({ message: "Application not found" });
+    await application.destroy();
     if (!application) return res.status(404).json({ message: "Application not found" });
     res.json({ message: "Application deleted successfully" });
   } catch (err) {
@@ -127,7 +127,10 @@ exports.deleteApplication = async (req, res) => {
 // Get applications for current user
 exports.getMyApplications = async (req, res) => {
   try {
-    const applications = await Application.find({ userId: req.user._id }).sort({ submittedAt: -1 });
+    const applications = await Application.findAll({
+      where: { userId: req.user.id },
+      order: [['submittedAt', 'DESC']]
+    });
     res.json(applications);
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -1,38 +1,96 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const questionSchema = new mongoose.Schema({
-  question: { type: String, required: true },
-  options: { type: [String], required: true },
-  correctAnswer: { type: Number, required: true }, // index of correct option (0-3)
-  explanation: { type: String }, // optional explanation for the answer
-  category: { type: String }, // e.g., "customs", "freight", "documentation"
-  difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },
-  marks: { type: Number, default: 1 }
+const PracticeTest = sequelize.define('PracticeTest', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  category: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  questions: {
+    type: DataTypes.JSON,
+    allowNull: false,
+    defaultValue: []
+  },
+  totalQuestions: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  questionsPerTest: {
+    type: DataTypes.INTEGER,
+    defaultValue: 10
+  },
+  duration: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  passingScore: {
+    type: DataTypes.INTEGER,
+    defaultValue: 70
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  allowRepeat: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  repeatAfterHours: {
+    type: DataTypes.INTEGER,
+    defaultValue: 24
+  },
+  enableCooldown: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  showInPublic: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  targetUserType: {
+    type: DataTypes.ENUM('student', 'corporate', 'government'),
+    allowNull: false,
+    defaultValue: 'student'
+  },
+  courseId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Courses',
+      key: 'id'
+    }
+  },
+  createdBy: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  }
+}, {
+  timestamps: true,
+  hooks: {
+    beforeUpdate: (practiceTest) => {
+      practiceTest.updatedAt = new Date();
+    }
+  }
 });
 
-const practiceTestSchema = new mongoose.Schema({
-  title: { type: String, required: true, trim: true },
-  description: { type: String },
-  category: { type: String, required: true }, // e.g., "F Card", "G Card", "Customs Law"
-  questions: { type: [questionSchema], required: true }, // 150-200 questions
-  totalQuestions: { type: Number, required: true }, // total questions in bank
-  questionsPerTest: { type: Number, default: 10 }, // questions shown per test
-  duration: { type: Number, required: true }, // duration in minutes
-  passingScore: { type: Number, default: 70 }, // passing percentage
-  isActive: { type: Boolean, default: true },
-  allowRepeat: { type: Boolean, default: false }, // admin can enable repeat
-  repeatAfterHours: { type: Number, default: 24 }, // hours before repeat allowed
-  enableCooldown: { type: Boolean, default: true }, // whether cooldown is enabled for this test
-  showInPublic: { type: Boolean, default: false },
-  targetUserType: { type: String, enum: ['student', 'corporate', 'government'], required: true, default: 'student' },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-practiceTestSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-module.exports = mongoose.model('PracticeTest', practiceTestSchema); 
+module.exports = PracticeTest; 

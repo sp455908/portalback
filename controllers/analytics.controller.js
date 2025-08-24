@@ -1,17 +1,5 @@
-const mongoose = require('mongoose');
-const User = require('../models/user.model');
-const Batch = require('../models/batch.model');
-const PracticeTest = require('../models/practiceTest.model');
-const TestAttempt = require('../models/testAttempt.model');
-const Course = require('../models/course.model');
-
-function toObjectId(id) {
-  try {
-    return new mongoose.Types.ObjectId(id);
-  } catch {
-    return null;
-  }
-}
+const { User, Batch, PracticeTest, TestAttempt, Course } = require('../models');
+const { sequelize } = require('../config/database');
 
 // Helper to format safe number average
 function average(numbers) {
@@ -31,28 +19,34 @@ exports.getStudentsProgress = async (req, res) => {
     // 1) Load all students
     const userQuery = { role: 'student' };
     if (search) {
-      userQuery.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { studentId: { $regex: search, $options: 'i' } }
+      userQuery[sequelize.Op.or] = [
+        { firstName: { [sequelize.Op.iLike]: `%${search}%` } },
+        { lastName: { [sequelize.Op.iLike]: `%${search}%` } },
+        { email: { [sequelize.Op.iLike]: `%${search}%` } },
+        { studentId: { [sequelize.Op.iLike]: `%${search}%` } }
       ];
     }
 
-    const totalStudents = await User.countDocuments(userQuery);
-    const students = await User.find(userQuery)
-      .select('firstName lastName email studentId isActive createdAt')
-      .sort({ createdAt: -1 })
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .lean();
+    const totalStudents = await User.count({ where: userQuery });
+    const students = await User.findAll({
+      where: userQuery,
+      attributes: ['id', 'firstName', 'lastName', 'email', 'studentId', 'isActive', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+      limit: limitNum,
+      offset: (pageNum - 1) * limitNum
+    });
 
-    const studentIds = students.map(s => s._id);
+    const studentIds = students.map(s => s.id);
 
     // 2) Load batches containing these students (most students are in exactly one batch by design)
-    const batches = await Batch.find({ students: { $in: studentIds } })
-      .select('batchName students assignedTests')
-      .lean();
+    const batches = await Batch.findAll({
+      where: {
+        id: {
+          [sequelize.Op.in]: studentIds
+        }
+      },
+      attributes: ['id', 'batchName', 'students', 'assignedTests']
+    });
 
     const studentIdToBatch = new Map();
     const allAssignedTestIds = new Set();
@@ -67,24 +61,28 @@ exports.getStudentsProgress = async (req, res) => {
 
     // 3) Load practice tests referenced by those batches (for titles/categories)
     const uniqueTestIds = Array.from(allAssignedTestIds);
-    const tests = await PracticeTest.find({ _id: { $in: uniqueTestIds } })
-      .select('title category')
-      .lean();
-    const testIdToTest = new Map(tests.map(t => [String(t._id), t]));
+    const tests = await PracticeTest.findAll({
+      where: {
+        id: {
+          [sequelize.Op.in]: uniqueTestIds
+        }
+      },
+      attributes: ['id', 'title', 'category']
+    });
+    const testIdToTest = new Map(tests.map(t => [String(t.id), t]));
 
     // 4) Load attempts for these students (optionally filter by batch/test)
-    const attemptsQuery = { userId: { $in: studentIds } };
+    const attemptsQuery = { userId: { [sequelize.Op.in]: studentIds } };
     if (testId) {
-      const tid = toObjectId(testId);
-      if (tid) attemptsQuery.practiceTestId = tid;
+      attemptsQuery.practiceTestId = testId;
     }
     if (batchId) {
-      const bid = toObjectId(batchId);
-      if (bid) attemptsQuery.batchId = bid;
+      attemptsQuery.batchId = batchId;
     }
-    const attempts = await TestAttempt.find(attemptsQuery)
-      .select('userId practiceTestId testTitle score status completedAt startedAt attemptsCount batchId')
-      .lean();
+    const attempts = await TestAttempt.findAll({
+      where: attemptsQuery,
+      attributes: ['id', 'userId', 'practiceTestId', 'testTitle', 'score', 'status', 'completedAt', 'startedAt', 'attemptsCount', 'batchId']
+    });
 
     const attemptsByUser = new Map();
     attempts.forEach(a => {
@@ -95,7 +93,7 @@ exports.getStudentsProgress = async (req, res) => {
 
     // 5) Compute per-student summaries
     const studentSummaries = students.map(s => {
-      const sid = String(s._id);
+      const sid = String(s.id);
       const batch = studentIdToBatch.get(sid) || null;
       const assignedActive = (batch?.assignedTests || []).filter(t => t && t.isActive !== false);
       const assignedActiveTestIds = assignedActive.map(t => String(t.testId));
@@ -137,12 +135,12 @@ exports.getStudentsProgress = async (req, res) => {
         : 0;
 
       return {
-        userId: s._id,
+        userId: s.id,
         name: `${s.firstName} ${s.lastName}`,
         email: s.email,
         studentId: s.studentId,
         isActive: s.isActive,
-        batch: batch ? { _id: batch._id, name: batch.batchName } : null,
+        batch: batch ? { _id: batch.id, name: batch.batchName } : null,
         primaryCourse: courseCategories.length === 1 ? courseCategories[0] : (courseCategories.length > 1 ? 'Multiple' : 'Unassigned'),
         courseCategories,
         assignments: { total: totalAssignments, completed: completedCount },
@@ -159,7 +157,7 @@ exports.getStudentsProgress = async (req, res) => {
     const completionRate = overallAssigned > 0 ? Math.round((overallCompleted / overallAssigned) * 100) : 0;
 
     // Active courses: count unique categories among active tests
-    const activeTests = await PracticeTest.find({ isActive: true }).select('category').lean();
+    const activeTests = await PracticeTest.findAll({ where: { isActive: true } });
     const activeCourseCategories = new Set(activeTests.map(t => t.category).filter(Boolean));
 
     res.status(200).json({
@@ -191,26 +189,39 @@ exports.getStudentsProgress = async (req, res) => {
 exports.getStudentProgressDetail = async (req, res) => {
   try {
     const { userId } = req.params;
-    const uid = toObjectId(userId);
+    const uid = userId; // Sequelize uses 'id' for primary key
     if (!uid) {
       return res.status(400).json({ status: 'fail', message: 'Invalid userId' });
     }
 
-    const user = await User.findById(uid).select('firstName lastName email studentId isActive').lean();
+    const user = await User.findByPk(uid, {
+      attributes: ['id', 'firstName', 'lastName', 'email', 'studentId', 'isActive']
+    });
     if (!user) return res.status(404).json({ status: 'fail', message: 'User not found' });
 
-    const batch = await Batch.findOne({ students: uid })
-      .select('batchName assignedTests')
-      .lean();
+    const batch = await Batch.findOne({
+      where: {
+        id: uid
+      },
+      attributes: ['batchName', 'assignedTests']
+    });
 
-    const attempts = await TestAttempt.find({ userId: uid })
-      .select('practiceTestId testTitle score status completedAt startedAt attemptsCount batchId')
-      .sort({ completedAt: -1, startedAt: -1 })
-      .lean();
+    const attempts = await TestAttempt.findAll({
+      where: { userId: uid },
+      attributes: ['practiceTestId', 'testTitle', 'score', 'status', 'completedAt', 'startedAt', 'attemptsCount', 'batchId'],
+      order: [['completedAt', 'DESC'], ['startedAt', 'DESC']]
+    });
 
     const testIds = Array.from(new Set(attempts.map(a => String(a.practiceTestId))));
-    const tests = await PracticeTest.find({ _id: { $in: testIds } }).select('title category passingScore').lean();
-    const testMap = new Map(tests.map(t => [String(t._id), t]));
+    const tests = await PracticeTest.findAll({
+      where: {
+        id: {
+          [sequelize.Op.in]: testIds
+        }
+      },
+      attributes: ['id', 'title', 'category', 'passingScore']
+    });
+    const testMap = new Map(tests.map(t => [String(t.id), t]));
 
     // Group attempts by test
     const byTest = new Map();
@@ -243,7 +254,7 @@ exports.getStudentProgressDetail = async (req, res) => {
         lastAttemptAt: latest?.completedAt || latest?.startedAt || null,
         assignedAt,
         attempts: arr.map(a => ({
-          attemptId: a._id,
+          attemptId: a.id,
           status: a.status,
           score: a.score,
           attemptsCount: a.attemptsCount,
@@ -257,7 +268,7 @@ exports.getStudentProgressDetail = async (req, res) => {
       status: 'success',
       data: {
         user: {
-          _id: user._id,
+          _id: user.id,
           name: `${user.firstName} ${user.lastName}`,
           email: user.email,
           studentId: user.studentId,
@@ -278,24 +289,27 @@ exports.getStudentProgressDetail = async (req, res) => {
 exports.getOverviewAnalytics = async (req, res) => {
   try {
     const [totalStudents, activePracticeTests, totalCourses, totalBatches] = await Promise.all([
-      User.countDocuments({ role: 'student' }),
-      PracticeTest.countDocuments({ isActive: true }),
-      Course.countDocuments({}),
-      Batch.countDocuments({})
+      User.count({ where: { role: 'student' } }),
+      PracticeTest.count({ where: { isActive: true } }),
+      Course.count({}),
+      Batch.count({})
     ]);
 
     // Completion rate across completed attempts vs total attempts for last 90 days
     const since = new Date();
     since.setDate(since.getDate() - 90);
-    const attempts = await TestAttempt.aggregate([
-      { $match: { startedAt: { $gte: since } } },
-      { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } }
+    const attempts = await TestAttempt.findAll({
+      where: {
+        startedAt: {
+          [sequelize.Op.gte]: since
         }
-      }
-    ]);
+      },
+      attributes: [
+        [sequelize.fn('COUNT', sequelize.col('*')), 'total'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN status = \'completed\' THEN 1 ELSE 0 END')), 'completed']
+      ],
+      group: []
+    });
     const totals = attempts[0] || { total: 0, completed: 0 };
     const completionRate = totals.total > 0 ? Math.round((totals.completed / totals.total) * 100) : 0;
 
@@ -309,12 +323,20 @@ exports.getOverviewAnalytics = async (req, res) => {
     const enrollments = await Promise.all(months.map(async (m) => {
       const start = new Date(m.year, m.month, 1);
       const end = new Date(m.year, m.month + 1, 1);
-      const count = await User.countDocuments({ role: 'student', createdAt: { $gte: start, $lt: end } });
+      const count = await User.count({
+        where: {
+          role: 'student',
+          createdAt: {
+            [sequelize.Op.gte]: start,
+            [sequelize.Op.lt]: end
+          }
+        }
+      });
       return { month: start.toLocaleString('en-US', { month: 'short' }), enrollments: count };
     }));
 
     // Course distribution by category of active practice tests
-    const activeTests = await PracticeTest.find({ isActive: true }).select('category').lean();
+    const activeTests = await PracticeTest.findAll({ where: { isActive: true } });
     const byCategory = new Map();
     activeTests.forEach(t => {
       if (!t.category) return;
@@ -325,19 +347,26 @@ exports.getOverviewAnalytics = async (req, res) => {
     // Exam results: summarize pass/fail by test category for last 60 days
     const since60 = new Date();
     since60.setDate(since60.getDate() - 60);
-    const recentAttempts = await TestAttempt.aggregate([
-      { $match: { completedAt: { $gte: since60 }, status: 'completed' } },
-      { $lookup: { from: 'practicetests', localField: 'practiceTestId', foreignField: '_id', as: 'test' } },
-      { $unwind: '$test' },
-      { $group: {
-          _id: '$test.category',
-          total: { $sum: 1 },
-          passed: { $sum: { $cond: ['$passed', 1, 0] } },
-          failed: { $sum: { $cond: ['$passed', 0, 1] } }
-        }
-      }
-    ]);
-    const exams = recentAttempts.map(e => ({ exam: e._id || 'General', passed: e.passed, failed: e.failed, total: e.total }));
+    const recentAttempts = await TestAttempt.findAll({
+      where: {
+        completedAt: {
+          [sequelize.Op.gte]: since60
+        },
+        status: 'completed'
+      },
+      attributes: [
+        [sequelize.fn('COUNT', sequelize.col('*')), 'total'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN passed = true THEN 1 ELSE 0 END')), 'passed'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN passed = false THEN 1 ELSE 0 END')), 'failed']
+      ],
+      include: [{
+        model: PracticeTest,
+        as: 'test',
+        attributes: ['category']
+      }],
+      group: ['test.category']
+    });
+    const exams = recentAttempts.map(e => ({ exam: e.test?.category || 'General', passed: e.passed, failed: e.failed, total: e.total }));
 
     res.status(200).json({
       status: 'success',
@@ -364,19 +393,30 @@ exports.getOverviewAnalytics = async (req, res) => {
 // Student dashboard analytics
 exports.getStudentDashboard = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id; // Sequelize uses 'id' for primary key
     
     // Get user's batch information
     const userBatch = await Batch.findOne({
-      students: userId,
-      status: 'active'
-    }).select('batchName batchId assignedTests');
+      where: {
+        id: userId,
+        status: 'active'
+      },
+      attributes: ['batchName', 'batchId', 'assignedTests']
+    });
 
     // Get user's test attempts
-    const testAttempts = await TestAttempt.find({ 
-      userId: userId,
-      status: 'completed'
-    }).populate('practiceTestId', 'title category');
+    const testAttempts = await TestAttempt.findAll({ 
+      where: { 
+        userId: userId,
+        status: 'completed'
+      },
+      attributes: ['practiceTestId', 'testTitle', 'score', 'passed'],
+      include: [{
+        model: PracticeTest,
+        as: 'practiceTestId',
+        attributes: ['title', 'category']
+      }]
+    });
 
     // Calculate statistics
     const totalTests = testAttempts.length;

@@ -1,154 +1,85 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const batchSchema = new mongoose.Schema({
+const Batch = sequelize.define('Batch', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   batchId: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    trim: true
+    validate: {
+      notEmpty: true
+    }
   },
   batchName: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
   },
   description: {
-    type: String,
-    trim: true
+    type: DataTypes.TEXT,
+    allowNull: true
   },
   adminId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  students: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  assignedTests: [{
-    testId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'PracticeTest',
-      required: true
-    },
-    assignedAt: {
-      type: Date,
-      default: Date.now
-    },
-    assignedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    isActive: {
-      type: Boolean,
-      default: true
-    },
-    dueDate: {
-      type: Date
-    },
-    instructions: {
-      type: String,
-      trim: true
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
     }
-  }],
-  settings: {
-    maxStudents: {
-      type: Number,
-      default: 50,
+  },
+  maxStudents: {
+    type: DataTypes.INTEGER,
+    defaultValue: 50,
+    validate: {
       min: 1,
       max: 200
-    },
-    allowTestRetakes: {
-      type: Boolean,
-      default: false
-    },
-    requireCompletion: {
-      type: Boolean,
-      default: true
-    },
-    autoAssignTests: {
-      type: Boolean,
-      default: false
-    },
-    notificationSettings: {
-      emailNotifications: {
-        type: Boolean,
-        default: true
-      },
-      testReminders: {
-        type: Boolean,
-        default: true
-      },
-      dueDateAlerts: {
-        type: Boolean,
-        default: true
-      }
     }
+  },
+  allowTestRetakes: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  requireCompletion: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  autoAssignTests: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  emailNotifications: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  testReminders: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  dueDateAlerts: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
   status: {
-    type: String,
-    enum: ['active', 'inactive', 'completed', 'archived'],
-    default: 'active'
+    type: DataTypes.ENUM('active', 'inactive', 'completed', 'archived'),
+    defaultValue: 'active'
   },
   startDate: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
   endDate: {
-    type: Date
-  },
-  tags: [{
-    type: String,
-    trim: true
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    allowNull: true
   }
+}, {
+  timestamps: true
 });
 
-// Update updatedAt on save
-batchSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-// Generate unique batch ID before saving
-batchSchema.pre('save', async function(next) {
-  if (this.isNew && !this.batchId) {
-    try {
-      const year = new Date().getFullYear();
-      const count = await mongoose.connection.db.collection('batches').countDocuments({
-        batchId: { $regex: `^BATCH-${year}-` }
-      });
-      this.batchId = `BATCH-${year}-${String(count + 1).padStart(4, '0')}`;
-    } catch (error) {
-      // Fallback to timestamp if counting fails
-      this.batchId = `BATCH-${year}-${Date.now()}`;
-    }
-  }
-  next();
-});
-
-// Virtual for student count
-batchSchema.virtual('studentCount').get(function() {
-  return this.students.length;
-});
-
-// Virtual for active test count
-batchSchema.virtual('activeTestCount').get(function() {
-  return this.assignedTests.filter(test => test.isActive).length;
-});
-
-// Index for efficient queries
-batchSchema.index({ batchId: 1 });
-batchSchema.index({ adminId: 1 });
-batchSchema.index({ status: 1 });
-batchSchema.index({ 'students': 1 });
-
-module.exports = mongoose.model('Batch', batchSchema); 
+module.exports = Batch; 

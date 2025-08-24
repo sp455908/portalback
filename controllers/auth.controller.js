@@ -1,5 +1,5 @@
+const { User } = require('../models');
 // D:\IIFTL Backend\controllers\auth.controller.js
-const User = require('../models/user.model');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { promisify } = require('util');
@@ -17,7 +17,7 @@ const signToken = (id) => {
 
 // Create and send token
 const createSendToken = (user, statusCode, res) => {
-  const token = signToken(user._id);
+  const token = signToken(user.id);
   
   // Remove password from output
   user.password = undefined;
@@ -53,7 +53,7 @@ exports.register = async (req, res, next) => {
     }
 
     // 1) Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({
         status: 'fail',
@@ -108,7 +108,7 @@ exports.login = async (req, res, next) => {
     }
 
     // 2) Check if user exists && password is correct
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ where: { email } });
     
     if (!user || !(await user.comparePassword(password, user.password))) {
       return res.status(401).json({
@@ -140,7 +140,7 @@ exports.login = async (req, res, next) => {
 // Get current authenticated user
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findByPk(req.user.id);
     
     if (!user) {
       return res.status(404).json({
@@ -195,7 +195,7 @@ exports.protect = async (req, res, next) => {
     const decoded = await verifyToken(token, process.env.JWT_SECRET);
 
     // 3) Check if user still exists
-    const currentUser = await User.findById(decoded.id);
+    const currentUser = await User.findByPk(decoded.id);
     if (!currentUser) {
       return res.status(401).json({
         status: 'fail',

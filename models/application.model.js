@@ -1,32 +1,135 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const applicationSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
-  firstName: { type: String, required: true, trim: true },
-  lastName:  { type: String, required: true, trim: true },
-  email:     { type: String, required: true, trim: true },
-  phone:     { type: String, required: true, trim: true },
-  dateOfBirth: { type: String, required: false },
-  gender:    { type: String, enum: ['male', 'female', 'other'], required: false },
-  address:   { type: String, required: true },
-  city:      { type: String, required: true },
-  state:     { type: String, required: true },
-  pincode:   { type: String, required: true },
-  country:   { type: String, default: "India" },
-  qualification: { type: String, required: true },
-  institution:   { type: String, required: true },
-  yearOfPassing: { type: String, required: true },
-  percentage:    { type: String, required: true },
-  selectedCourse: { type: String, required: true }, // or ObjectId if referencing Course
-  preferredSchedule: { type: String, required: false },
-  workExperience: { type: String, required: false },
-  motivation:     { type: String, required: false },
-  documentsUploaded: { type: Boolean, default: false },
-  agreeTerms:    { type: Boolean, required: true },
-  agreeMarketing:{ type: Boolean, default: false },
-  status:        { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
-  notes:         { type: String },
-  submittedAt:   { type: Date, default: Date.now }
+const Application = sequelize.define('Application', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  firstName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  lastName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      isEmail: true,
+      notEmpty: true
+    }
+  },
+  phone: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  dateOfBirth: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  gender: {
+    type: DataTypes.ENUM('male', 'female', 'other'),
+    allowNull: true
+  },
+  address: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  city: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  state: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  pincode: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  country: {
+    type: DataTypes.STRING,
+    defaultValue: "India"
+  },
+  qualification: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  institution: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  yearOfPassing: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  percentage: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  selectedCourse: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  preferredSchedule: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  workExperience: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  motivation: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  documentsUploaded: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  agreeTerms: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false
+  },
+  agreeMarketing: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+    defaultValue: 'pending'
+  },
+  notes: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  submittedAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  }
+}, {
+  timestamps: true
 });
 
-module.exports = mongoose.model('Application', applicationSchema);
+module.exports = Application;

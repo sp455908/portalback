@@ -1,4 +1,4 @@
-const User = require('../models/user.model');
+const { User } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -9,7 +9,9 @@ const signToken = (id) =>
 // Get all users (admin only)
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const users = await User.findAll({
+      attributes: { exclude: ['password'] }
+    });
     res.json(users);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -19,7 +21,9 @@ exports.getAllUsers = async (req, res) => {
 // Get single user by ID (admin or self)
 exports.getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await User.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] }
+    });
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
   } catch (err) {
@@ -40,9 +44,14 @@ exports.updateUser = async (req, res) => {
     if (updates.password) {
       updates.password = await bcrypt.hash(updates.password, 12);
     }
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true }).select('-password');
+    const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    
+    await user.update(updates);
+    const updatedUser = await User.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] }
+    });
+    res.json(updatedUser);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -51,8 +60,9 @@ exports.updateUser = async (req, res) => {
 // Delete user (admin or self)
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+    await user.destroy();
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -62,7 +72,9 @@ exports.deleteUser = async (req, res) => {
 // Get current logged-in user profile
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
     res.json(user);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -77,8 +89,12 @@ exports.updateProfile = async (req, res) => {
     if (updates.password) {
       updates.password = await bcrypt.hash(updates.password, 12);
     }
-    const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true, runValidators: true }).select('-password');
-    res.json(user);
+    const user = await User.findByPk(req.user.id);
+    await user.update(updates);
+    const updatedUser = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
+    res.json(updatedUser);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -86,11 +102,11 @@ exports.updateProfile = async (req, res) => {
 
 exports.getUserStats = async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const students = await User.countDocuments({ role: 'student' });
-    const admins = await User.countDocuments({ role: 'admin' });
-    const corporates = await User.countDocuments({ role: 'corporate' });
-    const government = await User.countDocuments({ role: 'government' });
+    const totalUsers = await User.count();
+    const students = await User.count({ where: { role: 'student' } });
+    const admins = await User.count({ where: { role: 'admin' } });
+    const corporates = await User.count({ where: { role: 'corporate' } });
+    const government = await User.count({ where: { role: 'government' } });
 
     res.status(200).json({
       status: 'success',
@@ -103,7 +119,7 @@ exports.getUserStats = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ status: 'error', message: 'Failed to fetch user stats' });
+    res.status(500).json({ message: err.message });
   }
 };
 
@@ -167,9 +183,14 @@ exports.updateUserProfile = async (req, res) => {
     if (updates.password) {
       updates.password = await bcrypt.hash(updates.password, 12);
     }
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true }).select('-password');
+    const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    
+    await user.update(updates);
+    const updatedUser = await User.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] }
+    });
+    res.json(updatedUser);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -182,7 +203,7 @@ exports.toggleUserStatus = async (req, res) => {
     const { isActive } = req.body;
 
     // Check if user exists
-    const user = await User.findById(userId);
+    const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ 
         status: 'fail',
@@ -191,7 +212,7 @@ exports.toggleUserStatus = async (req, res) => {
     }
 
     // Prevent admin from disabling themselves
-    if (userId === req.user._id.toString()) {
+    if (userId === req.user.id.toString()) {
       return res.status(400).json({
         status: 'fail',
         message: 'You cannot disable your own account'
@@ -199,11 +220,10 @@ exports.toggleUserStatus = async (req, res) => {
     }
 
     // Update user status
-    const updatedUser = await User.findByIdAndUpdate(
+    const updatedUser = await User.findByPk(
       userId,
-      { isActive },
-      { new: true, runValidators: true }
-    ).select('-password');
+      { where: { isActive } }
+    );
 
     res.status(200).json({
       status: 'success',
@@ -226,7 +246,7 @@ exports.getUserByStudentId = async (req, res) => {
   try {
     const { studentId } = req.params;
     
-    const user = await User.findOne({ studentId }).select('-password');
+    const user = await User.findOne({ where: { studentId } });
     if (!user) {
       return res.status(404).json({
         status: 'fail',

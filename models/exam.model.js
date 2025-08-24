@@ -1,33 +1,82 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const questionSchema = new mongoose.Schema({
-  question: { type: String, required: true },
-  options:  { type: [String], required: true },
-  correctAnswer: { type: Number, required: true }, // index of correct option
-  marks: { type: Number, default: 1 }
+const Exam = sequelize.define('Exam', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  courseId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Courses',
+      key: 'id'
+    }
+  },
+  date: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  duration: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  questions: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  instructorId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  fee: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  status: {
+    type: DataTypes.ENUM('scheduled', 'completed', 'cancelled'),
+    defaultValue: 'scheduled'
+  },
+  targetUserType: {
+    type: DataTypes.ENUM('student', 'corporate', 'government'),
+    allowNull: false
+  },
+  venue: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  passingScore: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  maxMarks: {
+    type: DataTypes.INTEGER,
+    defaultValue: 100
+  }
+}, {
+  timestamps: true,
+  hooks: {
+    beforeUpdate: (exam) => {
+      exam.updatedAt = new Date();
+    }
+  }
 });
 
-const examSchema = new mongoose.Schema({
-  title:        { type: String, required: true, trim: true },
-  courseId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
-  date:         { type: Date, required: false },
-  duration:     { type: String, required: true }, // e.g., "3 Hours"
-  questions:    { type: [questionSchema], default: [] },
-  description:  { type: String },
-  instructorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  fee:          { type: String },
-  status:       { type: String, enum: ['scheduled', 'completed', 'cancelled'], default: 'scheduled' },
-  targetUserType: { type: String, enum: ['student', 'corporate', 'government'], required: true },
-  venue:        { type: String },
-  passingScore: { type: Number, default: 0 },
-  maxMarks:     { type: Number, default: 100 },
-  createdAt:    { type: Date, default: Date.now },
-  updatedAt:    { type: Date, default: Date.now }
-});
-
-examSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-module.exports = mongoose.model('Exam', examSchema);
+module.exports = Exam;

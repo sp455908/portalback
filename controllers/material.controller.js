@@ -1,4 +1,4 @@
-const Material = require('../models/material.model');
+const { Material, Course } = require('../models');
 
 // Create a new material (admin only)
 exports.createMaterial = async (req, res) => {
@@ -30,9 +30,15 @@ exports.getAllMaterials = async (req, res) => {
       query.courseId = courseId;
     }
     
-    const materials = await Material.find(query)
-      .populate('courseId', 'title')
-      .sort({ createdAt: -1 });
+    const materials = await Material.findAll({
+      where: query,
+      include: [{
+        model: Course,
+        as: 'course',
+        attributes: ['title']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
     
     res.json(materials);
   } catch (err) {
@@ -43,8 +49,13 @@ exports.getAllMaterials = async (req, res) => {
 // Get a single material by ID
 exports.getMaterialById = async (req, res) => {
   try {
-    const material = await Material.findById(req.params.id)
-      .populate('courseId', 'title');
+    const material = await Material.findByPk(req.params.id, {
+      include: [{
+        model: Course,
+        as: 'course',
+        attributes: ['title']
+      }]
+    });
     if (!material) return res.status(404).json({ message: 'Material not found' });
     res.json(material);
   } catch (err) {
@@ -56,7 +67,9 @@ exports.getMaterialById = async (req, res) => {
 exports.updateMaterial = async (req, res) => {
   try {
     const updates = { ...req.body };
-    const material = await Material.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+    const material = await Material.findByPk(req.params.id);
+    if (!material) return res.status(404).json({ message: 'Material not found' });
+    await material.update(updates);
     if (!material) return res.status(404).json({ message: 'Material not found' });
     res.json(material);
   } catch (err) {
@@ -67,7 +80,9 @@ exports.updateMaterial = async (req, res) => {
 // Delete a material (admin only)
 exports.deleteMaterial = async (req, res) => {
   try {
-    const material = await Material.findByIdAndDelete(req.params.id);
+    const material = await Material.findByPk(req.params.id);
+    if (!material) return res.status(404).json({ message: 'Material not found' });
+    await material.destroy();
     if (!material) return res.status(404).json({ message: 'Material not found' });
     res.json({ message: 'Material deleted successfully' });
   } catch (err) {

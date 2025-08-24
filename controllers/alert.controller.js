@@ -1,4 +1,4 @@
-const Alert = require('../models/alert.model');
+const { Alert } = require('../models');
 
 // Create a new alert (admin only)
 exports.createAlert = async (req, res) => {
@@ -34,7 +34,9 @@ exports.createAlert = async (req, res) => {
 // Get all alerts (public)
 exports.getAllAlerts = async (req, res) => {
   try {
-    const alerts = await Alert.find().sort({ date: -1 });
+    const alerts = await Alert.findAll({
+      order: [['date', 'DESC']]
+    });
     res.json(alerts);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -44,7 +46,7 @@ exports.getAllAlerts = async (req, res) => {
 // Get a single alert by ID (public)
 exports.getAlertById = async (req, res) => {
   try {
-    const alert = await Alert.findById(req.params.id);
+    const alert = await Alert.findByPk(req.params.id);
     if (!alert) return res.status(404).json({ message: 'Alert not found' });
     res.json(alert);
   } catch (err) {
@@ -56,7 +58,9 @@ exports.getAlertById = async (req, res) => {
 exports.updateAlert = async (req, res) => {
   try {
     const updates = { ...req.body };
-    const alert = await Alert.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+    const alert = await Alert.findByPk(req.params.id);
+    if (!alert) return res.status(404).json({ message: 'Alert not found' });
+    await alert.update(updates);
     if (!alert) return res.status(404).json({ message: 'Alert not found' });
     res.json(alert);
   } catch (err) {
@@ -67,7 +71,9 @@ exports.updateAlert = async (req, res) => {
 // Delete an alert (admin only)
 exports.deleteAlert = async (req, res) => {
   try {
-    const alert = await Alert.findByIdAndDelete(req.params.id);
+    const alert = await Alert.findByPk(req.params.id);
+    if (!alert) return res.status(404).json({ message: 'Alert not found' });
+    await alert.destroy();
     if (!alert) return res.status(404).json({ message: 'Alert not found' });
     res.json({ message: 'Alert deleted successfully' });
   } catch (err) {

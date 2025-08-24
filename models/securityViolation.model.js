@@ -1,77 +1,114 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const securityViolationSchema = new mongoose.Schema({
-  userId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+const SecurityViolation = sequelize.define('SecurityViolation', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
   },
-  testAttemptId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'TestAttempt', 
-    required: true 
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
-  practiceTestId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'PracticeTest', 
-    required: true 
+  testAttemptId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'TestAttempts',
+      key: 'id'
+    }
   },
-  violationType: { 
-    type: String, 
-    enum: ['tab_switch', 'window_switch', 'copy_paste', 'right_click', 'developer_tools'], 
-    required: true 
+  practiceTestId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'PracticeTests',
+      key: 'id'
+    }
   },
-  violationCount: { 
-    type: Number, 
-    default: 1 
+  violationType: {
+    type: DataTypes.ENUM('tab_switch', 'window_switch', 'copy_paste', 'right_click', 'developer_tools'),
+    allowNull: false
   },
-  timestamp: { 
-    type: Date, 
-    default: Date.now 
+  violationCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1
   },
-  isBlocked: { 
-    type: Boolean, 
-    default: false 
+  timestamp: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
-  blockedUntil: { 
-    type: Date 
+  isBlocked: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
-  blockDurationHours: { 
-    type: Number, 
-    default: 24 
+  blockedUntil: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
-  ipAddress: { 
-    type: String 
+  blockDurationHours: {
+    type: DataTypes.INTEGER,
+    defaultValue: 24
   },
-  userAgent: { 
-    type: String 
+  ipAddress: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
-  additionalInfo: {
-    windowTitle: String,
-    screenSize: String,
-    browserInfo: String
+  userAgent: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  windowTitle: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  screenSize: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  browserInfo: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
+}, {
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['userId', 'violationType', 'timestamp']
+    },
+    {
+      fields: ['userId', 'isBlocked', 'blockedUntil']
+    },
+    {
+      fields: ['testAttemptId', 'violationType']
+    }
+  ]
 });
 
-// Index for efficient queries
-securityViolationSchema.index({ userId: 1, violationType: 1, timestamp: -1 });
-securityViolationSchema.index({ userId: 1, isBlocked: 1, blockedUntil: 1 });
-securityViolationSchema.index({ testAttemptId: 1, violationType: 1 });
-
-// Method to check if user is currently blocked
-securityViolationSchema.statics.isUserBlocked = async function(userId, violationType = 'tab_switch') {
+// Static method to check if user is currently blocked
+SecurityViolation.isUserBlocked = async function(userId, violationType = 'tab_switch') {
   const violation = await this.findOne({
-    userId,
-    violationType,
-    isBlocked: true,
-    blockedUntil: { $gt: new Date() }
-  }).sort({ blockedUntil: -1 });
+    where: {
+      userId,
+      violationType,
+      isBlocked: true,
+      blockedUntil: {
+        [sequelize.Op.gt]: new Date()
+      }
+    },
+    order: [['blockedUntil', 'DESC']]
+  });
   
   return violation;
 };
 
-// Method to get remaining block time
-securityViolationSchema.statics.getRemainingBlockTime = async function(userId, violationType = 'tab_switch') {
+// Static method to get remaining block time
+SecurityViolation.getRemainingBlockTime = async function(userId, violationType = 'tab_switch') {
   const violation = await this.isUserBlocked(userId, violationType);
   if (!violation) return null;
   
@@ -87,4 +124,4 @@ securityViolationSchema.statics.getRemainingBlockTime = async function(userId, v
   };
 };
 
-module.exports = mongoose.model('SecurityViolation', securityViolationSchema);
+module.exports = SecurityViolation;

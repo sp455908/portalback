@@ -1,52 +1,104 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const { sequelize } = require('../config/database');
 
-const userSchema = new mongoose.Schema({
-  firstName: { type: String, required: true, trim: true },
-  lastName:  { type: String, required: true, trim: true },
-  email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password:  { type: String, required: true },
-  role:      { type: String, enum: ['student', 'admin', 'corporate', 'government'], required: true },
-  userType:  { type: String, enum: ['student', 'corporate', 'government'], required: true },
-  phone:     { type: String, trim: true },
-  address:   { type: String, trim: true },
-  profileImage: { type: String }, // URL to profile image (optional)
-  studentId: { type: String, unique: true, sparse: true }, // Unique student ID for students only
-  isActive:  { type: Boolean, default: true }, // Enable/disable user access
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-// Generate unique student ID before saving
-userSchema.pre('save', async function(next) {
-  if (this.isNew && this.role === 'student' && !this.studentId) {
-    // Generate student ID: IIFTL-YYYY-XXXXX (e.g., IIFTL-2024-00001)
-    const year = new Date().getFullYear();
-    const count = await mongoose.model('User').countDocuments({ 
-      role: 'student', 
-      studentId: { $regex: `^IIFTL-${year}-` } 
-    });
-    this.studentId = `IIFTL-${year}-${String(count + 1).padStart(5, '0')}`;
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  firstName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  lastName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+    validate: {
+      isEmail: true,
+      notEmpty: true
+    }
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  role: {
+    type: DataTypes.ENUM('student', 'admin', 'corporate', 'government'),
+    allowNull: false
+  },
+  userType: {
+    type: DataTypes.ENUM('student', 'corporate', 'government'),
+    allowNull: false
+  },
+  phone: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  address: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  profileImage: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  studentId: {
+    type: DataTypes.STRING,
+    unique: true,
+    allowNull: true
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   }
-  next();
+}, {
+  timestamps: true, // This will create createdAt and updatedAt
+  hooks: {
+    beforeCreate: async (user) => {
+      // Generate student ID for new students
+      if (user.role === 'student' && !user.studentId) {
+        const year = new Date().getFullYear();
+        const count = await User.count({
+          where: {
+            role: 'student',
+            studentId: {
+              [sequelize.Op.like]: `IIFTL-${year}-%`
+            }
+          }
+        });
+        user.studentId = `IIFTL-${year}-${String(count + 1).padStart(5, '0')}`;
+      }
+      
+      // Hash password
+      if (user.password) {
+        user.password = await bcrypt.hash(user.password, 12);
+      }
+    },
+    beforeUpdate: async (user) => {
+      // Hash password if it's being updated
+      if (user.changed('password')) {
+        user.password = await bcrypt.hash(user.password, 12);
+      }
+    }
+  }
 });
 
-// Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
-
-// Update updatedAt on save
-userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-// Password comparison method
-userSchema.methods.comparePassword = function(candidatePassword) {
+// Instance method to compare password
+User.prototype.comparePassword = function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;

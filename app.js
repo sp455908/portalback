@@ -5,7 +5,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
+const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const errorHandler = require('./middlewares/error.middleware');
+const { sequelize } = require('./config/database');
 
 // Route imports
 const authRoutes = require('./routes/auth.routes');
@@ -19,7 +22,7 @@ const materialRoutes = require('./routes/material.routes');
 const practiceTestRoutes = require('./routes/practiceTest.routes');
 const batchRoutes = require('./routes/batch.routes');
 const settingsRoutes = require('./routes/settings.routes');
-const analyticsRoutes = require('./routes/analytics.routes');
+// const analyticsRoutes = require('./routes/analytics.routes'); // Temporarily commented out
 const securityRoutes = require('./routes/security.routes');
 
 const app = express();
@@ -71,6 +74,25 @@ app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(cookieParser()); // Parse cookies
 
+// Session configuration with PostgreSQL store
+app.use(session({
+  store: new pgSession({
+    conObject: {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    },
+    tableName: 'sessions'
+  }),
+  secret: process.env.SESSION_SECRET || 'your-session-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
@@ -89,7 +111,7 @@ app.use('/api/materials', materialRoutes);
 app.use('/api/practice-tests', practiceTestRoutes);
 app.use('/api/batches', batchRoutes);
 app.use('/api/settings', settingsRoutes);
-app.use('/api/analytics', analyticsRoutes);
+// app.use('/api/analytics', analyticsRoutes); // Temporarily commented out
 app.use('/api/security', securityRoutes);
 
 // Health check endpoint
@@ -98,20 +120,11 @@ app.get('/api/health', (req, res) => {
     status: 'success',
     message: 'API is running',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    database: 'PostgreSQL'
   });
 });
 
-// 404 Handler
-app.use((req, res, next) => {
-  res.status(404).json({
-    status: 'fail',
-    message: `Cannot ${req.method} ${req.originalUrl}`
-  });
-});
-
-// Global error handler
+// Error handling middleware (should be last)
 app.use(errorHandler);
 
-// Export the configured app
 module.exports = app;

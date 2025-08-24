@@ -1,143 +1,162 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const settingsSchema = new mongoose.Schema({
+const Settings = sequelize.define('Settings', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   // Site Information
   siteName: {
-    type: String,
-    default: "IIFTL Portal"
+    type: DataTypes.STRING,
+    defaultValue: "IIFTL Portal"
   },
   siteDescription: {
-    type: String,
-    default: "Indian Institute of Foreign Trade & Logistics"
+    type: DataTypes.TEXT,
+    defaultValue: "Indian Institute of Foreign Trade & Logistics"
   },
   contactEmail: {
-    type: String,
-    default: "info@iiftl.com"
+    type: DataTypes.STRING,
+    defaultValue: "info@iiftl.com"
   },
   supportPhone: {
-    type: String,
-    default: "+91 9043575263"
+    type: DataTypes.STRING,
+    defaultValue: "+91 9043575263"
   },
 
   // Platform Controls
   maintenanceMode: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   registrationEnabled: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
 
   // Notification Settings
   emailNotifications: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
   smsNotifications: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
 
   // Security Settings
   autoApproval: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   sessionTimeout: {
-    type: Number,
-    default: 30 // minutes
+    type: DataTypes.INTEGER,
+    defaultValue: 30 // minutes
   },
   maxFileSize: {
-    type: Number,
-    default: 10 // MB
+    type: DataTypes.INTEGER,
+    defaultValue: 10 // MB
   },
 
   // System Settings
   databaseStatus: {
-    type: String,
-    default: "healthy"
+    type: DataTypes.STRING,
+    defaultValue: "healthy"
   },
   lastBackup: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
 
-  // Integration Settings
-  paymentGateway: {
-    enabled: {
-      type: Boolean,
-      default: false
-    },
-    provider: {
-      type: String,
-      default: "razorpay"
-    },
-    config: {
-      type: Object,
-      default: {}
+  // Payment Gateway Settings
+  paymentGatewayEnabled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  paymentGatewayProvider: {
+    type: DataTypes.STRING,
+    defaultValue: "razorpay"
+  },
+  paymentGatewayConfig: {
+    type: DataTypes.JSON,
+    defaultValue: {}
+  },
+
+  // Email Service Settings
+  emailServiceEnabled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  emailServiceProvider: {
+    type: DataTypes.STRING,
+    defaultValue: "smtp"
+  },
+  emailServiceConfig: {
+    type: DataTypes.JSON,
+    defaultValue: {}
+  },
+
+  // SMS Service Settings
+  smsServiceEnabled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  smsServiceProvider: {
+    type: DataTypes.STRING,
+    defaultValue: "twilio"
+  },
+  smsServiceConfig: {
+    type: DataTypes.JSON,
+    defaultValue: {}
+  },
+
+  // Analytics Settings
+  analyticsEnabled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  googleAnalyticsId: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+
+  // Social Media Settings
+  socialMediaLinks: {
+    type: DataTypes.JSON,
+    defaultValue: {
+      facebook: "",
+      twitter: "",
+      linkedin: "",
+      instagram: ""
     }
   },
 
-  emailService: {
-    enabled: {
-      type: Boolean,
-      default: false
-    },
-    provider: {
-      type: String,
-      default: "smtp"
-    },
-    config: {
-      type: Object,
-      default: {}
-    }
+  // Custom CSS/JS
+  customCSS: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  customJS: {
+    type: DataTypes.TEXT,
+    allowNull: true
   },
 
-  smsService: {
-    enabled: {
-      type: Boolean,
-      default: false
-    },
-    provider: {
-      type: String,
-      default: "twilio"
-    },
-    config: {
-      type: Object,
-      default: {}
-    }
+  // SEO Settings
+  metaTitle: {
+    type: DataTypes.STRING,
+    defaultValue: "IIFTL - Indian Institute of Foreign Trade & Logistics"
   },
-
-  // Metadata
-  updatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+  metaDescription: {
+    type: DataTypes.TEXT,
+    defaultValue: "Professional training and certification in foreign trade and logistics"
   },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  metaKeywords: {
+    type: DataTypes.TEXT,
+    defaultValue: "foreign trade, logistics, certification, training, IIFTL"
   }
 }, {
   timestamps: true
 });
 
-// Ensure only one settings document exists
-settingsSchema.statics.getInstance = async function() {
-  try {
-    console.log('Settings.getInstance called');
-    let settings = await this.findOne();
-    console.log('Found settings:', settings);
-    if (!settings) {
-      console.log('Creating new settings document');
-      settings = await this.create({});
-      console.log('Created settings:', settings);
-    }
-    return settings;
-  } catch (error) {
-    console.error('Error in Settings.getInstance:', error);
-    throw error;
-  }
-};
-
-module.exports = mongoose.model('Settings', settingsSchema); 
+module.exports = Settings; 

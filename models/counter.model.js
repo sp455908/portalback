@@ -1,18 +1,30 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const counterSchema = new mongoose.Schema({
-  _id: { type: String, required: true },
-  sequenceValue: { type: Number, default: 0 }
+const Counter = sequelize.define('Counter', {
+  id: {
+    type: DataTypes.STRING,
+    primaryKey: true,
+    allowNull: false
+  },
+  sequenceValue: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  }
+}, {
+  timestamps: false
 });
 
-counterSchema.statics.getNextSequence = async function(key) {
-  const result = await this.findOneAndUpdate(
-    { _id: key },
-    { $inc: { sequenceValue: 1 } },
-    { new: true, upsert: true }
-  );
+// Static method to get next sequence
+Counter.getNextSequence = async function(key) {
+  const [counter, created] = await this.findOrCreate({
+    where: { id: key },
+    defaults: { sequenceValue: 0 }
+  });
+  
+  const result = await counter.increment('sequenceValue');
   return result.sequenceValue;
 };
 
-module.exports = mongoose.model('Counter', counterSchema);
+module.exports = Counter;
 

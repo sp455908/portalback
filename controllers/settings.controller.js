@@ -1,4 +1,4 @@
-const Settings = require('../models/settings.model');
+const { Settings } = require('../models');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
@@ -32,7 +32,7 @@ exports.updateSettings = catchAsync(async (req, res) => {
   
   // Update settings with provided data
   Object.assign(settings, req.body);
-  settings.updatedBy = req.user._id;
+  settings.updatedBy = req.user.id;
   settings.updatedAt = new Date();
   
   await settings.save();

@@ -1,7 +1,5 @@
-const mongoose = require('mongoose');
-const Batch = require('../models/batch.model');
-const User = require('../models/user.model');
-const PracticeTest = require('../models/practiceTest.model');
+const { Batch, User, PracticeTest } = require('../models');
+const { sequelize } = require('../config/database');
 
 // Create a new batch
 exports.createBatch = async (req, res) => {
@@ -23,7 +21,7 @@ exports.createBatch = async (req, res) => {
     }
 
     // Check if batch name already exists
-    const existingBatch = await Batch.findOne({ batchName });
+    const existingBatch = await Batch.findOne({ where: { batchName } });
     if (existingBatch) {
       return res.status(400).json({
         status: 'fail',
@@ -35,8 +33,12 @@ exports.createBatch = async (req, res) => {
     const year = new Date().getFullYear();
     let batchId;
     try {
-      const count = await mongoose.connection.db.collection('batches').countDocuments({
-        batchId: { $regex: `^BATCH-${year}-` }
+      const count = await Batch.count({
+        where: {
+          batchId: {
+            [sequelize.Op.like]: `BATCH-${year}-%`
+          }
+        }
       });
       batchId = `BATCH-${year}-${String(count + 1).padStart(4, '0')}`;
     } catch (error) {
@@ -48,20 +50,15 @@ exports.createBatch = async (req, res) => {
       batchId,
       batchName,
       description,
-      adminId: req.user._id,
+      adminId: req.user.id,
       status: 'active',
-      settings: {
-        maxStudents: maxStudents || 50,
-        allowTestRetakes: req.body.settings?.allowTestRetakes || false,
-        requireCompletion: req.body.settings?.requireCompletion !== false, // default true
-        autoAssignTests: req.body.settings?.autoAssignTests || false,
-        notificationSettings: {
-          emailNotifications: req.body.settings?.notificationSettings?.emailNotifications !== false, // default true
-          testReminders: req.body.settings?.notificationSettings?.testReminders !== false, // default true
-          dueDateAlerts: req.body.settings?.notificationSettings?.dueDateAlerts !== false // default true
-        }
-      },
-      tags: tags || [],
+      maxStudents: maxStudents || 50,
+      allowTestRetakes: req.body.settings?.allowTestRetakes || false,
+      requireCompletion: req.body.settings?.requireCompletion !== false, // default true
+      autoAssignTests: req.body.settings?.autoAssignTests || false,
+      emailNotifications: req.body.settings?.notificationSettings?.emailNotifications !== false, // default true
+      testReminders: req.body.settings?.notificationSettings?.testReminders !== false, // default true
+      dueDateAlerts: req.body.settings?.notificationSettings?.dueDateAlerts !== false, // default true
       startDate: startDate ? new Date(startDate) : new Date(),
       endDate: endDate ? new Date(endDate) : null
     };
@@ -71,8 +68,13 @@ exports.createBatch = async (req, res) => {
     const batch = await Batch.create(batchData);
 
     // Populate the admin info for the response
-    const populatedBatch = await Batch.findById(batch._id)
-      .populate('adminId', 'firstName lastName email');
+    const populatedBatch = await Batch.findByPk(batch.id, {
+      include: [{
+        model: User,
+        as: 'admin',
+        attributes: ['firstName', 'lastName', 'email']
+      }]
+    });
 
     res.status(201).json({
       status: 'success',

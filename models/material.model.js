@@ -1,17 +1,69 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const materialSchema = new mongoose.Schema({
-  courseId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
-  title:       { type: String, required: true, trim: true },
-  description: { type: String },
-  fileUrl:     { type: String, required: true },
-  type:        { type: String, enum: ['pdf', 'video', 'image', 'document', 'archive', 'other'], default: 'other' },
-  size:        { type: String }, // e.g., "2.4 MB"
-  uploadedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  uploadDate:  { type: Date, default: Date.now },
-  downloads:   { type: Number, default: 0 },
-  category:    { type: String }, // e.g., "lecture", "template", "resources"
-  tags:        { type: [String], default: [] }
+const Material = sequelize.define('Material', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  courseId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Courses',
+      key: 'id'
+    }
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  fileUrl: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  type: {
+    type: DataTypes.ENUM('pdf', 'video', 'image', 'document', 'archive', 'other'),
+    defaultValue: 'other'
+  },
+  size: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  uploadedBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  uploadDate: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  downloads: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  category: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tags: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  }
+}, {
+  timestamps: true
 });
 
-module.exports = mongoose.model('Material', materialSchema);
+module.exports = Material;

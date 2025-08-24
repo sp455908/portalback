@@ -1,6 +1,4 @@
-const PracticeTest = require('../models/practiceTest.model');
-const TestAttempt = require('../models/testAttempt.model');
-const User = require('../models/user.model');
+const { PracticeTest, TestAttempt, User } = require('../models');
 const PDFDocument = require('pdfkit');
 const XLSX = require('xlsx');
 const multer = require('multer');
@@ -75,7 +73,7 @@ exports.createPracticeTest = async (req, res) => {
       passingScore: passingScore || 70,
       allowRepeat: allowRepeat || false,
       repeatAfterHours: repeatAfterHours || 24,
-      createdBy: req.user._id,
+      createdBy: req.user.id,
       targetUserType,
       showInPublic: !!showInPublic
     });
@@ -97,9 +95,14 @@ exports.createPracticeTest = async (req, res) => {
 exports.getAllPracticeTests = async (req, res) => {
   try {
     console.log('getAllPracticeTests called by user:', req.user);
-    const practiceTests = await PracticeTest.find()
-      .populate('createdBy', 'firstName lastName email')
-      .sort({ createdAt: -1 });
+    const practiceTests = await PracticeTest.findAll({
+      include: [{
+        model: User,
+        as: 'creator',
+        attributes: ['firstName', 'lastName', 'email']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
 
     console.log('Found practice tests:', practiceTests.length);
     res.status(200).json({
@@ -120,8 +123,13 @@ exports.getPracticeTestById = async (req, res) => {
   try {
     const { testId } = req.params;
     
-    const practiceTest = await PracticeTest.findById(testId)
-      .populate('createdBy', 'firstName lastName email');
+    const practiceTest = await PracticeTest.findByPk(testId, {
+      include: [{
+        model: User,
+        as: 'creator',
+        attributes: ['firstName', 'lastName', 'email']
+      }]
+    });
 
     if (!practiceTest) {
       return res.status(404).json({
@@ -145,9 +153,11 @@ exports.getPracticeTestById = async (req, res) => {
 // Get available practice tests for students and corporate users
 exports.getAvailablePracticeTests = async (req, res) => {
   try {
-    const practiceTests = await PracticeTest.find({ isActive: true })
-      .select('title description category totalQuestions questionsPerTest duration passingScore repeatAfterHours enableCooldown questions targetUserType showInPublic')
-      .sort({ createdAt: -1 });
+    const practiceTests = await PracticeTest.findAll({
+      where: { isActive: true },
+      attributes: ['id', 'title', 'description', 'category', 'totalQuestions', 'questionsPerTest', 'duration', 'passingScore', 'repeatAfterHours', 'enableCooldown', 'questions', 'targetUserType', 'showInPublic'],
+      order: [['createdAt', 'DESC']]
+    });
 
     let filteredTests = practiceTests;
     if (req.user && req.user.userType) {
@@ -157,14 +167,17 @@ exports.getAvailablePracticeTests = async (req, res) => {
 
     let testsWithAvailability;
     if (req.user) {
-      const userAttempts = await TestAttempt.find({ 
-        userId: req.user._id,
-        status: 'completed'
-      }).select('practiceTestId completedAt');
+      const userAttempts = await TestAttempt.findAll({ 
+        where: {
+          userId: req.user.id,
+          status: 'completed'
+        },
+        attributes: ['practiceTestId', 'completedAt']
+      });
 
       testsWithAvailability = filteredTests.map(test => {
         const userTestAttempts = userAttempts.filter(
-          attempt => attempt.practiceTestId.toString() === test._id.toString()
+          attempt => attempt.practiceTestId.toString() === test.id.toString()
         );
         const lastAttempt = userTestAttempts.length > 0 
           ? userTestAttempts.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0]
@@ -187,7 +200,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
           options: q.options
         }));
         return {
-          _id: test._id,
+          id: test.id,
           title: test.title,
           description: test.description,
           category: test.category,
@@ -233,7 +246,7 @@ exports.startPracticeTest = async (req, res) => {
     });
 
     // Check if test exists and is active
-    const practiceTest = await PracticeTest.findById(testId);
+    const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest || !practiceTest.isActive) {
       return res.status(404).json({
         status: 'fail',
@@ -243,9 +256,11 @@ exports.startPracticeTest = async (req, res) => {
 
     // 1. Check for in-progress attempt for this user and test
     let testAttempt = await TestAttempt.findOne({
-      userId: req.user._id,
-      practiceTestId: testId,
-      status: 'in_progress'
+      where: {
+        userId: req.user.id,
+        practiceTestId: testId,
+        status: 'in_progress'
+      }
     });
 
     if (testAttempt) {
@@ -253,7 +268,7 @@ exports.startPracticeTest = async (req, res) => {
       return res.status(200).json({
         status: 'success',
         data: {
-          testAttemptId: testAttempt._id,
+          testAttemptId: testAttempt.id,
           test: {
             title: practiceTest.title,
             duration: practiceTest.duration,
@@ -271,10 +286,13 @@ exports.startPracticeTest = async (req, res) => {
 
     // 2. (existing cooldown logic for completed attempts, if any)
     const lastAttempt = await TestAttempt.findOne({
-      userId: req.user._id,
-      practiceTestId: testId,
-      status: 'completed'
-    }).sort({ completedAt: -1 });
+      where: {
+        userId: req.user.id,
+        practiceTestId: testId,
+        status: 'completed'
+      },
+      order: [['completedAt', 'DESC']]
+    });
     if (lastAttempt && lastAttempt.completedAt) {
       const now = new Date();
       const completedAt = new Date(lastAttempt.completedAt);
@@ -301,7 +319,7 @@ exports.startPracticeTest = async (req, res) => {
       options: practiceTest.questions[index].options
     }));
     const testAttemptData = {
-      userId: req.user._id,
+      userId: req.user.id,
       practiceTestId: testId,
       testTitle: practiceTest.title,
       questionsAsked: selectedQuestionIndices,
@@ -310,13 +328,13 @@ exports.startPracticeTest = async (req, res) => {
       startedAt: new Date(),
       ipAddress: req.ip,
       userAgent: req.get('User-Agent'),
-      attemptsCount: (await TestAttempt.countDocuments({ userId: req.user._id, practiceTestId: testId })) + 1
+      attemptsCount: (await TestAttempt.count({ where: { userId: req.user.id, practiceTestId: testId } })) + 1
     };
     const newTestAttempt = await TestAttempt.create(testAttemptData);
     res.status(200).json({
       status: 'success',
       data: {
-        testAttemptId: newTestAttempt._id,
+        testAttemptId: newTestAttempt.id,
         test: {
           title: practiceTest.title,
           duration: practiceTest.duration,
@@ -342,7 +360,7 @@ exports.submitPracticeTest = async (req, res) => {
     const { answers } = req.body;
 
     // Get test attempt
-    const testAttempt = await TestAttempt.findById(testAttemptId);
+    const testAttempt = await TestAttempt.findByPk(testAttemptId);
     if (!testAttempt) {
       return res.status(404).json({
         status: 'fail',
@@ -351,7 +369,7 @@ exports.submitPracticeTest = async (req, res) => {
     }
 
     // Verify user owns this attempt
-    if (testAttempt.userId.toString() !== req.user._id.toString()) {
+    if (testAttempt.userId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         status: 'fail',
         message: 'Not authorized to access this test attempt'
@@ -367,7 +385,7 @@ exports.submitPracticeTest = async (req, res) => {
     }
 
     // Get practice test for correct answers
-    const practiceTest = await PracticeTest.findById(testAttempt.practiceTestId);
+    const practiceTest = await PracticeTest.findByPk(testAttempt.practiceTestId);
     if (!practiceTest) {
       return res.status(404).json({
         status: 'fail',
@@ -412,7 +430,16 @@ exports.submitPracticeTest = async (req, res) => {
     testAttempt.status = 'completed';
     testAttempt.passed = passed;
 
-    await testAttempt.save();
+    await testAttempt.update({
+      answers: detailedAnswers,
+      score: score,
+      correctAnswers: correctAnswers,
+      wrongAnswers: testAttempt.totalQuestions - correctAnswers,
+      timeTaken: timeTaken,
+      completedAt: new Date(),
+      status: 'completed',
+      passed: passed
+    });
 
     res.status(200).json({
       status: 'success',
@@ -437,10 +464,15 @@ exports.submitPracticeTest = async (req, res) => {
 // Get user's test attempts
 exports.getUserTestAttempts = async (req, res) => {
   try {
-    const testAttempts = await TestAttempt.find({ userId: req.user._id })
-      .populate('practiceTestId', 'title category')
-      .lean() // Convert to plain JavaScript objects for better performance
-      .sort({ createdAt: -1 });
+    const testAttempts = await TestAttempt.findAll({
+      where: { userId: req.user.id },
+      include: [{
+        model: PracticeTest,
+        as: 'practiceTest',
+        attributes: ['title', 'category']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
 
     res.status(200).json({
       status: 'success',
@@ -473,14 +505,14 @@ exports.resetUserTestCooldown = async (req, res) => {
       : { userId, practiceTestId: testId, status: 'completed' };
 
     // Delete all completed attempts for this test
-    const result = await TestAttempt.deleteMany(query);
+    const result = await TestAttempt.destroy({ where: query });
 
     res.status(200).json({
       status: 'success',
       message: userId === "all" 
         ? `Reset cooldown for all users on test ${testId}`
         : `Reset cooldown for user ${userId} on test ${testId}`,
-      data: { deletedAttempts: result.deletedCount }
+      data: { deletedAttempts: result }
     });
   } catch (err) {
     res.status(500).json({
@@ -503,7 +535,7 @@ exports.getTestStatistics = async (req, res) => {
       });
     }
 
-    const attempts = await TestAttempt.find({ practiceTestId: testId });
+    const attempts = await TestAttempt.findAll({ where: { practiceTestId: testId } });
     const completedAttempts = attempts.filter(a => a.status === 'completed');
 
     const stats = {
@@ -521,9 +553,11 @@ exports.getTestStatistics = async (req, res) => {
 
     // Track question usage
     attempts.forEach(attempt => {
-      attempt.questionsAsked.forEach(qIndex => {
-        stats.questionUsage[qIndex] = (stats.questionUsage[qIndex] || 0) + 1;
-      });
+      if (attempt.questionsAsked && Array.isArray(attempt.questionsAsked)) {
+        attempt.questionsAsked.forEach(qIndex => {
+          stats.questionUsage[qIndex] = (stats.questionUsage[qIndex] || 0) + 1;
+        });
+      }
     });
 
     // Check if all questions have been used
@@ -600,11 +634,15 @@ exports.updatePracticeTest = async (req, res) => {
       updates.showInPublic = !!updates.showInPublic;
     }
 
-    const practiceTest = await PracticeTest.findByIdAndUpdate(
-      testId,
-      { ...updates, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    );
+    const practiceTest = await PracticeTest.findByPk(testId);
+    if (!practiceTest) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Practice test not found'
+      });
+    }
+    
+    await practiceTest.update({ ...updates, updatedAt: new Date() });
     console.log('Updated practice test:', practiceTest && practiceTest.targetUserType);
 
     if (!practiceTest) {
@@ -632,7 +670,15 @@ exports.deletePracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
 
-    const practiceTest = await PracticeTest.findByIdAndDelete(testId);
+    const practiceTest = await PracticeTest.findByPk(testId);
+    if (!practiceTest) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Practice test not found'
+      });
+    }
+    
+    await practiceTest.destroy();
     if (!practiceTest) {
       return res.status(404).json({
         status: 'fail',
@@ -658,7 +704,7 @@ exports.resetQuestionUsage = async (req, res) => {
     const { testId } = req.params;
 
     // Delete all attempts for this test
-    await TestAttempt.deleteMany({ practiceTestId: testId });
+    await TestAttempt.destroy({ where: { practiceTestId: testId } });
 
     res.status(200).json({
       status: 'success',

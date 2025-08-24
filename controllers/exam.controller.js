@@ -1,4 +1,4 @@
-const Exam = require('../models/exam.model');
+const { Exam, Course, User } = require('../models');
 
 // Create a new exam (admin only)
 exports.createExam = async (req, res) => {
@@ -52,9 +52,20 @@ exports.createExam = async (req, res) => {
 // Get all exams
 exports.getAllExams = async (req, res) => {
   try {
-    const exams = await Exam.find()
-      .populate('courseId', 'title')
-      .populate('instructorId', 'firstName lastName email');
+    const exams = await Exam.findAll({
+      include: [
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['title']
+        },
+        {
+          model: User,
+          as: 'instructor',
+          attributes: ['firstName', 'lastName', 'email']
+        }
+      ]
+    });
     res.json(exams);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -64,9 +75,20 @@ exports.getAllExams = async (req, res) => {
 // Get a single exam by ID
 exports.getExamById = async (req, res) => {
   try {
-    const exam = await Exam.findById(req.params.id)
-      .populate('courseId', 'title')
-      .populate('instructorId', 'firstName lastName email');
+    const exam = await Exam.findByPk(req.params.id, {
+      include: [
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['title']
+        },
+        {
+          model: User,
+          as: 'instructor',
+          attributes: ['firstName', 'lastName', 'email']
+        }
+      ]
+    });
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
     res.json(exam);
   } catch (err) {
@@ -78,7 +100,9 @@ exports.getExamById = async (req, res) => {
 exports.updateExam = async (req, res) => {
   try {
     const updates = { ...req.body };
-    const exam = await Exam.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+    const exam = await Exam.findByPk(req.params.id);
+    if (!exam) return res.status(404).json({ message: 'Exam not found' });
+    await exam.update(updates);
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
     res.json(exam);
   } catch (err) {
@@ -89,7 +113,9 @@ exports.updateExam = async (req, res) => {
 // Delete an exam (admin only)
 exports.deleteExam = async (req, res) => {
   try {
-    const exam = await Exam.findByIdAndDelete(req.params.id);
+    const exam = await Exam.findByPk(req.params.id);
+    if (!exam) return res.status(404).json({ message: 'Exam not found' });
+    await exam.destroy();
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
     res.json({ message: 'Exam deleted successfully' });
   } catch (err) {

@@ -1,4 +1,4 @@
-const Course = require('../models/course.model');
+const { Course, User } = require('../models');
 
 // Create a new course (admin only)
 exports.createCourse = async (req, res) => {
@@ -20,7 +20,7 @@ exports.createCourse = async (req, res) => {
     });
 
     res.status(201).json({
-      _id: course._id,
+      id: course.id,
       title: course.title,
       description: course.description,
       duration: course.duration,
@@ -41,7 +41,13 @@ exports.createCourse = async (req, res) => {
 // Get all courses
 exports.getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.find().populate('instructorId', 'firstName lastName email');
+    const courses = await Course.findAll({
+      include: [{
+        model: User,
+        as: 'instructor',
+        attributes: ['firstName', 'lastName', 'email']
+      }]
+    });
     res.json(courses);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -51,7 +57,13 @@ exports.getAllCourses = async (req, res) => {
 // Get a single course by ID
 exports.getCourseById = async (req, res) => {
   try {
-    const course = await Course.findById(req.params.id).populate('instructorId', 'firstName lastName email');
+    const course = await Course.findByPk(req.params.id, {
+      include: [{
+        model: User,
+        as: 'instructor',
+        attributes: ['firstName', 'lastName', 'email']
+      }]
+    });
     if (!course) return res.status(404).json({ message: 'Course not found' });
     res.json(course);
   } catch (err) {
@@ -63,8 +75,10 @@ exports.getCourseById = async (req, res) => {
 exports.updateCourse = async (req, res) => {
   try {
     const updates = { ...req.body };
-    const course = await Course.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+    const course = await Course.findByPk(req.params.id);
     if (!course) return res.status(404).json({ message: 'Course not found' });
+    
+    await course.update(updates);
     res.json(course);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -74,8 +88,9 @@ exports.updateCourse = async (req, res) => {
 // Delete a course (admin only)
 exports.deleteCourse = async (req, res) => {
   try {
-    const course = await Course.findByIdAndDelete(req.params.id);
+    const course = await Course.findByPk(req.params.id);
     if (!course) return res.status(404).json({ message: 'Course not found' });
+    await course.destroy();
     res.json({ message: 'Course deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });

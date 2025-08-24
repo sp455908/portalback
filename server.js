@@ -1,6 +1,6 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
 const app = require('./app');
+const { sequelize, testConnection, syncDatabase } = require('./config/database');
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -10,32 +10,32 @@ const allowedOrigins = [
   "https://your-frontend-domain.onrender.com" // Add your frontend Render domain here
 ];
 
-const MONGO_URI = process.env.MONGO_URI;
 const PORT = process.env.PORT || 3000;
 let isConnected = false;
+
+// Check if --force-sync flag is passed
+const forceSync = process.argv.includes('--force-sync');
+if (forceSync) {
+  console.log('⚠️  Force sync mode enabled - this will recreate all tables!');
+}
 
 async function connectDB() {
   if (!isConnected) {
     try {
-      console.log('Attempting to connect to MongoDB...');
-      console.log('MongoDB URI:', MONGO_URI ? 'Set' : 'Not set');
+      console.log('Attempting to connect to PostgreSQL...');
       
-      if (!MONGO_URI) {
-        throw new Error('MONGO_URI environment variable is not set');
+      const connected = await testConnection();
+      if (connected) {
+        isConnected = true;
+        console.log('PostgreSQL connected successfully');
+        
+        // Sync database (create tables if they don't exist)
+        await syncDatabase(forceSync); // Use forceSync flag if passed
+      } else {
+        throw new Error('Failed to connect to PostgreSQL');
       }
-
-      await mongoose.connect(MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        serverSelectionTimeoutMS: 5000, // 5 second timeout
-        socketTimeoutMS: 45000, // 45 second timeout
-      });
-      
-      isConnected = true;
-      console.log('MongoDB connected successfully');
     } catch (error) {
-      console.error('MongoDB connection error:', error);
-      // Don't exit immediately, let the server start and handle reconnection
+      console.error('PostgreSQL connection error:', error);
       isConnected = false;
     }
   }
@@ -62,16 +62,16 @@ async function startServer() {
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
-  mongoose.connection.close(() => {
-    console.log('MongoDB connection closed');
+  sequelize.close(() => {
+    console.log('PostgreSQL connection closed');
     process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
-  mongoose.connection.close(() => {
-    console.log('MongoDB connection closed');
+  sequelize.close(() => {
+    console.log('PostgreSQL connection closed');
     process.exit(0);
   });
 });

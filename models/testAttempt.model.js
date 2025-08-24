@@ -1,40 +1,110 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const testAttemptSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
-  guestName: { type: String }, // for guest users
-  guestEmail: { type: String }, // for guest users
-  practiceTestId: { type: mongoose.Schema.Types.ObjectId, ref: 'PracticeTest', required: true },
-  testTitle: { type: String, required: true },
-  answers: [{
-    questionIndex: { type: Number, required: true },
-    selectedAnswer: { type: Number, required: true }, // index of selected option
-    isCorrect: { type: Boolean, required: true },
-    timeSpent: { type: Number, default: 0 } // time spent on this question in seconds
-  }],
-  questionsAsked: [{ type: Number }], // indices of questions that were shown
-  score: { type: Number, default: 0 }, // percentage score - set to 0 initially
-  totalQuestions: { type: Number, required: true },
-  correctAnswers: { type: Number, default: 0 }, // set to 0 initially
-  wrongAnswers: { type: Number, default: 0 }, // set to 0 initially
-  timeTaken: { type: Number, default: 0 }, // total time taken in seconds - set to 0 initially
-  maxTime: { type: Number, required: true }, // max time allowed in seconds
-  startedAt: { type: Date, required: true },
-  completedAt: { type: Date }, // optional - only set when completed
-  status: { 
-    type: String, 
-    enum: ['in_progress', 'completed', 'timeout', 'abandoned'], 
-    default: 'in_progress' 
+const TestAttempt = sequelize.define('TestAttempt', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
   },
-  passed: { type: Boolean, default: false }, // set to false initially
-  ipAddress: { type: String }, // for security tracking
-  userAgent: { type: String }, // for security tracking
-  attemptsCount: { type: Number, default: 1 }, // which attempt this is for this user
-  createdAt: { type: Date, default: Date.now }
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  guestName: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  guestEmail: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  practiceTestId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'PracticeTests',
+      key: 'id'
+    }
+  },
+  testTitle: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  answers: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  questionsAsked: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  score: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  totalQuestions: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  correctAnswers: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  wrongAnswers: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  timeTaken: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  maxTime: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  startedAt: {
+    type: DataTypes.DATE,
+    allowNull: false
+  },
+  completedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  status: {
+    type: DataTypes.ENUM('in_progress', 'completed', 'timeout', 'abandoned'),
+    defaultValue: 'in_progress'
+  },
+  passed: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  ipAddress: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  userAgent: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  attemptsCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1
+  }
+}, {
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['userId', 'practiceTestId', 'createdAt']
+    },
+    {
+      fields: ['userId', 'startedAt']
+    }
+  ]
 });
 
-// Index for efficient queries
-testAttemptSchema.index({ userId: 1, practiceTestId: 1, createdAt: -1 });
-testAttemptSchema.index({ userId: 1, startedAt: 1 });
-
-module.exports = mongoose.model('TestAttempt', testAttemptSchema); 
+module.exports = TestAttempt; 

@@ -1,24 +1,57 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const courseSchema = new mongoose.Schema({
-  title: { type: String, required: true, trim: true },
-  description: { type: String, required: true },
-  duration: { type: String, required: true },
-  modules: { type: Number, required: true },
-  fee: { type: String, required: true },
-  isActive: { type: Boolean, default: false }, // Changed to match your frontend status
-  instructorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  students: { type: Number, default: 0 },
-  rating: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+const Course = sequelize.define('Course', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  duration: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  modules: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  fee: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  instructorId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  students: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  rating: {
+    type: DataTypes.DECIMAL(3, 2),
+    defaultValue: 0
+  }
 }, {
-  timestamps: true // This will automatically handle createdAt and updatedAt
+  timestamps: true
 });
 
-courseSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-module.exports = mongoose.model('Course', courseSchema);
+module.exports = Course;

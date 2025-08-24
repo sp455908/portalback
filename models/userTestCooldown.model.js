@@ -1,37 +1,57 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const userTestCooldownSchema = new mongoose.Schema({
-  userId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+const UserTestCooldown = sequelize.define('UserTestCooldown', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
   },
-  testId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'PracticeTest', 
-    required: true 
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
-  cooldownHours: { 
-    type: Number, 
-    required: true, 
-    default: 24 
+  testId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'PracticeTests',
+      key: 'id'
+    }
   },
-  setBy: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+  cooldownHours: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 24
   },
-  setAt: { 
-    type: Date, 
-    default: Date.now 
+  setBy: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
-  isActive: { 
-    type: Boolean, 
-    default: true 
+  setAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   }
+}, {
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['userId', 'testId']
+    }
+  ]
 });
 
-// Compound index to ensure unique user-test combinations
-userTestCooldownSchema.index({ userId: 1, testId: 1 }, { unique: true });
-
-module.exports = mongoose.model('UserTestCooldown', userTestCooldownSchema); 
+module.exports = UserTestCooldown; 

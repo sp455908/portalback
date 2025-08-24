@@ -1,5 +1,4 @@
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const crypto = require('crypto');
 
 // Session configuration with fallback for when MongoDB is not available
@@ -15,16 +14,7 @@ const sessionConfig = {
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined
   },
-  store: process.env.MONGO_URI ? MongoStore.create({
-    mongoUrl: process.env.MONGO_URI,
-    collectionName: 'sessions',
-    ttl: 24 * 60 * 60, // 24 hours in seconds
-    autoRemove: 'native',
-    touchAfter: 24 * 3600, // 24 hours
-    crypto: {
-      secret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-in-production'
-    }
-  }) : undefined, // Fallback to memory store if no MongoDB
+  store: undefined, // Using memory store for now, can be configured with PostgreSQL store later
   rolling: true, // Extend session on each request
   unset: 'destroy'
 };
