@@ -15,16 +15,34 @@ const signToken = (id) => {
   });
 };
 
-// Create and send token
+// Helper to sign refresh token
+const signRefreshToken = (id) => {
+  return jwt.sign({ id, type: 'refresh' }, process.env.JWT_SECRET, {
+    expiresIn: '30d' // Refresh token valid for 30 days
+  });
+};
+
+// Create and send token with refresh token
 const createSendToken = (user, statusCode, res) => {
-  const token = signToken(user.id);
+  const accessToken = signToken(user.id);
+  const refreshToken = signRefreshToken(user.id);
   
   // Remove password from output
   user.password = undefined;
 
+  // Set refresh token as HTTP-only cookie
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+  });
+
   res.status(statusCode).json({
     status: 'success',
-    token,
+    token: accessToken,
+    refreshToken: refreshToken,
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     data: {
       user
     }
@@ -201,12 +219,90 @@ exports.getMe = async (req, res, next) => {
   }
 };
 
-// Logout (for client-side token removal)
-exports.logout = (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    message: 'Logged out successfully'
-  });
+// Refresh access token using refresh token
+exports.refreshToken = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.cookies;
+    
+    if (!refreshToken) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'No refresh token provided'
+      });
+    }
+
+    // Verify refresh token
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Invalid token type'
+      });
+    }
+
+    // Check if user still exists
+    const user = await User.findByPk(decoded.id);
+    if (!user || !user.isActive) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'User not found or inactive'
+      });
+    }
+
+    // Generate new access token
+    const newAccessToken = signToken(user.id);
+    
+    // Remove password from output
+    user.password = undefined;
+
+    res.status(200).json({
+      status: 'success',
+      token: newAccessToken,
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+      data: {
+        user
+      }
+    });
+
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Refresh token expired. Please login again.'
+      });
+    }
+    
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Invalid refresh token'
+      });
+    }
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Token refresh failed'
+    });
+  }
+};
+
+// Logout user (invalidate refresh token)
+exports.logout = async (req, res, next) => {
+  try {
+    // Clear refresh token cookie
+    res.clearCookie('refreshToken');
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Logged out successfully'
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Logout failed'
+    });
+  }
 };
 
 // Protect middleware (already in auth.middleware.js)
