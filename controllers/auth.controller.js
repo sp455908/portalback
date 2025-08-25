@@ -91,17 +91,36 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // 2) Create new user
-    const newUser = await User.create({
-      firstName,
-      lastName,
-      email: normalizedEmail,
-      password,
-      role,
-      userType,
-      phone,
-      address
-    });
+    // 2) Create new user (retry once on studentId collision)
+    let newUser;
+    try {
+      newUser = await User.create({
+        firstName,
+        lastName,
+        email: normalizedEmail,
+        password,
+        role,
+        userType,
+        phone,
+        address
+      });
+    } catch (createErr) {
+      if (createErr.name === 'SequelizeUniqueConstraintError' && createErr?.fields?.studentId) {
+        // Retry create once in case two requests raced for the same sequence
+        newUser = await User.create({
+          firstName,
+          lastName,
+          email: normalizedEmail,
+          password,
+          role,
+          userType,
+          phone,
+          address
+        });
+      } else {
+        throw createErr;
+      }
+    }
 
     // 3) Log user in, send JWT
     createSendToken(newUser, 201, res);

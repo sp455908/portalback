@@ -76,6 +76,7 @@ const User = sequelize.define('User', {
   timestamps: true, // This will create createdAt and updatedAt
   hooks: {
     beforeCreate: async (user) => {
+      const Counter = require('./counter.model');
       // Check single admin rule
       if (user.role === 'admin') {
         const adminCount = await User.count({ where: { role: 'admin' } });
@@ -84,18 +85,11 @@ const User = sequelize.define('User', {
         }
       }
       
-      // Generate student ID for new students
+      // Generate student ID for new students using atomic counter
       if (user.role === 'student' && !user.studentId) {
         const year = new Date().getFullYear();
-        const count = await User.count({
-          where: {
-            role: 'student',
-            studentId: {
-              [Op.like]: `IIFTL-${year}-%`
-            }
-          }
-        });
-        user.studentId = `IIFTL-${year}-${String(count + 1).padStart(5, '0')}`;
+        const seq = await Counter.getNextSequence(`student:${year}`);
+        user.studentId = `IIFTL-${year}-${String(seq).padStart(5, '0')}`;
       }
       
       // Hash password
