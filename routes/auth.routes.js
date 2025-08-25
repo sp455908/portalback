@@ -4,6 +4,7 @@ const authController = require('../controllers/auth.controller');
 const { protect } = require('../middlewares/auth.middleware');
 const userController = require('../controllers/user.controller');
 const { User } = require('../models');
+const { Op, fn, col } = require('sequelize');
 
 // Register a new user
 router.post('/user-auth/register', authController.register);
@@ -22,7 +23,12 @@ router.get('/check-email', async (req, res) => {
       });
     }
 
-    const existingUser = await User.findOne({ where: { email } });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const existingUser = await User.findOne({
+      where: {
+        email: normalizedEmail
+      }
+    });
     
     res.status(200).json({
       status: 'success',

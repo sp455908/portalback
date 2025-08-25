@@ -53,6 +53,7 @@ const createSendToken = (user, statusCode, res) => {
 exports.register = async (req, res, next) => {
   try {
     const { firstName, lastName, email, password, role, userType, phone, address } = req.body;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
 
     if (!role || !userType) {
       return res.status(400).json({
@@ -82,7 +83,7 @@ exports.register = async (req, res, next) => {
     }
 
     // 1) Check if user already exists
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await User.findOne({ where: { email: normalizedEmail } });
     if (existingUser) {
       return res.status(400).json({
         status: 'fail',
@@ -94,7 +95,7 @@ exports.register = async (req, res, next) => {
     const newUser = await User.create({
       firstName,
       lastName,
-      email,
+      email: normalizedEmail,
       password,
       role,
       userType,

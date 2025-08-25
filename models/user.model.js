@@ -30,6 +30,14 @@ const User = sequelize.define('User', {
       isEmail: true,
       notEmpty: true
     }
+    ,
+    set(value) {
+      if (typeof value === 'string') {
+        this.setDataValue('email', value.trim().toLowerCase());
+      } else {
+        this.setDataValue('email', value);
+      }
+    }
   },
   password: {
     type: DataTypes.STRING,
