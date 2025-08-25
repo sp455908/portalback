@@ -259,3 +259,80 @@ exports.protect = async (req, res, next) => {
     });
   }
 };
+
+// Temporary admin creation endpoint for initial setup (Render deployment)
+exports.createInitialAdmin = async (req, res, next) => {
+  try {
+    // Check if admin user already exists
+    const adminCount = await User.count({ where: { role: 'admin' } });
+    
+    if (adminCount > 0) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Admin user already exists. Use regular login or contact support.'
+      });
+    }
+
+    // Check if this is a development environment or if a special setup key is provided
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const setupKey = req.headers['x-setup-key'];
+    const validSetupKey = process.env.SETUP_KEY || 'iiftl-setup-2024';
+    
+    if (!isDevelopment && setupKey !== validSetupKey) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'Initial admin creation requires proper setup key or development environment'
+      });
+    }
+
+    // Create the admin user
+    const hashedPassword = await bcrypt.hash('sunVexpress#0912', 12);
+    const adminUser = await User.create({
+      firstName: 'IIFTL',
+      lastName: 'Administrator',
+      email: 'iiftladmin@iiftl.com',
+      password: hashedPassword,
+      role: 'admin',
+      userType: 'corporate',
+      isActive: true
+    });
+
+    console.log('🎉 Initial admin user created successfully:', adminUser.email);
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Initial admin user created successfully',
+      data: {
+        user: {
+          id: adminUser.id,
+          email: adminUser.email,
+          role: adminUser.role,
+          userType: adminUser.userType,
+          firstName: adminUser.firstName,
+          lastName: adminUser.lastName
+        }
+      },
+      credentials: {
+        email: 'iiftladmin@iiftl.com',
+        password: 'sunVexpress#0912'
+      },
+      note: 'Please change the default password after first login'
+    });
+
+  } catch (err) {
+    console.error('Initial admin creation error:', err);
+    
+    if (err.message === 'Only one admin user is allowed in the system') {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Admin user already exists'
+      });
+    }
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to create initial admin user',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};

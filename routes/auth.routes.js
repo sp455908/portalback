@@ -47,6 +47,9 @@ router.post('/verify-token', protect, (req, res) => {
 // Login user
 router.post('/login', authController.login);
 
+// Initial admin creation endpoint (for Render deployment)
+router.post('/create-initial-admin', authController.createInitialAdmin);
+
 // Get current authenticated user
 router.get('/me', protect, authController.getMe);
 
