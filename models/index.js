@@ -10,6 +10,8 @@ const Exam = require('./exam.model');
 const Material = require('./material.model');
 const PracticeTest = require('./practiceTest.model');
 const Batch = require('./batch.model');
+const BatchStudent = require('./batchStudent.model');
+const BatchAssignedTest = require('./batchAssignedTest.model');
 const Settings = require('./settings.model');
 const SecurityViolation = require('./securityViolation.model');
 const TestAttempt = require('./testAttempt.model');
@@ -74,6 +76,41 @@ PracticeTest.hasMany(SecurityViolation, { foreignKey: 'practiceTestId', as: 'sec
 // Batch associations
 Batch.belongsTo(User, { foreignKey: 'adminId', as: 'admin' });
 
+// Many-to-many relationship between Batch and User (students)
+Batch.belongsToMany(User, { 
+  through: BatchStudent, 
+  foreignKey: 'batchId', 
+  otherKey: 'userId',
+  as: 'students' 
+});
+User.belongsToMany(Batch, { 
+  through: BatchStudent, 
+  foreignKey: 'userId', 
+  otherKey: 'batchId',
+  as: 'enrolledBatches' 
+});
+
+// Many-to-many relationship between Batch and PracticeTest (assignedTests)
+Batch.belongsToMany(PracticeTest, { 
+  through: BatchAssignedTest, 
+  foreignKey: 'batchId', 
+  otherKey: 'testId',
+  as: 'assignedTests' 
+});
+PracticeTest.belongsToMany(Batch, { 
+  through: BatchAssignedTest, 
+  foreignKey: 'testId', 
+  otherKey: 'batchId',
+  as: 'assignedToBatches' 
+});
+
+// Junction table associations
+BatchStudent.belongsTo(Batch, { foreignKey: 'batchId' });
+BatchStudent.belongsTo(User, { foreignKey: 'userId' });
+BatchAssignedTest.belongsTo(Batch, { foreignKey: 'batchId' });
+BatchAssignedTest.belongsTo(PracticeTest, { foreignKey: 'testId' });
+BatchAssignedTest.belongsTo(User, { foreignKey: 'assignedBy', as: 'assignedByUser' });
+
 // Export all models
 module.exports = {
   sequelize,
@@ -86,6 +123,8 @@ module.exports = {
   Material,
   PracticeTest,
   Batch,
+  BatchStudent,
+  BatchAssignedTest,
   Settings,
   SecurityViolation,
   TestAttempt,

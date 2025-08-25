@@ -96,6 +96,8 @@ exports.createBatch = async (req, res) => {
 // Get all batches (admin only)
 exports.getAllBatches = async (req, res) => {
   try {
+    console.log('Getting all batches with query:', req.query);
+    
     const { status, search, page = 1, limit = 10 } = req.query;
     
     let whereClause = {};
@@ -116,6 +118,9 @@ exports.getAllBatches = async (req, res) => {
 
     const offset = (page - 1) * limit;
     
+    console.log('Batch query where clause:', whereClause);
+    console.log('Pagination:', { offset, limit });
+    
     const { count, rows: batches } = await Batch.findAndCountAll({
       where: whereClause,
       include: [
@@ -123,11 +128,6 @@ exports.getAllBatches = async (req, res) => {
           model: User,
           as: 'admin',
           attributes: ['firstName', 'lastName', 'email']
-        },
-        {
-          model: User,
-          as: 'students',
-          attributes: ['firstName', 'lastName', 'email', 'studentId', 'isActive']
         }
       ],
       order: [['createdAt', 'DESC']],
@@ -135,20 +135,23 @@ exports.getAllBatches = async (req, res) => {
       limit: parseInt(limit)
     });
 
+    console.log('Batch query result:', { count, batchesCount: batches.length });
+
     res.status(200).json({
       status: 'success',
       data: {
-        batches,
+        batches: batches || [],
         pagination: {
-          total: count,
+          total: count || 0,
           page: parseInt(page),
           limit: parseInt(limit),
-          totalPages: Math.ceil(count / limit)
+          totalPages: Math.ceil((count || 0) / limit)
         }
       }
     });
   } catch (err) {
     console.error('Error in getAllBatches:', err);
+    console.error('Error stack:', err.stack);
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch batches',
@@ -618,6 +621,37 @@ exports.updateBatchSettings = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to update batch settings',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+}; 
+
+// Health check for batches
+exports.batchHealthCheck = async (req, res) => {
+  try {
+    console.log('Batch health check requested');
+    
+    // Simple query to test if Batch model is working
+    const batchCount = await Batch.count();
+    
+    console.log('Batch count:', batchCount);
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Batch model is working',
+      data: {
+        batchCount,
+        model: 'Batch',
+        database: 'PostgreSQL',
+        associations: ['admin', 'students', 'assignedTests']
+      }
+    });
+  } catch (err) {
+    console.error('Error in batch health check:', err);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Batch model health check failed',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }

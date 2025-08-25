@@ -16,6 +16,9 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Health check endpoint (no auth required)
+router.get('/health', batchController.batchHealthCheck);
+
 // Admin-only routes - MUST BE AFTER student routes
 router.use(protect, authorize('admin'));
 
