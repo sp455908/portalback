@@ -274,7 +274,7 @@ exports.startPracticeTest = async (req, res) => {
       });
     }
 
-    // 2. (existing cooldown logic for completed attempts, if any)
+    // 2. Cooldown logic based on test configuration
     const lastAttempt = await TestAttempt.findOne({
       where: {
         userId: req.user.id,
@@ -284,25 +284,39 @@ exports.startPracticeTest = async (req, res) => {
       order: [['completedAt', 'DESC']]
     });
     if (lastAttempt && lastAttempt.completedAt) {
-      const now = new Date();
-      const completedAt = new Date(lastAttempt.completedAt);
-      const diffMs = now - completedAt;
-      const diffHours = diffMs / (1000 * 60 * 60);
-      if (diffHours < 1) {
-        const nextAvailableTime = new Date(completedAt.getTime() + 60 * 60 * 1000);
+      if (!practiceTest.allowRepeat) {
         return res.status(403).json({
           status: 'fail',
-          message: 'You must wait 1 hour before retaking this test.',
-          nextAvailableTime
+          message: 'Repeat attempts are disabled for this test.'
         });
+      }
+      if (practiceTest.enableCooldown) {
+        const now = new Date();
+        const completedAt = new Date(lastAttempt.completedAt);
+        const diffMs = now.getTime() - completedAt.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        const cooldownHours = Number(practiceTest.repeatAfterHours || 0);
+        if (diffHours < cooldownHours) {
+          const nextAvailableTime = new Date(completedAt.getTime() + cooldownHours * 60 * 60 * 1000);
+          return res.status(403).json({
+            status: 'fail',
+            message: `You must wait ${Math.ceil(cooldownHours - diffHours)} hour(s) before retaking this test.`,
+            nextAvailableTime
+          });
+        }
       }
     }
 
-    // 3. Create new attempt as before
-    // Get questions that user hasn't seen recently
-    // (No longer needed: unique question logic, just use first N in order)
-    const total = practiceTest.questionsPerTest || practiceTest.totalQuestions;
-    const selectedQuestionIndices = Array.from({ length: total }, (_, i) => i);
+    // 3. Create new attempt with cycling question selection
+    const totalAvailable = Array.isArray(practiceTest.questions) ? practiceTest.questions.length : 0;
+    if (totalAvailable === 0) {
+      return res.status(400).json({ status: 'fail', message: 'This test has no questions.' });
+    }
+    const perAttempt = Math.min(practiceTest.questionsPerTest || totalAvailable, totalAvailable);
+    const completedAttemptsCount = await TestAttempt.count({ where: { userId: req.user.id, practiceTestId: testId, status: 'completed' } });
+    const attemptNumber = completedAttemptsCount + 1;
+    const offset = ((attemptNumber - 1) * perAttempt) % totalAvailable;
+    const selectedQuestionIndices = Array.from({ length: perAttempt }, (_, i) => (offset + i) % totalAvailable);
     const selectedQuestions = selectedQuestionIndices.map(index => ({
       index,
       question: practiceTest.questions[index].question,
@@ -313,7 +327,7 @@ exports.startPracticeTest = async (req, res) => {
       practiceTestId: testId,
       testTitle: practiceTest.title,
       questionsAsked: selectedQuestionIndices,
-      totalQuestions: total,
+      totalQuestions: perAttempt,
       maxTime: practiceTest.duration * 60,
       startedAt: new Date(),
       ipAddress: req.ip,

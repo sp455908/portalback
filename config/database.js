@@ -39,24 +39,39 @@ const testConnection = async () => {
 // Sync database (create tables if they don't exist)
 const syncDatabase = async (force = false) => {
   try {
-    // Only sync if force is true or if we're in development and tables don't exist
+    // Only sync if force is true or if key tables don't exist
     if (force) {
       await sequelize.sync({ force: true });
       console.log('Database force synchronized successfully.');
     } else {
-      // Check if tables exist first
-      const tableExists = await sequelize.query(
-        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Users')",
-        { type: sequelize.QueryTypes.SELECT }
-      );
-      
-      if (tableExists[0].exists) {
+      // Check if key tables exist first
+      const checks = await Promise.all([
+        sequelize.query(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Users')",
+          { type: sequelize.QueryTypes.SELECT }
+        ),
+        sequelize.query(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'BatchStudents')",
+          { type: sequelize.QueryTypes.SELECT }
+        ),
+        sequelize.query(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'BatchAssignedTests')",
+          { type: sequelize.QueryTypes.SELECT }
+        )
+      ]);
+
+      const usersExists = checks[0][0].exists;
+      const batchStudentsExists = checks[1][0].exists;
+      const batchAssignedTestsExists = checks[2][0].exists;
+
+      if (usersExists && batchStudentsExists && batchAssignedTestsExists) {
         console.log('Database tables already exist, skipping sync.');
         return true;
-      } else {
-        await sequelize.sync({ force: false });
-        console.log('Database synchronized successfully (tables created).');
       }
+
+      // Create any missing tables without dropping existing ones
+      await sequelize.sync({ alter: true });
+      console.log('Database synchronized successfully (missing tables created/altered).');
     }
     return true;
   } catch (error) {

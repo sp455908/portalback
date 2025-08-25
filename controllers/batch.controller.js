@@ -1,4 +1,17 @@
-const { Batch, User, PracticeTest } = require('../models');
+const { Batch, User, PracticeTest, BatchStudent } = require('../models');
+const { Op } = require('sequelize');
+// Helper: resolve batch by numeric primary key or by string batchId code
+const findBatchByParam = async (batchIdParam, include = undefined) => {
+  if (!batchIdParam) return null;
+  if (batchIdParam === 'undefined' || batchIdParam === 'null') return null;
+  const param = String(batchIdParam).trim();
+  const isNumeric = /^\d+$/.test(param);
+  const orConditions = [{ batchId: { [Op.eq]: param } }];
+  if (isNumeric) {
+    orConditions.push({ id: Number(param) });
+  }
+  return await Batch.findOne({ where: { [Op.or]: orConditions }, include });
+};
 const { sequelize } = require('../config/database');
 
 // Create a new batch
@@ -128,6 +141,18 @@ exports.getAllBatches = async (req, res) => {
           model: User,
           as: 'admin',
           attributes: ['firstName', 'lastName', 'email']
+        },
+        {
+          model: User,
+          as: 'students',
+          attributes: ['id'],
+          through: { attributes: [] }
+        },
+        {
+          model: PracticeTest,
+          as: 'assignedTests',
+          attributes: ['id'],
+          through: { attributes: [] }
         }
       ],
       order: [['createdAt', 'DESC']],
@@ -165,20 +190,25 @@ exports.getBatchById = async (req, res) => {
   try {
     const { batchId } = req.params;
 
-    const batch = await Batch.findByPk(batchId, {
-      include: [
-        {
-          model: User,
-          as: 'admin',
-          attributes: ['firstName', 'lastName', 'email']
-        },
-        {
-          model: User,
-          as: 'students',
-          attributes: ['firstName', 'lastName', 'email', 'studentId', 'isActive']
-        }
-      ]
-    });
+    const batch = await findBatchByParam(batchId, [
+      {
+        model: User,
+        as: 'admin',
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      },
+      {
+        model: User,
+        as: 'students',
+        attributes: ['id', 'firstName', 'lastName', 'email', 'studentId', 'isActive'],
+        through: { attributes: [] }
+      },
+      {
+        model: PracticeTest,
+        as: 'assignedTests',
+        attributes: ['id', 'title', 'description', 'isActive', 'totalQuestions'],
+        through: { attributes: ['dueDate', 'instructions', 'assignedAt', 'assignedBy', 'isActive'] }
+      }
+    ]);
 
     if (!batch) {
       return res.status(404).json({
@@ -208,7 +238,7 @@ exports.updateBatch = async (req, res) => {
     const { batchId } = req.params;
     const updates = req.body;
 
-    const batch = await Batch.findByPk(batchId);
+    const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -235,20 +265,18 @@ exports.updateBatch = async (req, res) => {
     const updatedBatch = await batch.update(updates);
 
     // Fetch the updated batch with associations
-    const populatedBatch = await Batch.findByPk(batchId, {
-      include: [
-        {
-          model: User,
-          as: 'admin',
-          attributes: ['firstName', 'lastName', 'email']
-        },
-        {
-          model: User,
-          as: 'students',
-          attributes: ['firstName', 'lastName', 'email', 'studentId']
-        }
-      ]
-    });
+    const populatedBatch = await findBatchByParam(batchId, [
+      {
+        model: User,
+        as: 'admin',
+        attributes: ['firstName', 'lastName', 'email']
+      },
+      {
+        model: User,
+        as: 'students',
+        attributes: ['firstName', 'lastName', 'email', 'studentId']
+      }
+    ]);
 
     res.status(200).json({
       status: 'success',
@@ -271,7 +299,7 @@ exports.deleteBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
 
-    const batch = await Batch.findByPk(batchId);
+    const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -307,7 +335,7 @@ exports.addStudentsToBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findByPk(batchId);
+    const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -315,18 +343,25 @@ exports.addStudentsToBatch = async (req, res) => {
       });
     }
 
-    // Add students to batch (assuming many-to-many relationship)
-    await batch.addStudents(studentIds);
+    // Coerce to numeric user IDs (Sequelize FK uses integers)
+    const numericUserIds = studentIds
+      .map(id => Number(id))
+      .filter(n => !isNaN(n));
 
-    const updatedBatch = await Batch.findByPk(batchId, {
-      include: [
-        {
-          model: User,
-          as: 'students',
-          attributes: ['firstName', 'lastName', 'email', 'studentId']
-        }
-      ]
-    });
+    if (!numericUserIds.length) {
+      return res.status(400).json({ status: 'fail', message: 'Invalid student IDs' });
+    }
+
+    // Add students to batch (many-to-many)
+    await batch.addStudents(numericUserIds);
+
+    const updatedBatch = await findBatchByParam(batchId, [
+      {
+        model: User,
+        as: 'students',
+        attributes: ['firstName', 'lastName', 'email', 'studentId']
+      }
+    ]);
 
     res.status(200).json({
       status: 'success',
@@ -339,6 +374,59 @@ exports.addStudentsToBatch = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to add students to batch',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};
+
+// Check if given students are already in other active batches
+exports.checkStudentsConflicts = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    if (!batchId) {
+      return res.status(400).json({ status: 'fail', message: 'Invalid batchId' });
+    }
+
+    // Accept userIds via query (?userIds=1,2,3) or JSON body { userIds: [] }
+    let userIds = [];
+    if (req.query.userIds) {
+      userIds = String(req.query.userIds)
+        .split(',')
+        .map(id => Number(id))
+        .filter(n => !isNaN(n));
+    } else if (Array.isArray(req.body?.userIds)) {
+      userIds = req.body.userIds.map(n => Number(n)).filter(n => !isNaN(n));
+    }
+
+    if (!userIds.length) {
+      return res.status(400).json({ status: 'fail', message: 'userIds are required' });
+    }
+
+    const conflicts = await BatchStudent.findAll({
+      where: {
+        userId: userIds,
+        status: 'active'
+      },
+      attributes: ['userId', 'batchId']
+    });
+
+    // Exclude the current batch regardless of whether frontend sent PK or code
+    const currentBatch = await findBatchByParam(batchId);
+    const currentBatchPk = currentBatch ? currentBatch.id : null;
+    const filtered = currentBatchPk
+      ? conflicts.filter(c => Number(c.batchId) !== Number(currentBatchPk))
+      : conflicts;
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        conflicts: filtered
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to check student conflicts',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
@@ -357,7 +445,8 @@ exports.removeStudentsFromBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findByPk(batchId);
+    // Resolve batch by PK or human-readable code
+    const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -365,14 +454,33 @@ exports.removeStudentsFromBatch = async (req, res) => {
       });
     }
 
+    // Coerce to numeric user IDs for FK
+    const numericUserIds = studentIds
+      .map(id => Number(id))
+      .filter(n => !isNaN(n));
+
+    if (!numericUserIds.length) {
+      return res.status(400).json({ status: 'fail', message: 'Invalid student IDs' });
+    }
+
     // Remove students from batch
-    const updatedBatch = await batch.removeStudents(studentIds);
+    await batch.removeStudents(numericUserIds);
+
+    // Return refreshed batch with students
+    const refreshed = await findBatchByParam(batchId, [
+      {
+        model: User,
+        as: 'students',
+        attributes: ['id', 'firstName', 'lastName', 'email', 'studentId', 'isActive'],
+        through: { attributes: [] }
+      }
+    ]);
 
     res.status(200).json({
       status: 'success',
-      message: `${studentIds.length} students removed from batch successfully`,
+      message: `${numericUserIds.length} students removed from batch successfully`,
       data: {
-        batch: updatedBatch
+        batch: refreshed
       }
     });
   } catch (err) {
@@ -397,7 +505,7 @@ exports.assignTestsToBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findByPk(batchId);
+  const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -406,8 +514,12 @@ exports.assignTestsToBatch = async (req, res) => {
     }
 
     // Validate test assignments
-    const testIds = testAssignments.map(assignment => assignment.testId);
-    const tests = await PracticeTest.findAll({ where: { id: { [sequelize.Op.in]: testIds } } });
+    // Validate test assignments
+    const testIds = testAssignments.map(assignment => Number(assignment.testId)).filter(n => !isNaN(n));
+    if (!testIds.length) {
+      return res.status(400).json({ status: 'fail', message: 'Invalid test IDs' });
+    }
+    const tests = await PracticeTest.findAll({ where: { id: { [Op.in]: testIds } } });
 
     if (tests.length !== testIds.length) {
       return res.status(400).json({
@@ -416,21 +528,32 @@ exports.assignTestsToBatch = async (req, res) => {
       });
     }
 
-    // Prepare test assignments
-    const assignments = testAssignments.map(assignment => ({
-      testId: assignment.testId,
-      assignedBy: req.user.id,
-      dueDate: assignment.dueDate ? new Date(assignment.dueDate) : null,
-      instructions: assignment.instructions || '',
-      isActive: true
+    // Add assignments to batch with through attributes
+    await Promise.all(testAssignments.map(async assignment => {
+      const testId = Number(assignment.testId);
+      if (isNaN(testId)) return;
+      await batch.addAssignedTest(testId, {
+        through: {
+          assignedBy: req.user.id,
+          dueDate: assignment.dueDate ? new Date(assignment.dueDate) : null,
+          instructions: assignment.instructions || '',
+          isActive: true
+        }
+      });
     }));
 
-    // Add assignments to batch
-    const updatedBatch = await batch.addAssignedTests(assignments);
+    const updatedBatch = await findBatchByParam(batchId, [
+      {
+        model: PracticeTest,
+        as: 'assignedTests',
+        attributes: ['id', 'title', 'description', 'isActive', 'totalQuestions'],
+        through: { attributes: ['dueDate', 'instructions', 'assignedAt', 'assignedBy', 'isActive'] }
+      }
+    ]);
 
     res.status(200).json({
       status: 'success',
-      message: `${assignments.length} tests assigned to batch successfully`,
+      message: `${testAssignments.length} tests assigned to batch successfully`,
       data: {
         batch: updatedBatch
       }
@@ -457,7 +580,7 @@ exports.removeTestsFromBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findByPk(batchId);
+    const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -465,14 +588,27 @@ exports.removeTestsFromBatch = async (req, res) => {
       });
     }
 
-    // Remove tests from batch
-    const updatedBatch = await batch.removeAssignedTests(testIds);
+    const numericTestIds = testIds.map(id => Number(id)).filter(n => !isNaN(n));
+    if (!numericTestIds.length) {
+      return res.status(400).json({ status: 'fail', message: 'Invalid test IDs' });
+    }
+
+    await batch.removeAssignedTests(numericTestIds);
+
+    const refreshed = await findBatchByParam(batchId, [
+      {
+        model: PracticeTest,
+        as: 'assignedTests',
+        attributes: ['id', 'title', 'description', 'isActive', 'totalQuestions'],
+        through: { attributes: ['dueDate', 'instructions', 'assignedAt', 'assignedBy', 'isActive'] }
+      }
+    ]);
 
     res.status(200).json({
       status: 'success',
-      message: `${testIds.length} tests removed from batch successfully`,
+      message: `${numericTestIds.length} tests removed from batch successfully`,
       data: {
-        batch: updatedBatch
+        batch: refreshed
       }
     });
   } catch (err) {
@@ -542,8 +678,12 @@ exports.getBatchStats = async (req, res) => {
 exports.getStudentBatches = async (req, res) => {
   try {
     const { studentId } = req.params;
+    const numericStudentId = Number(studentId);
+    if (isNaN(numericStudentId)) {
+      return res.status(400).json({ status: 'fail', message: 'Invalid studentId' });
+    }
 
-    console.log('Fetching batches for student:', studentId);
+    console.log('Fetching batches for student (by join table):', numericStudentId);
 
     const batches = await Batch.findAll({
       include: [
@@ -555,27 +695,24 @@ exports.getStudentBatches = async (req, res) => {
         {
           model: PracticeTest,
           as: 'assignedTests',
-          attributes: ['title', 'description', 'targetUserType', 'duration', 'passingScore', 'questionsPerTest', 'totalQuestions', 'category']
+          attributes: ['id', 'title', 'description', 'targetUserType', 'duration', 'passingScore', 'questionsPerTest', 'totalQuestions', 'category'],
+          through: { attributes: ['dueDate', 'instructions', 'assignedAt', 'assignedBy', 'isActive'] }
         },
         {
           model: User,
-          as: 'assignedTests.assignedBy',
-          attributes: ['firstName', 'lastName']
+          as: 'students',
+          attributes: [],
+          through: { attributes: [] },
+          where: { id: numericStudentId }
         }
       ],
       where: {
-        students: {
-          [sequelize.Op.contains]: [studentId]
-        },
-        status: {
-          [sequelize.Op.in]: ['active', 'completed']
-        }
+        status: { [Op.in]: ['active', 'completed'] }
       },
       order: [['createdAt', 'DESC']]
     });
 
-    console.log('Found batches:', batches.length);
-    console.log('Batch data:', JSON.stringify(batches, null, 2));
+    console.log('Found batches for student:', batches.length);
 
     res.status(200).json({
       status: 'success',
