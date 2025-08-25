@@ -98,44 +98,52 @@ exports.getAllBatches = async (req, res) => {
   try {
     const { status, search, page = 1, limit = 10 } = req.query;
     
-    let query = {};
+    let whereClause = {};
     
     // Filter by status
     if (status && status !== 'all') {
-      query.status = status;
+      whereClause.status = status;
     }
     
     // Search functionality
     if (search) {
-      query.$or = [
-        { batchName: { $regex: search, $options: 'i' } },
-        { batchId: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+      whereClause[sequelize.Op.or] = [
+        { batchName: { [sequelize.Op.iLike]: `%${search}%` } },
+        { batchId: { [sequelize.Op.iLike]: `%${search}%` } },
+        { description: { [sequelize.Op.iLike]: `%${search}%` } }
       ];
     }
 
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
     
-    const batches = await Batch.find(query)
-      .populate('adminId', 'firstName lastName email')
-      .populate('students', 'firstName lastName email studentId isActive')
-      .populate('assignedTests.testId', 'title description targetUserType duration passingScore questionsPerTest totalQuestions category')
-      .populate('assignedTests.assignedBy', 'firstName lastName')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const total = await Batch.countDocuments(query);
+    const { count, rows: batches } = await Batch.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'admin',
+          attributes: ['firstName', 'lastName', 'email']
+        },
+        {
+          model: User,
+          as: 'students',
+          attributes: ['firstName', 'lastName', 'email', 'studentId', 'isActive']
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      offset: parseInt(offset),
+      limit: parseInt(limit)
+    });
 
     res.status(200).json({
       status: 'success',
       data: {
         batches,
         pagination: {
-          total,
+          total: count,
           page: parseInt(page),
           limit: parseInt(limit),
-          totalPages: Math.ceil(total / limit)
+          totalPages: Math.ceil(count / limit)
         }
       }
     });
@@ -154,11 +162,20 @@ exports.getBatchById = async (req, res) => {
   try {
     const { batchId } = req.params;
 
-    const batch = await Batch.findById(batchId)
-      .populate('adminId', 'firstName lastName email')
-      .populate('students', 'firstName lastName email studentId isActive')
-      .populate('assignedTests.testId', 'title description targetUserType duration passingScore')
-      .populate('assignedTests.assignedBy', 'firstName lastName');
+    const batch = await Batch.findByPk(batchId, {
+      include: [
+        {
+          model: User,
+          as: 'admin',
+          attributes: ['firstName', 'lastName', 'email']
+        },
+        {
+          model: User,
+          as: 'students',
+          attributes: ['firstName', 'lastName', 'email', 'studentId', 'isActive']
+        }
+      ]
+    });
 
     if (!batch) {
       return res.status(404).json({
@@ -188,7 +205,7 @@ exports.updateBatch = async (req, res) => {
     const { batchId } = req.params;
     const updates = req.body;
 
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findByPk(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -199,8 +216,10 @@ exports.updateBatch = async (req, res) => {
     // Check if batch name is being updated and if it already exists
     if (updates.batchName && updates.batchName !== batch.batchName) {
       const existingBatch = await Batch.findOne({ 
-        batchName: updates.batchName,
-        _id: { $ne: batchId }
+        where: {
+          batchName: updates.batchName,
+          id: { [sequelize.Op.ne]: batchId }
+        }
       });
       if (existingBatch) {
         return res.status(400).json({
@@ -210,19 +229,29 @@ exports.updateBatch = async (req, res) => {
       }
     }
 
-    const updatedBatch = await Batch.findByIdAndUpdate(
-      batchId,
-      updates,
-      { new: true, runValidators: true }
-    ).populate('adminId', 'firstName lastName email')
-     .populate('students', 'firstName lastName email studentId')
-     .populate('assignedTests.testId', 'title category');
+    const updatedBatch = await batch.update(updates);
+
+    // Fetch the updated batch with associations
+    const populatedBatch = await Batch.findByPk(batchId, {
+      include: [
+        {
+          model: User,
+          as: 'admin',
+          attributes: ['firstName', 'lastName', 'email']
+        },
+        {
+          model: User,
+          as: 'students',
+          attributes: ['firstName', 'lastName', 'email', 'studentId']
+        }
+      ]
+    });
 
     res.status(200).json({
       status: 'success',
       message: 'Batch updated successfully',
       data: {
-        batch: updatedBatch
+        batch: populatedBatch
       }
     });
   } catch (err) {
@@ -239,7 +268,7 @@ exports.deleteBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
 
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findByPk(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -247,7 +276,7 @@ exports.deleteBatch = async (req, res) => {
       });
     }
 
-    await Batch.findByIdAndDelete(batchId);
+    await batch.destroy();
 
     res.status(200).json({
       status: 'success',
@@ -275,7 +304,7 @@ exports.addStudentsToBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findByPk(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -283,40 +312,22 @@ exports.addStudentsToBatch = async (req, res) => {
       });
     }
 
-    // Check if students exist and are actually students
-    const students = await User.find({
-      _id: { $in: studentIds },
-      role: 'student'
+    // Add students to batch (assuming many-to-many relationship)
+    await batch.addStudents(studentIds);
+
+    const updatedBatch = await Batch.findByPk(batchId, {
+      include: [
+        {
+          model: User,
+          as: 'students',
+          attributes: ['firstName', 'lastName', 'email', 'studentId']
+        }
+      ]
     });
-
-    if (students.length !== studentIds.length) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Some users are not valid students'
-      });
-    }
-
-    // Check if adding these students would exceed max limit
-    const currentCount = batch.students.length;
-    const newCount = currentCount + studentIds.length;
-    
-    if (newCount > batch.settings.maxStudents) {
-      return res.status(400).json({
-        status: 'fail',
-        message: `Cannot add students. Batch limit is ${batch.settings.maxStudents}. Current: ${currentCount}, Adding: ${studentIds.length}`
-      });
-    }
-
-    // Add students to batch
-    const updatedBatch = await Batch.findByIdAndUpdate(
-      batchId,
-      { $addToSet: { students: { $each: studentIds } } },
-      { new: true }
-    ).populate('students', 'firstName lastName email studentId');
 
     res.status(200).json({
       status: 'success',
-      message: `${studentIds.length} students added to batch successfully`,
+      message: 'Students added to batch successfully',
       data: {
         batch: updatedBatch
       }
@@ -343,7 +354,7 @@ exports.removeStudentsFromBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findByPk(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -352,11 +363,7 @@ exports.removeStudentsFromBatch = async (req, res) => {
     }
 
     // Remove students from batch
-    const updatedBatch = await Batch.findByIdAndUpdate(
-      batchId,
-      { $pull: { students: { $in: studentIds } } },
-      { new: true }
-    ).populate('students', 'firstName lastName email studentId');
+    const updatedBatch = await batch.removeStudents(studentIds);
 
     res.status(200).json({
       status: 'success',
@@ -387,7 +394,7 @@ exports.assignTestsToBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findByPk(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -397,7 +404,7 @@ exports.assignTestsToBatch = async (req, res) => {
 
     // Validate test assignments
     const testIds = testAssignments.map(assignment => assignment.testId);
-    const tests = await PracticeTest.find({ _id: { $in: testIds } });
+    const tests = await PracticeTest.findAll({ where: { id: { [sequelize.Op.in]: testIds } } });
 
     if (tests.length !== testIds.length) {
       return res.status(400).json({
@@ -409,19 +416,14 @@ exports.assignTestsToBatch = async (req, res) => {
     // Prepare test assignments
     const assignments = testAssignments.map(assignment => ({
       testId: assignment.testId,
-      assignedBy: req.user._id,
+      assignedBy: req.user.id,
       dueDate: assignment.dueDate ? new Date(assignment.dueDate) : null,
       instructions: assignment.instructions || '',
       isActive: true
     }));
 
     // Add assignments to batch
-    const updatedBatch = await Batch.findByIdAndUpdate(
-      batchId,
-      { $push: { assignedTests: { $each: assignments } } },
-      { new: true }
-    ).populate('assignedTests.testId', 'title description targetUserType duration passingScore questionsPerTest totalQuestions category')
-     .populate('assignedTests.assignedBy', 'firstName lastName');
+    const updatedBatch = await batch.addAssignedTests(assignments);
 
     res.status(200).json({
       status: 'success',
@@ -452,7 +454,7 @@ exports.removeTestsFromBatch = async (req, res) => {
       });
     }
 
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findByPk(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -461,11 +463,7 @@ exports.removeTestsFromBatch = async (req, res) => {
     }
 
     // Remove tests from batch
-    const updatedBatch = await Batch.findByIdAndUpdate(
-      batchId,
-      { $pull: { assignedTests: { testId: { $in: testIds } } } },
-      { new: true }
-    ).populate('assignedTests.testId', 'title description targetUserType duration passingScore questionsPerTest totalQuestions category');
+    const updatedBatch = await batch.removeAssignedTests(testIds);
 
     res.status(200).json({
       status: 'success',
@@ -488,9 +486,20 @@ exports.getBatchStats = async (req, res) => {
   try {
     const { batchId } = req.params;
 
-    const batch = await Batch.findById(batchId)
-      .populate('students', 'firstName lastName email studentId')
-      .populate('assignedTests.testId', 'title category');
+    const batch = await Batch.findByPk(batchId, {
+      include: [
+        {
+          model: User,
+          as: 'students',
+          attributes: ['firstName', 'lastName', 'email', 'studentId']
+        },
+        {
+          model: PracticeTest,
+          as: 'assignedTests',
+          attributes: ['title', 'category']
+        }
+      ]
+    });
 
     if (!batch) {
       return res.status(404).json({
@@ -505,9 +514,9 @@ exports.getBatchStats = async (req, res) => {
       activeStudents: batch.students.filter(student => student.isActive).length,
       totalTests: batch.assignedTests.length,
       activeTests: batch.assignedTests.filter(test => test.isActive).length,
-      completionRate: batch.settings.requireCompletion ? 'Required' : 'Optional',
-      maxStudents: batch.settings.maxStudents,
-      availableSlots: batch.settings.maxStudents - batch.students.length
+      completionRate: batch.requireCompletion ? 'Required' : 'Optional',
+      maxStudents: batch.maxStudents,
+      availableSlots: batch.maxStudents - batch.students.length
     };
 
     res.status(200).json({
@@ -533,14 +542,34 @@ exports.getStudentBatches = async (req, res) => {
 
     console.log('Fetching batches for student:', studentId);
 
-    const batches = await Batch.find({
-      students: studentId,
-      status: { $in: ['active', 'completed'] }
-    })
-    .populate('adminId', 'firstName lastName email')
-    .populate('assignedTests.testId', 'title description targetUserType duration passingScore questionsPerTest totalQuestions category')
-    .populate('assignedTests.assignedBy', 'firstName lastName')
-    .sort({ createdAt: -1 });
+    const batches = await Batch.findAll({
+      include: [
+        {
+          model: User,
+          as: 'admin',
+          attributes: ['firstName', 'lastName', 'email']
+        },
+        {
+          model: PracticeTest,
+          as: 'assignedTests',
+          attributes: ['title', 'description', 'targetUserType', 'duration', 'passingScore', 'questionsPerTest', 'totalQuestions', 'category']
+        },
+        {
+          model: User,
+          as: 'assignedTests.assignedBy',
+          attributes: ['firstName', 'lastName']
+        }
+      ],
+      where: {
+        students: {
+          [sequelize.Op.contains]: [studentId]
+        },
+        status: {
+          [sequelize.Op.in]: ['active', 'completed']
+        }
+      },
+      order: [['createdAt', 'DESC']]
+    });
 
     console.log('Found batches:', batches.length);
     console.log('Batch data:', JSON.stringify(batches, null, 2));
@@ -567,7 +596,7 @@ exports.updateBatchSettings = async (req, res) => {
     const { batchId } = req.params;
     const { settings } = req.body;
 
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findByPk(batchId);
     if (!batch) {
       return res.status(404).json({
         status: 'fail',
@@ -576,11 +605,7 @@ exports.updateBatchSettings = async (req, res) => {
     }
 
     // Update settings
-    const updatedBatch = await Batch.findByIdAndUpdate(
-      batchId,
-      { $set: { settings } },
-      { new: true, runValidators: true }
-    );
+    const updatedBatch = await batch.update({ settings });
 
     res.status(200).json({
       status: 'success',
