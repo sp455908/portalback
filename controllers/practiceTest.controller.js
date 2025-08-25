@@ -981,6 +981,94 @@ exports.importQuestionsFromExcel = async (req, res) => {
   }
 };
 
+// Parse Excel and return questions without saving (Admin)
+exports.parseExcelPreview = async (req, res) => {
+  try {
+    const { category } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'No Excel file uploaded'
+      });
+    }
+
+    // Read the Excel file
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+
+    // Convert to JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    if (!jsonData || jsonData.length === 0) {
+      return res.status(400).json({ status: 'fail', message: 'Empty Excel sheet' });
+    }
+
+    const headers = jsonData[0];
+    const requiredHeaders = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer'];
+    const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+    if (missingHeaders.length > 0) {
+      return res.status(400).json({
+        status: 'fail',
+        message: `Missing required headers: ${missingHeaders.join(', ')}. Expected headers: ${requiredHeaders.join(', ')}`
+      });
+    }
+
+    const questions = [];
+    for (let i = 1; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      if (!row || row.length < 6) continue;
+
+      const question = row[headers.indexOf('Question')];
+      const optionA = row[headers.indexOf('Option A')];
+      const optionB = row[headers.indexOf('Option B')];
+      const optionC = row[headers.indexOf('Option C')];
+      const optionD = row[headers.indexOf('Option D')];
+      const correctAnswer = row[headers.indexOf('Correct Answer')];
+
+      if (!question || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
+        continue;
+      }
+
+      let correctAnswerIndex;
+      const answerStr = correctAnswer.toString().toLowerCase().trim();
+      if (answerStr === 'a' || answerStr === '1') correctAnswerIndex = 0;
+      else if (answerStr === 'b' || answerStr === '2') correctAnswerIndex = 1;
+      else if (answerStr === 'c' || answerStr === '3') correctAnswerIndex = 2;
+      else if (answerStr === 'd' || answerStr === '4') correctAnswerIndex = 3;
+      else continue;
+
+      questions.push({
+        question: question.toString().trim(),
+        options: [
+          optionA.toString().trim(),
+          optionB.toString().trim(),
+          optionC.toString().trim(),
+          optionD.toString().trim()
+        ],
+        correctAnswer: correctAnswerIndex,
+        explanation: '',
+        category: category || '',
+        difficulty: 'medium',
+        marks: 1
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Parsed ${questions.length} questions from Excel`,
+      data: { questions }
+    });
+  } catch (err) {
+    console.error('Error parsing Excel preview:', err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to parse Excel file',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};
+
 // Update practice test with Excel data (Admin)
 exports.updateTestWithExcel = async (req, res) => {
   try {

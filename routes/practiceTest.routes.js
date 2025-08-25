@@ -46,6 +46,7 @@ router.put('/admin/:testId/update-json', protect, authorize('admin'), practiceTe
 // Excel import routes (admin only)
 router.post('/admin/import-excel', protect, authorize('admin'), upload.single('excelFile'), practiceTestController.importQuestionsFromExcel);
 router.put('/admin/:testId/update-excel', protect, authorize('admin'), upload.single('excelFile'), practiceTestController.updateTestWithExcel);
+router.post('/admin/parse-excel', protect, authorize('admin'), upload.single('excelFile'), practiceTestController.parseExcelPreview);
 
 // Bulk update test settings (admin only)
 router.put('/admin/bulk-settings', protect, authorize('admin'), practiceTestController.bulkUpdateTestSettings);
