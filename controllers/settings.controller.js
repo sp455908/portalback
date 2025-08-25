@@ -65,7 +65,8 @@ exports.getMaintenanceStatus = async (req, res) => {
       data: {
         maintenanceMode: settings?.maintenanceMode || false,
         maintenanceMessage: settings?.maintenanceMessage || '',
-        maintenanceEndTime: settings?.maintenanceEndTime || null
+        maintenanceEndTime: settings?.maintenanceEndTime || null,
+        registrationEnabled: settings?.registrationEnabled || true
       }
     });
   } catch (err) {

@@ -22,6 +22,9 @@ router.get('/health', batchController.batchHealthCheck);
 // Admin-only routes - MUST BE AFTER student routes
 router.use(protect, authorize('admin'));
 
+// Batch statistics (MUST come before parameterized routes)
+router.get('/stats', protect, authorize('admin'), batchController.getBatchStats);
+
 // Batch CRUD operations
 router.post('/', batchController.createBatch);
 router.get('/', batchController.getAllBatches);
@@ -29,7 +32,7 @@ router.get('/:batchId', batchController.getBatchById);
 router.put('/:batchId', batchController.updateBatch);
 router.delete('/:batchId', batchController.deleteBatch);
 
-// Batch statistics
+// Individual batch statistics
 router.get('/:batchId/stats', batchController.getBatchStats);
 
 // Student management in batches

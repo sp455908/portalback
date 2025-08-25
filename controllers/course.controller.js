@@ -3,7 +3,7 @@ const { Course, User } = require('../models');
 // Create a new course (admin only)
 exports.createCourse = async (req, res) => {
   try {
-    const { title, description, duration, modules, fee, isActive } = req.body;
+    const { title, description, duration, modules, fee, isActive, targetUserType } = req.body;
     
     // Basic validation
     if (!title || !description || !duration || !modules || !fee) {
@@ -16,7 +16,8 @@ exports.createCourse = async (req, res) => {
       duration,
       modules,
       fee,
-      isActive: isActive || false // Default to false if not provided
+      isActive: isActive || false, // Default to false if not provided
+      targetUserType: targetUserType || 'student' // Default to student if not provided
     });
 
     res.status(201).json({
@@ -27,6 +28,7 @@ exports.createCourse = async (req, res) => {
       modules: course.modules,
       fee: course.fee,
       isActive: course.isActive,
+      targetUserType: course.targetUserType,
       createdAt: course.createdAt
     });
   } catch (err) {
@@ -75,11 +77,28 @@ exports.getCourseById = async (req, res) => {
 exports.updateCourse = async (req, res) => {
   try {
     const updates = { ...req.body };
-    const course = await Course.findByPk(req.params.id);
+    const course = await Course.findByPk(req.params.id, {
+      include: [{
+        model: User,
+        as: 'instructor',
+        attributes: ['firstName', 'lastName', 'email']
+      }]
+    });
     if (!course) return res.status(404).json({ message: 'Course not found' });
     
+    // Update the course with new data
     await course.update(updates);
-    res.json(course);
+    
+    // Fetch the updated course with instructor info
+    const updatedCourse = await Course.findByPk(req.params.id, {
+      include: [{
+        model: User,
+        as: 'instructor',
+        attributes: ['firstName', 'lastName', 'email']
+      }]
+    });
+    
+    res.json(updatedCourse);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

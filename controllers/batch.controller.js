@@ -626,6 +626,39 @@ exports.updateBatchSettings = async (req, res) => {
   }
 }; 
 
+// Get batch statistics for dashboard
+exports.getBatchStats = async (req, res) => {
+  try {
+    console.log('Getting batch statistics for dashboard');
+    console.log('Request URL:', req.url);
+    console.log('Request method:', req.method);
+    console.log('Request params:', req.params);
+    
+    // For now, return default values to get the endpoint working
+    // We can enhance this later with actual database queries
+    const totalStudents = 0;
+    const totalAssignedTests = 0;
+    
+    console.log('Batch statistics (default):', { totalStudents, totalAssignedTests });
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        totalStudents,
+        totalAssignedTests
+      }
+    });
+  } catch (err) {
+    console.error('Error in getBatchStats:', err);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch batch statistics',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};
+
 // Health check for batches
 exports.batchHealthCheck = async (req, res) => {
   try {

@@ -34,6 +34,11 @@ const Course = sequelize.define('Course', {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
+  targetUserType: {
+    type: DataTypes.ENUM('student', 'corporate', 'government'),
+    allowNull: false,
+    defaultValue: 'student'
+  },
   instructorId: {
     type: DataTypes.INTEGER,
     allowNull: true,
