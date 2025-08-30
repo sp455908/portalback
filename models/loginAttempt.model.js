@@ -63,6 +63,7 @@ const LoginAttempt = sequelize.define('LoginAttempt', {
     allowNull: true
   }
 }, {
+  tableName: 'LoginAttempts', // Explicitly set table name
   timestamps: true,
   indexes: [
     {

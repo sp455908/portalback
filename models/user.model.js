@@ -73,6 +73,7 @@ const User = sequelize.define('User', {
     defaultValue: true
   }
 }, {
+  tableName: 'Users', // Explicitly set table name to match database
   timestamps: true, // This will create createdAt and updatedAt
   hooks: {
     beforeCreate: async (user) => {

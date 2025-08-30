@@ -40,8 +40,8 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
   // Query optimization
   define: {
     timestamps: true,
-    underscored: false,
-    freezeTableName: true
+    underscored: false
+    // Removed freezeTableName: true to fix table naming issues
   }
 });
 
