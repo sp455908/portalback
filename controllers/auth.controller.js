@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { promisify } = require('util');
 const crypto = require('crypto');
+const { userCache, adminCountCache } = require('../utils/cache');
 
 // Promisify jwt.verify
 const verifyToken = promisify(jwt.verify);
@@ -71,19 +72,26 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Check single admin rule
+    // OPTIMIZED: Single query to check both admin count and existing user
+    const [adminCount, existingUser] = await Promise.all([
+      role === 'admin' ? User.count({ where: { role: 'admin' } }) : Promise.resolve(0),
+      User.findOne({ where: { email: normalizedEmail } })
+    ]);
+
+    // Cache admin count for future use
     if (role === 'admin') {
-      const adminCount = await User.count({ where: { role: 'admin' } });
-      if (adminCount > 0) {
-        return res.status(400).json({
-          status: 'fail',
-          message: 'Only one admin user is allowed in the system. Admin user already exists.'
-        });
-      }
+      adminCountCache.set('admin_count', adminCount, 5 * 60 * 1000); // 5 minutes
     }
 
-    // 1) Check if user already exists
-    const existingUser = await User.findOne({ where: { email: normalizedEmail } });
+    // Check single admin rule
+    if (role === 'admin' && adminCount > 0) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Only one admin user is allowed in the system. Admin user already exists.'
+      });
+    }
+
+    // Check if user already exists
     if (existingUser) {
       return res.status(400).json({
         status: 'fail',
@@ -91,7 +99,7 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // 2) Create new user (retry once on studentId collision)
+    // Create new user (retry once on studentId collision)
     let newUser;
     try {
       newUser = await User.create({
@@ -122,7 +130,7 @@ exports.register = async (req, res, next) => {
       }
     }
 
-    // 3) Log user in, send JWT
+    // Log user in, send JWT
     createSendToken(newUser, 201, res);
 
   } catch (err) {
@@ -174,8 +182,9 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
 
-    // 1) Check if email and password exist
     if (!email || !password) {
       return res.status(400).json({
         status: 'fail',
@@ -183,52 +192,32 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Get client IP and user agent
-    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
-    const userAgent = req.headers['user-agent'];
-
-    // 2) Check if email is blocked due to multiple failed attempts
-    const emailBlocked = await LoginAttempt.isEmailBlocked(email);
-    if (emailBlocked) {
-      // Record this failed attempt
-      await LoginAttempt.create({
-        userId: emailBlocked.userId,
-        email,
-        ipAddress,
-        userAgent,
-        success: false,
-        attemptTime: new Date()
-      });
-
-      const remainingTime = Math.ceil((new Date(emailBlocked.blockedUntil) - new Date()) / (1000 * 60));
-      return res.status(423).json({
-        status: 'fail',
-        message: `Account temporarily blocked due to multiple failed login attempts. Please try again in ${remainingTime} minutes or contact an administrator.`,
-        code: 'ACCOUNT_BLOCKED',
-        blockedUntil: emailBlocked.blockedUntil,
-        remainingMinutes: remainingTime
-      });
-    }
-
-    // 3) Check if user exists && password is correct
+    // 1) Check if user exists && password is correct
     const user = await User.findOne({ where: { email } });
     
+    // Cache user data for future use
+    if (user) {
+      userCache.set(`user_${user.id}`, {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive
+      }, 2 * 60 * 1000); // 2 minutes
+    }
+    
     if (!user || !(await user.comparePassword(password))) {
-      // Record failed login attempt
+      // Record failed login attempt and check blocking
       if (user) {
-        await LoginAttempt.create({
+        const loginResult = await LoginAttempt.processLoginAttempt({
           userId: user.id,
           email,
           ipAddress,
           userAgent,
-          success: false,
-          attemptTime: new Date()
+          success: false
         });
 
-        // Check if user should be blocked (5 failed attempts in 15 minutes)
-        const failedAttempts = await LoginAttempt.getFailedAttemptsCount(user.id, 15 * 60 * 1000);
-        
-        if (failedAttempts >= 5 && user.role !== 'admin') {
+        // If user should be blocked (5 failed attempts in 15 minutes)
+        if (loginResult.shouldBlock && user.role !== 'admin') {
           // Block the user for 15 minutes
           const blockedUntil = await LoginAttempt.blockUser(user.id, email, 'Multiple failed login attempts', 15);
           
@@ -248,9 +237,11 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 4) Check if user is currently blocked
-    const userBlocked = await LoginAttempt.isUserBlocked(user.id);
-    if (userBlocked) {
+    // 2) Get all blocking status in single query
+    const loginStatus = await LoginAttempt.getLoginStatus(user.id, email);
+    
+    // Check if user or email is currently blocked
+    if (loginStatus.isUserBlocked || loginStatus.isEmailBlocked) {
       // Record this failed attempt
       await LoginAttempt.create({
         userId: user.id,
@@ -261,17 +252,19 @@ exports.login = async (req, res, next) => {
         attemptTime: new Date()
       });
 
-      const remainingTime = Math.ceil((new Date(userBlocked.blockedUntil) - new Date()) / (1000 * 60));
+      const blockedUntil = loginStatus.isUserBlocked ? loginStatus.userBlockedUntil : loginStatus.emailBlockedUntil;
+      const remainingTime = Math.ceil((new Date(blockedUntil) - new Date()) / (1000 * 60));
+      
       return res.status(423).json({
         status: 'fail',
         message: `Account temporarily blocked due to multiple failed login attempts. Please try again in ${remainingTime} minutes or contact an administrator.`,
         code: 'ACCOUNT_BLOCKED',
-        blockedUntil: userBlocked.blockedUntil,
+        blockedUntil,
         remainingMinutes: remainingTime
       });
     }
 
-    // 5) Check if user is active
+    // 3) Check if user is active
     if (!user.isActive) {
       // Record failed login attempt
       await LoginAttempt.create({
@@ -289,7 +282,7 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 6) Record successful login attempt
+    // 4) Record successful login attempt
     await LoginAttempt.create({
       userId: user.id,
       email,
@@ -299,7 +292,7 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    // 7) If everything ok, send token to client
+    // 5) If everything ok, send token to client
     createSendToken(user, 200, res);
 
   } catch (err) {

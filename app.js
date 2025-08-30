@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const errorHandler = require('./middlewares/error.middleware');
+const performanceMonitor = require('./middlewares/performance.middleware');
 const { sequelize } = require('./config/database');
 
 // Route imports
@@ -70,6 +71,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 })); // Security headers first
 app.use(morgan('dev')); // Logging
+app.use(performanceMonitor); // Performance monitoring
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(cookieParser()); // Parse cookies

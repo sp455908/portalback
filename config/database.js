@@ -6,21 +6,42 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set. Please check your .env file.');
 }
 
-// Create Sequelize instance
+// Create Sequelize instance with optimized settings
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   dialect: 'postgres',
   dialectOptions: {
     ssl: {
       require: true,
       rejectUnauthorized: false
-    }
+    },
+    // Performance optimizations
+    statement_timeout: 30000, // 30 seconds
+    idle_in_transaction_session_timeout: 30000, // 30 seconds
+    // Connection optimizations
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000
   },
   logging: process.env.NODE_ENV === 'development' ? console.log : false,
+  // OPTIMIZED: Better connection pooling for performance
   pool: {
-    max: 5,
-    min: 0,
-    acquire: 30000,
-    idle: 10000
+    max: 20,           // Increased from 5 to 20 for better concurrency
+    min: 5,            // Increased from 0 to 5 for faster response
+    acquire: 30000,    // 30 seconds to acquire connection
+    idle: 10000,       // 10 seconds idle timeout
+    evict: 60000,      // Check for dead connections every minute
+    handleDisconnects: true
+  },
+  // Performance optimizations
+  benchmark: process.env.NODE_ENV === 'development',
+  retry: {
+    max: 3,
+    timeout: 1000
+  },
+  // Query optimization
+  define: {
+    timestamps: true,
+    underscored: false,
+    freezeTableName: true
   }
 });
 
