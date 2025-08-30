@@ -17,6 +17,7 @@ const SecurityViolation = require('./securityViolation.model');
 const TestAttempt = require('./testAttempt.model');
 const UserTestCooldown = require('./userTestCooldown.model');
 const Counter = require('./counter.model');
+const LoginAttempt = require('./loginAttempt.model');
 
 // Define associations
 // User associations
@@ -28,6 +29,7 @@ User.hasMany(UserTestCooldown, { foreignKey: 'userId', as: 'testCooldowns' });
 User.hasMany(SecurityViolation, { foreignKey: 'userId', as: 'securityViolations' });
 User.hasMany(Batch, { foreignKey: 'adminId', as: 'administeredBatches' });
 User.hasMany(UserTestCooldown, { foreignKey: 'setBy', as: 'setCooldowns' });
+User.hasMany(LoginAttempt, { foreignKey: 'userId', as: 'loginAttempts' });
 
 // Course associations
 Course.belongsTo(User, { foreignKey: 'instructorId', as: 'instructor' });
@@ -57,6 +59,10 @@ UserTestCooldown.belongsTo(PracticeTest, { foreignKey: 'testId', as: 'test' });
 SecurityViolation.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 SecurityViolation.belongsTo(TestAttempt, { foreignKey: 'testAttemptId', as: 'testAttempt' });
 SecurityViolation.belongsTo(PracticeTest, { foreignKey: 'practiceTestId', as: 'practiceTest' });
+
+// LoginAttempt associations
+LoginAttempt.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+LoginAttempt.belongsTo(User, { foreignKey: 'unblockedBy', as: 'unblockedByUser' });
 
 // Material associations
 Material.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
@@ -129,5 +135,6 @@ module.exports = {
   SecurityViolation,
   TestAttempt,
   UserTestCooldown,
-  Counter
+  Counter,
+  LoginAttempt
 }; 

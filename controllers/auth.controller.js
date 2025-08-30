@@ -1,4 +1,4 @@
-const { User } = require('../models');
+const { User, LoginAttempt } = require('../models');
 // D:\IIFTL Backend\controllers\auth.controller.js
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -183,28 +183,127 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 2) Check if user exists && password is correct
+    // Get client IP and user agent
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+
+    // 2) Check if email is blocked due to multiple failed attempts
+    const emailBlocked = await LoginAttempt.isEmailBlocked(email);
+    if (emailBlocked) {
+      // Record this failed attempt
+      await LoginAttempt.create({
+        userId: emailBlocked.userId,
+        email,
+        ipAddress,
+        userAgent,
+        success: false,
+        attemptTime: new Date()
+      });
+
+      const remainingTime = Math.ceil((new Date(emailBlocked.blockedUntil) - new Date()) / (1000 * 60));
+      return res.status(423).json({
+        status: 'fail',
+        message: `Account temporarily blocked due to multiple failed login attempts. Please try again in ${remainingTime} minutes or contact an administrator.`,
+        code: 'ACCOUNT_BLOCKED',
+        blockedUntil: emailBlocked.blockedUntil,
+        remainingMinutes: remainingTime
+      });
+    }
+
+    // 3) Check if user exists && password is correct
     const user = await User.findOne({ where: { email } });
     
     if (!user || !(await user.comparePassword(password))) {
+      // Record failed login attempt
+      if (user) {
+        await LoginAttempt.create({
+          userId: user.id,
+          email,
+          ipAddress,
+          userAgent,
+          success: false,
+          attemptTime: new Date()
+        });
+
+        // Check if user should be blocked (5 failed attempts in 15 minutes)
+        const failedAttempts = await LoginAttempt.getFailedAttemptsCount(user.id, 15 * 60 * 1000);
+        
+        if (failedAttempts >= 5 && user.role !== 'admin') {
+          // Block the user for 15 minutes
+          const blockedUntil = await LoginAttempt.blockUser(user.id, email, 'Multiple failed login attempts', 15);
+          
+          return res.status(423).json({
+            status: 'fail',
+            message: 'Account temporarily blocked due to multiple failed login attempts. Please try again in 15 minutes or contact an administrator.',
+            code: 'ACCOUNT_BLOCKED',
+            blockedUntil,
+            remainingMinutes: 15
+          });
+        }
+      }
+
       return res.status(401).json({
         status: 'fail',
         message: 'Incorrect email or password'
       });
     }
 
-    // 3) Check if user is active
+    // 4) Check if user is currently blocked
+    const userBlocked = await LoginAttempt.isUserBlocked(user.id);
+    if (userBlocked) {
+      // Record this failed attempt
+      await LoginAttempt.create({
+        userId: user.id,
+        email,
+        ipAddress,
+        userAgent,
+        success: false,
+        attemptTime: new Date()
+      });
+
+      const remainingTime = Math.ceil((new Date(userBlocked.blockedUntil) - new Date()) / (1000 * 60));
+      return res.status(423).json({
+        status: 'fail',
+        message: `Account temporarily blocked due to multiple failed login attempts. Please try again in ${remainingTime} minutes or contact an administrator.`,
+        code: 'ACCOUNT_BLOCKED',
+        blockedUntil: userBlocked.blockedUntil,
+        remainingMinutes: remainingTime
+      });
+    }
+
+    // 5) Check if user is active
     if (!user.isActive) {
+      // Record failed login attempt
+      await LoginAttempt.create({
+        userId: user.id,
+        email,
+        ipAddress,
+        userAgent,
+        success: false,
+        attemptTime: new Date()
+      });
+
       return res.status(403).json({
         status: 'fail',
         message: 'Your account has been disabled. Please contact an administrator.'
       });
     }
 
-    // 3) If everything ok, send token to client
+    // 6) Record successful login attempt
+    await LoginAttempt.create({
+      userId: user.id,
+      email,
+      ipAddress,
+      userAgent,
+      success: true,
+      attemptTime: new Date()
+    });
+
+    // 7) If everything ok, send token to client
     createSendToken(user, 200, res);
 
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({
       status: 'error',
       message: 'An error occurred during login',

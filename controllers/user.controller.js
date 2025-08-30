@@ -1,4 +1,4 @@
-const { User } = require('../models');
+const { User, LoginAttempt } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize'); // Added Op for the new updateUser function
@@ -296,6 +296,153 @@ exports.getUserByStudentId = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch student information'
+    });
+  }
+};
+
+// Get all blocked users (admin only)
+exports.getBlockedUsers = async (req, res) => {
+  try {
+    const blockedUsers = await LoginAttempt.findAll({
+      where: {
+        isBlocked: true,
+        blockedUntil: {
+          [Op.gt]: new Date()
+        }
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'userType']
+        }
+      ],
+      order: [['blockedUntil', 'DESC']]
+    });
+
+    // Group by user and get the latest block info
+    const userMap = new Map();
+    blockedUsers.forEach(attempt => {
+      if (!userMap.has(attempt.userId.toString())) {
+        userMap.set(attempt.userId.toString(), {
+          userId: attempt.userId,
+          user: attempt.user,
+          blockedUntil: attempt.blockedUntil,
+          blockReason: attempt.blockReason,
+          remainingMinutes: Math.ceil((new Date(attempt.blockedUntil) - new Date()) / (1000 * 60))
+        });
+      }
+    });
+
+    const blockedUsersList = Array.from(userMap.values());
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        blockedUsers: blockedUsersList,
+        total: blockedUsersList.length
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching blocked users:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch blocked users'
+    });
+  }
+};
+
+// Unblock a user (admin only)
+exports.unblockUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Check if user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is actually blocked
+    const blockedAttempt = await LoginAttempt.isUserBlocked(userId);
+    if (!blockedAttempt) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'User is not currently blocked'
+      });
+    }
+
+    // Unblock the user
+    await LoginAttempt.unblockUser(userId, req.user.id);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'User unblocked successfully',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Error unblocking user:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to unblock user'
+    });
+  }
+};
+
+// Get user login attempts (admin only)
+exports.getUserLoginAttempts = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50 } = req.query;
+
+    // Check if user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found'
+      });
+    }
+
+    // Get recent login attempts
+    const attempts = await LoginAttempt.findAll({
+      where: { userId },
+      order: [['attemptTime', 'DESC']],
+      limit: parseInt(limit),
+      attributes: [
+        'id', 'success', 'attemptTime', 'ipAddress', 'userAgent',
+        'isBlocked', 'blockedUntil', 'blockReason'
+      ]
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
+        },
+        attempts,
+        total: attempts.length
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching user login attempts:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch user login attempts'
     });
   }
 };
