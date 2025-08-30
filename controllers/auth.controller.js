@@ -227,7 +227,10 @@ exports.login = async (req, res, next) => {
           // Block the user permanently (no time limit)
           const blockedUntil = await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
           
-          console.log(`✅ User ${user.email} blocked successfully`);
+          // Set user as inactive when blocked
+          await user.update({ isActive: false });
+          
+          console.log(`✅ User ${user.email} blocked successfully and marked as inactive`);
           
           return res.status(423).json({
             status: 'fail',

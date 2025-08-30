@@ -11,11 +11,37 @@ const signToken = (id) =>
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: { exclude: ['password'] }
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']]
     });
-    res.json(users);
+
+    // Get blocking status for each user
+    const usersWithBlockStatus = await Promise.all(
+      users.map(async (user) => {
+        const blockStatus = await LoginAttempt.isUserBlocked(user.id);
+        return {
+          ...user.toJSON(),
+          isBlocked: !!blockStatus,
+          blockedUntil: blockStatus?.blockedUntil || null,
+          blockReason: blockStatus?.blockReason || null
+        };
+      })
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        users: usersWithBlockStatus,
+        total: usersWithBlockStatus.length
+      }
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error fetching users:', err);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to fetch users',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
@@ -139,6 +165,16 @@ exports.getUserStats = async (req, res) => {
     const admins = await User.count({ where: { role: 'admin' } });
     const corporates = await User.count({ where: { role: 'corporate' } });
     const government = await User.count({ where: { role: 'government' } });
+    const activeUsers = await User.count({ where: { isActive: true } });
+    const inactiveUsers = await User.count({ where: { isActive: false } });
+
+    // Calculate percentages
+    const activePercentage = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
+    const inactivePercentage = totalUsers > 0 ? Math.round((inactiveUsers / totalUsers) * 100) : 0;
+    const studentPercentage = totalUsers > 0 ? Math.round((students / totalUsers) * 100) : 0;
+    const adminPercentage = totalUsers > 0 ? Math.round((admins / totalUsers) * 100) : 0;
+    const corporatePercentage = totalUsers > 0 ? Math.round((corporates / totalUsers) * 100) : 0;
+    const governmentPercentage = totalUsers > 0 ? Math.round((government / totalUsers) * 100) : 0;
 
     res.status(200).json({
       status: 'success',
@@ -147,11 +183,26 @@ exports.getUserStats = async (req, res) => {
         students,
         admins,
         corporates,
-        government
+        government,
+        activeUsers,
+        inactiveUsers,
+        percentages: {
+          students: studentPercentage,
+          admins: adminPercentage,
+          corporates: corporatePercentage,
+          government: governmentPercentage,
+          active: activePercentage,
+          inactive: inactivePercentage
+        }
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error fetching user stats:', err);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to fetch user statistics',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
@@ -393,15 +444,19 @@ exports.unblockUser = async (req, res) => {
     // Unblock the user
     await LoginAttempt.unblockUser(userId, req.user.id);
 
+    // Set user as active when unblocked
+    await user.update({ isActive: true });
+
     res.status(200).json({
       status: 'success',
-      message: 'User unblocked successfully',
+      message: 'User unblocked successfully and marked as active',
       data: {
         user: {
           id: user.id,
           email: user.email,
           firstName: user.firstName,
-          lastName: user.lastName
+          lastName: user.lastName,
+          isActive: true
         }
       }
     });
