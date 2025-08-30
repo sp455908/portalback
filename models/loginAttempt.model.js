@@ -188,9 +188,18 @@ LoginAttempt.isUserBlocked = async function(userId) {
     where: {
       userId,
       isBlocked: true,
-      blockedUntil: {
-        [Op.gt]: new Date()
-      }
+      [Op.or]: [
+        // Temporary blocks (with expiration)
+        {
+          blockedUntil: {
+            [Op.gt]: new Date()
+          }
+        },
+        // Permanent blocks (no expiration)
+        {
+          blockedUntil: null
+        }
+      ]
     },
     order: [['blockedUntil', 'DESC']]
   });
@@ -293,7 +302,7 @@ LoginAttempt.manuallyBlockUser = async function(userId, email, reason = 'Manuall
 LoginAttempt.unblockUser = async function(userId, unblockedBy) {
   const now = new Date();
   
-  // Update all active blocks for this user
+  // Update all active blocks for this user (both temporary and permanent)
   await this.update(
     {
       isBlocked: false,
@@ -305,9 +314,18 @@ LoginAttempt.unblockUser = async function(userId, unblockedBy) {
       where: {
         userId,
         isBlocked: true,
-        blockedUntil: {
-          [Op.gt]: now
-        }
+        [Op.or]: [
+          // Temporary blocks (with expiration)
+          {
+            blockedUntil: {
+              [Op.gt]: now
+            }
+          },
+          // Permanent blocks (no expiration)
+          {
+            blockedUntil: null
+          }
+        ]
       }
     }
   );

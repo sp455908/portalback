@@ -33,7 +33,6 @@ router.get('/:id/activity', protect, userController.getUserActivity);
 router.put('/:id/profile', protect, userController.updateUserProfile);
 
 // Admin-only endpoints for user management
-router.patch('/:userId/status', protect, authorize('admin'), userController.toggleUserStatus);
 router.get('/student/:studentId', protect, userController.getUserByStudentId);
 
 // Admin-only endpoints for login attempt management

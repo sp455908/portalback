@@ -279,50 +279,7 @@ exports.updateUserProfile = async (req, res) => {
   }
 };
 
-// Toggle user active status (admin only)
-exports.toggleUserStatus = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { isActive } = req.body;
 
-    // Check if user exists
-    const user = await User.findByPk(userId);
-    if (!user) {
-      return res.status(404).json({ 
-        status: 'fail',
-        message: 'User not found' 
-      });
-    }
-
-    // Prevent admin from disabling themselves
-    if (userId === req.user.id.toString()) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'You cannot disable your own account'
-      });
-    }
-
-    // Update user status
-    const updatedUser = await User.findByPk(
-      userId,
-      { where: { isActive } }
-    );
-
-    res.status(200).json({
-      status: 'success',
-      message: `User ${isActive ? 'enabled' : 'disabled'} successfully`,
-      data: {
-        user: updatedUser
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ 
-      status: 'error', 
-      message: 'Failed to update user status',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-};
 
 // Get user by student ID (for students)
 exports.getUserByStudentId = async (req, res) => {
