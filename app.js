@@ -25,6 +25,7 @@ const batchRoutes = require('./routes/batch.routes');
 const settingsRoutes = require('./routes/settings.routes');
 // const analyticsRoutes = require('./routes/analytics.routes'); // Temporarily commented out
 const securityRoutes = require('./routes/security.routes');
+const captchaRoutes = require('./routes/captcha.routes');
 
 const app = express();
 
@@ -115,6 +116,7 @@ app.use('/api/batches', batchRoutes);
 app.use('/api/settings', settingsRoutes);
 // app.use('/api/analytics', analyticsRoutes); // Temporarily commented out
 app.use('/api/security', securityRoutes);
+app.use('/api/captcha', captchaRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
