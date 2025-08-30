@@ -62,7 +62,7 @@ exports.getUserById = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
 
     // Check if user exists
     const user = await User.findByPk(userId);
@@ -89,13 +89,23 @@ exports.updateUser = async (req, res) => {
       }
     }
 
+    // Hash password if it's being updated
+    if (updates.password) {
+      updates.password = await bcrypt.hash(updates.password, 12);
+    }
+
     // Update user
     await user.update(updates);
+
+    // Get updated user without password
+    const updatedUser = await User.findByPk(userId, {
+      attributes: { exclude: ['password'] }
+    });
 
     res.status(200).json({
       status: 'success',
       message: 'User updated successfully',
-      data: { user }
+      data: { user: updatedUser }
     });
   } catch (err) {
     console.error('Error updating user:', err);
@@ -107,10 +117,23 @@ exports.updateUser = async (req, res) => {
         message: err.message
       });
     }
+
+    // Handle validation errors
+    if (err.name === 'SequelizeValidationError') {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Validation error',
+        errors: err.errors.map(e => ({
+          field: e.path,
+          message: e.message
+        }))
+      });
+    }
     
     res.status(500).json({
       status: 'error',
-      message: 'Failed to update user'
+      message: 'Failed to update user',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };
@@ -118,12 +141,91 @@ exports.updateUser = async (req, res) => {
 // Delete user (admin or self)
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findByPk(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const userId = req.params.id;
+    
+    // Check if user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        status: 'fail',
+        message: 'User not found' 
+      });
+    }
+
+    // Prevent deletion of the last admin user
+    if (user.role === 'admin') {
+      const adminCount = await User.count({ where: { role: 'admin' } });
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Cannot delete the last admin user. At least one admin must remain in the system.'
+        });
+      }
+    }
+
+    // Prevent self-deletion
+    if (parseInt(userId) === req.user.id) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'You cannot delete your own account. Please contact another administrator.'
+      });
+    }
+
+    // Check if user is an instructor of any courses
+    const { Course } = require('../models');
+    const instructorCourses = await Course.count({ where: { instructorId: userId } });
+    if (instructorCourses > 0) {
+      return res.status(400).json({
+        status: 'fail',
+        message: `Cannot delete user because they are an instructor of ${instructorCourses} course(s). Please reassign or delete the courses first.`
+      });
+    }
+
+    // Import models for cascade deletion
+    const { 
+      Enrollment, 
+      Application, 
+      TestAttempt, 
+      UserTestCooldown, 
+      SecurityViolation, 
+      LoginAttempt,
+      BatchStudent 
+    } = require('../models');
+
+    // Delete related records first
+    await Promise.all([
+      Enrollment.destroy({ where: { userId: userId } }),
+      Application.destroy({ where: { userId: userId } }),
+      TestAttempt.destroy({ where: { userId: userId } }),
+      UserTestCooldown.destroy({ where: { userId: userId } }),
+      SecurityViolation.destroy({ where: { userId: userId } }),
+      LoginAttempt.destroy({ where: { userId: userId } }),
+      BatchStudent.destroy({ where: { userId: userId } })
+    ]);
+
+    // Now delete the user
     await user.destroy();
-    res.json({ message: 'User deleted successfully' });
+
+    res.status(200).json({ 
+      status: 'success',
+      message: 'User deleted successfully' 
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error deleting user:', err);
+    
+    // Handle specific database errors
+    if (err.name === 'SequelizeForeignKeyConstraintError') {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Cannot delete user because they have related data (enrollments, applications, etc.). Please remove related data first or contact support.'
+      });
+    }
+    
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to delete user',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
