@@ -208,6 +208,8 @@ exports.login = async (req, res, next) => {
     if (!user || !(await user.comparePassword(password))) {
       // Record failed login attempt and check blocking
       if (user) {
+        console.log(`🔐 Failed login attempt for user: ${user.email} (ID: ${user.id})`);
+        
         const loginResult = await LoginAttempt.processLoginAttempt({
           userId: user.id,
           email,
@@ -216,10 +218,16 @@ exports.login = async (req, res, next) => {
           success: false
         });
 
+        console.log(`📊 Login result:`, loginResult);
+
         // Check if user should be blocked (5 failed attempts in 15 minutes)
-        if (failedAttempts >= 5 && user.role !== 'admin') {
+        if (loginResult.shouldBlock && user.role !== 'admin') {
+          console.log(`🚫 Blocking user ${user.email} after ${loginResult.failedCount} failed attempts`);
+          
           // Block the user permanently (no time limit)
           const blockedUntil = await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
+          
+          console.log(`✅ User ${user.email} blocked successfully`);
           
           return res.status(423).json({
             status: 'fail',
@@ -230,6 +238,8 @@ exports.login = async (req, res, next) => {
             isPermanent: true,
             contactAdmin: true
           });
+        } else {
+          console.log(`⚠️ User ${user.email} has ${loginResult.failedCount || 0} failed attempts, not blocked yet`);
         }
       }
 
