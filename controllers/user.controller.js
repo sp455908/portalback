@@ -306,9 +306,18 @@ exports.getBlockedUsers = async (req, res) => {
     const blockedUsers = await LoginAttempt.findAll({
       where: {
         isBlocked: true,
-        blockedUntil: {
-          [Op.gt]: new Date()
-        }
+        [Op.or]: [
+          // Temporary blocks (with expiration)
+          {
+            blockedUntil: {
+              [Op.gt]: new Date()
+            }
+          },
+          // Permanent blocks (no expiration)
+          {
+            blockedUntil: null
+          }
+        ]
       },
       include: [
         {
@@ -317,19 +326,25 @@ exports.getBlockedUsers = async (req, res) => {
           attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'userType']
         }
       ],
-      order: [['blockedUntil', 'DESC']]
+      order: [['createdAt', 'DESC']]
     });
 
     // Group by user and get the latest block info
     const userMap = new Map();
     blockedUsers.forEach(attempt => {
       if (!userMap.has(attempt.userId.toString())) {
+        const isPermanent = !attempt.blockedUntil;
+        const remainingMinutes = isPermanent ? null : 
+          Math.ceil((new Date(attempt.blockedUntil) - new Date()) / (1000 * 60));
+        
         userMap.set(attempt.userId.toString(), {
           userId: attempt.userId,
           user: attempt.user,
           blockedUntil: attempt.blockedUntil,
           blockReason: attempt.blockReason,
-          remainingMinutes: Math.ceil((new Date(attempt.blockedUntil) - new Date()) / (1000 * 60))
+          remainingMinutes: remainingMinutes,
+          isPermanent: isPermanent,
+          blockedAt: attempt.createdAt
         });
       }
     });
@@ -395,6 +410,88 @@ exports.unblockUser = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to unblock user'
+    });
+  }
+};
+
+// Block a user manually (admin only) - no time limit
+exports.blockUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason, blockDuration } = req.body;
+
+    // Check if user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is already blocked
+    const alreadyBlocked = await LoginAttempt.isUserBlocked(userId);
+    if (alreadyBlocked) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'User is already blocked'
+      });
+    }
+
+    // Check if trying to block admin user
+    if (user.role === 'admin') {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Cannot block admin users'
+      });
+    }
+
+    // Check if trying to block yourself
+    if (userId === req.user.id) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Cannot block your own account'
+      });
+    }
+
+    // Create block record
+    let blockedUntil = null;
+    if (blockDuration) {
+      // If blockDuration is provided, calculate expiration
+      blockedUntil = new Date(Date.now() + blockDuration * 60 * 1000);
+    }
+    // If blockDuration is null/undefined, user is blocked indefinitely
+
+    blockedUntil = await LoginAttempt.manuallyBlockUser(
+      userId, 
+      user.email, 
+      reason || 'Manually blocked by administrator', 
+      blockDuration
+    );
+
+    // Update user status to inactive
+    await user.update({ isActive: false });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'User blocked successfully',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
+        },
+        blockedUntil: blockedUntil,
+        isPermanent: !blockedUntil,
+        blockReason: reason || 'Manually blocked by administrator'
+      }
+    });
+  } catch (err) {
+    console.error('Error blocking user:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to block user'
     });
   }
 };

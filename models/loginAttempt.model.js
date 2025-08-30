@@ -164,13 +164,14 @@ LoginAttempt.processLoginAttempt = async function(loginData) {
       }
     });
     
-    // Return blocking info if threshold reached
+    // Return blocking info if threshold reached (5 failed attempts)
     if (failedCount >= 5) {
       return {
         attempt,
         shouldBlock: true,
         failedCount,
-        message: 'Account temporarily blocked due to multiple failed login attempts. Please try again in 15 minutes or contact an administrator.'
+        message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
+        isPermanent: true
       };
     }
   }
@@ -247,11 +248,11 @@ LoginAttempt.getFailedAttemptsCountByEmail = async function(email, timeWindow = 
   return count;
 };
 
-// Static method to block a user
+// OPTIMIZED: Block user with single query
 LoginAttempt.blockUser = async function(userId, email, reason = 'Multiple failed login attempts', blockDurationMinutes = 15) {
   const blockedUntil = new Date(Date.now() + blockDurationMinutes * 60 * 1000);
   
-  // Create a block record
+  // Create block record
   await this.create({
     userId,
     email,
@@ -259,6 +260,30 @@ LoginAttempt.blockUser = async function(userId, email, reason = 'Multiple failed
     isBlocked: true,
     blockedUntil,
     blockReason: reason
+  });
+  
+  return blockedUntil;
+};
+
+// OPTIMIZED: Manually block user (admin use) - no time limit
+LoginAttempt.manuallyBlockUser = async function(userId, email, reason = 'Manually blocked by administrator', blockDurationMinutes = null) {
+  let blockedUntil = null;
+  
+  if (blockDurationMinutes) {
+    // If duration provided, calculate expiration
+    blockedUntil = new Date(Date.now() + blockDurationMinutes * 60 * 1000);
+  }
+  // If no duration, user is blocked permanently (blockedUntil = null)
+  
+  // Create block record
+  await this.create({
+    userId,
+    email,
+    success: false,
+    isBlocked: true,
+    blockedUntil,
+    blockReason: reason,
+    attemptTime: new Date()
   });
   
   return blockedUntil;

@@ -216,17 +216,19 @@ exports.login = async (req, res, next) => {
           success: false
         });
 
-        // If user should be blocked (5 failed attempts in 15 minutes)
-        if (loginResult.shouldBlock && user.role !== 'admin') {
-          // Block the user for 15 minutes
-          const blockedUntil = await LoginAttempt.blockUser(user.id, email, 'Multiple failed login attempts', 15);
+        // Check if user should be blocked (5 failed attempts in 15 minutes)
+        if (failedAttempts >= 5 && user.role !== 'admin') {
+          // Block the user permanently (no time limit)
+          const blockedUntil = await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
           
           return res.status(423).json({
             status: 'fail',
-            message: 'Account temporarily blocked due to multiple failed login attempts. Please try again in 15 minutes or contact an administrator.',
+            message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
             code: 'ACCOUNT_BLOCKED',
-            blockedUntil,
-            remainingMinutes: 15
+            blockedUntil: null,
+            remainingMinutes: null,
+            isPermanent: true,
+            contactAdmin: true
           });
         }
       }
@@ -253,15 +255,29 @@ exports.login = async (req, res, next) => {
       });
 
       const blockedUntil = loginStatus.isUserBlocked ? loginStatus.userBlockedUntil : loginStatus.emailBlockedUntil;
-      const remainingTime = Math.ceil((new Date(blockedUntil) - new Date()) / (1000 * 60));
+      const isPermanent = !blockedUntil;
       
-      return res.status(423).json({
-        status: 'fail',
-        message: `Account temporarily blocked due to multiple failed login attempts. Please try again in ${remainingTime} minutes or contact an administrator.`,
-        code: 'ACCOUNT_BLOCKED',
-        blockedUntil,
-        remainingMinutes: remainingTime
-      });
+      if (isPermanent) {
+        return res.status(423).json({
+          status: 'fail',
+          message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
+          code: 'ACCOUNT_BLOCKED',
+          blockedUntil: null,
+          remainingMinutes: null,
+          isPermanent: true,
+          contactAdmin: true
+        });
+      } else {
+        const remainingTime = Math.ceil((new Date(blockedUntil) - new Date()) / (1000 * 60));
+        return res.status(423).json({
+          status: 'fail',
+          message: `Account temporarily blocked due to multiple failed login attempts. Please try again in ${remainingTime} minutes or contact an administrator.`,
+          code: 'ACCOUNT_BLOCKED',
+          blockedUntil,
+          remainingMinutes: remainingTime,
+          isPermanent: false
+        });
+      }
     }
 
     // 3) Check if user is active
