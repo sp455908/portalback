@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
+const { Op } = require('sequelize');
 
 const LoginAttempt = sequelize.define('LoginAttempt', {
   id: {
@@ -81,6 +82,105 @@ const LoginAttempt = sequelize.define('LoginAttempt', {
   ]
 });
 
+// OPTIMIZED: Single method to get all blocking info and failed attempts count
+LoginAttempt.getLoginStatus = async function(userId, email, timeWindow = 15 * 60 * 1000) {
+  const since = new Date(Date.now() - timeWindow);
+  
+  // Single query to get all needed information
+  const [blockedUser, blockedEmail, failedAttempts] = await Promise.all([
+    // Check if user is blocked
+    this.findOne({
+      where: {
+        userId,
+        isBlocked: true,
+        blockedUntil: {
+          [Op.gt]: new Date()
+        }
+      },
+      order: [['blockedUntil', 'DESC']],
+      attributes: ['blockedUntil', 'blockReason']
+    }),
+    
+    // Check if email is blocked
+    this.findOne({
+      where: {
+        email,
+        isBlocked: true,
+        blockedUntil: {
+          [Op.gt]: new Date()
+        }
+      },
+      order: [['blockedUntil', 'DESC']],
+      attributes: ['blockedUntil', 'blockReason']
+    }),
+    
+    // Get failed attempts count
+    this.count({
+      where: {
+        userId,
+        success: false,
+        attemptTime: {
+          [Op.gte]: since
+        }
+      }
+    })
+  ]);
+  
+  return {
+    isUserBlocked: !!blockedUser,
+    isEmailBlocked: !!blockedEmail,
+    userBlockedUntil: blockedUser?.blockedUntil,
+    emailBlockedUntil: blockedEmail?.blockedUntil,
+    userBlockReason: blockedUser?.blockReason,
+    emailBlockReason: blockedEmail?.blockReason,
+    failedAttemptsCount: failedAttempts
+  };
+};
+
+// OPTIMIZED: Single method to create login attempt and check blocking
+LoginAttempt.processLoginAttempt = async function(loginData) {
+  const { userId, email, ipAddress, userAgent, success, timeWindow = 15 * 60 * 1000 } = loginData;
+  
+  // Create login attempt record
+  const attempt = await this.create({
+    userId,
+    email,
+    ipAddress,
+    userAgent,
+    success,
+    attemptTime: new Date()
+  });
+  
+  // If failed attempt, check if user should be blocked
+  if (!success) {
+    const since = new Date(Date.now() - timeWindow);
+    const failedCount = await this.count({
+      where: {
+        userId,
+        success: false,
+        attemptTime: {
+          [Op.gte]: since
+        }
+      }
+    });
+    
+    // Return blocking info if threshold reached
+    if (failedCount >= 5) {
+      return {
+        attempt,
+        shouldBlock: true,
+        failedCount,
+        message: 'Account temporarily blocked due to multiple failed login attempts. Please try again in 15 minutes or contact an administrator.'
+      };
+    }
+  }
+  
+  return {
+    attempt,
+    shouldBlock: false
+  };
+};
+
 // Static method to check if user is currently blocked
 LoginAttempt.isUserBlocked = async function(userId) {
   const attempt = await this.findOne({
@@ -88,7 +188,7 @@ LoginAttempt.isUserBlocked = async function(userId) {
       userId,
       isBlocked: true,
       blockedUntil: {
-        [sequelize.Op.gt]: new Date()
+        [Op.gt]: new Date()
       }
     },
     order: [['blockedUntil', 'DESC']]
@@ -104,7 +204,7 @@ LoginAttempt.isEmailBlocked = async function(email) {
       email,
       isBlocked: true,
       blockedUntil: {
-        [sequelize.Op.gt]: new Date()
+        [Op.gt]: new Date()
       }
     },
     order: [['blockedUntil', 'DESC']]
@@ -122,7 +222,7 @@ LoginAttempt.getFailedAttemptsCount = async function(userId, timeWindow = 15 * 6
       userId,
       success: false,
       attemptTime: {
-        [sequelize.Op.gte]: since
+        [Op.gte]: since
       }
     }
   });
@@ -139,7 +239,7 @@ LoginAttempt.getFailedAttemptsCountByEmail = async function(email, timeWindow = 
       email,
       success: false,
       attemptTime: {
-        [sequelize.Op.gte]: since
+        [Op.gte]: since
       }
     }
   });
@@ -181,7 +281,7 @@ LoginAttempt.unblockUser = async function(userId, unblockedBy) {
         userId,
         isBlocked: true,
         blockedUntil: {
-          [sequelize.Op.gt]: now
+          [Op.gt]: now
         }
       }
     }
