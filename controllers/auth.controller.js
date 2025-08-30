@@ -53,7 +53,7 @@ const createSendToken = (user, statusCode, res) => {
 // Register a new user
 exports.register = async (req, res, next) => {
   try {
-    const { firstName, lastName, email, password, role, userType, phone, address } = req.body;
+    const { firstName, lastName, email, password, role, userType, phone, address, city, state, pincode } = req.body;
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
 
     if (!role || !userType) {
@@ -110,7 +110,10 @@ exports.register = async (req, res, next) => {
         role,
         userType,
         phone,
-        address
+        address,
+        city,
+        state,
+        pincode
       });
     } catch (createErr) {
       if (createErr.name === 'SequelizeUniqueConstraintError' && createErr?.fields?.studentId) {
@@ -123,7 +126,10 @@ exports.register = async (req, res, next) => {
           role,
           userType,
           phone,
-          address
+          address,
+          city,
+          state,
+          pincode
         });
       } else {
         throw createErr;

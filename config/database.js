@@ -15,11 +15,15 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
       rejectUnauthorized: false
     },
     // Performance optimizations
-    statement_timeout: 30000, // 30 seconds
-    idle_in_transaction_session_timeout: 30000, // 30 seconds
+    statement_timeout: 60000, // 60 seconds
+    idle_in_transaction_session_timeout: 60000, // 60 seconds
     // Connection optimizations
     keepAlive: true,
-    keepAliveInitialDelayMillis: 10000
+    keepAliveInitialDelayMillis: 10000,
+    // Connection timeout settings
+    connectTimeout: 30000, // 30 seconds
+    acquireTimeout: 30000, // 30 seconds
+    timeout: 30000 // 30 seconds
   },
   logging: process.env.NODE_ENV === 'development' ? console.log : false,
   // OPTIMIZED: Better connection pooling for performance
