@@ -51,8 +51,8 @@ router.post('/admin/parse-excel', protect, authorize('admin'), upload.single('ex
 // Bulk update test settings (admin only)
 router.put('/admin/bulk-settings', protect, authorize('admin'), practiceTestController.bulkUpdateTestSettings);
 
-// Public route to get available tests (no authentication required)
-router.get('/available', practiceTestController.getAvailablePracticeTests);
+// Route to get available tests (requires authentication to filter by user type)
+router.get('/available', protect, authorize('student', 'corporate', 'government'), practiceTestController.getAvailablePracticeTests);
 
 // Student/Corporate/Government routes
 router.post('/:testId/start', protect, authorize('student', 'corporate', 'government'), practiceTestController.startPracticeTest);

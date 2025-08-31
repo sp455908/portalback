@@ -176,12 +176,15 @@ exports.getAvailablePracticeTests = async (req, res) => {
       }
       
       console.log('User type for filtering:', userType);
+      console.log('User object:', { id: req.user.id, role: req.user.role, userType: req.user.userType });
       
       if (userType) {
         // Only show tests for the user's type
         filteredTests = practiceTests.filter(test => test.targetUserType === userType);
         console.log('Filtered tests for user type', userType, ':', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
       }
+    } else {
+      console.log('No user object found in request');
     }
 
     let testsWithAvailability;
