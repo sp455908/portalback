@@ -1,4 +1,14 @@
-const { PracticeTest, TestAttempt, User } = require('../models');
+let PracticeTest, TestAttempt, User;
+try {
+  const models = require('../models');
+  PracticeTest = models.PracticeTest;
+  TestAttempt = models.TestAttempt;
+  User = models.User;
+  console.log('Models imported successfully');
+} catch (error) {
+  console.error('Error importing models:', error);
+  throw error;
+}
 const PDFDocument = require('pdfkit');
 const XLSX = require('xlsx');
 const multer = require('multer');
@@ -150,18 +160,24 @@ exports.getPracticeTestById = async (req, res) => {
 // Get available practice tests for students and corporate users
 exports.getAvailablePracticeTests = async (req, res) => {
   try {
-    console.log('getAvailablePracticeTests called with user:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
+    console.log('=== getAvailablePracticeTests START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
     
+    console.log('About to query practice tests...');
     const practiceTests = await PracticeTest.findAll({
       where: { isActive: true },
       attributes: ['id', 'title', 'description', 'category', 'totalQuestions', 'questionsPerTest', 'duration', 'passingScore', 'repeatAfterHours', 'enableCooldown', 'questions', 'targetUserType', 'showInPublic'],
       order: [['createdAt', 'DESC']]
     });
+    console.log('Practice tests query completed');
     
     // Also check for all practice tests (including inactive ones) for debugging
+    console.log('About to query all practice tests...');
     const allPracticeTests = await PracticeTest.findAll({
       attributes: ['id', 'title', 'isActive', 'targetUserType']
     });
+    console.log('All practice tests query completed');
     console.log('All practice tests (including inactive):', allPracticeTests.map(t => ({ id: t.id, title: t.title, isActive: t.isActive, targetUserType: t.targetUserType })));
     
     console.log('Found practice tests:', practiceTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
@@ -189,6 +205,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
 
     let testsWithAvailability;
     if (req.user) {
+      console.log('About to query user attempts...');
       const userAttempts = await TestAttempt.findAll({ 
         where: {
           userId: req.user.id,
@@ -196,6 +213,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
         },
         attributes: ['practiceTestId', 'completedAt']
       });
+      console.log('User attempts query completed');
 
       testsWithAvailability = filteredTests.map(test => {
         const userTestAttempts = userAttempts.filter(
@@ -244,15 +262,18 @@ exports.getAvailablePracticeTests = async (req, res) => {
     }
 
     console.log('Final response - testsWithAvailability count:', testsWithAvailability.length);
+    console.log('=== getAvailablePracticeTests END ===');
     res.status(200).json({
       status: 'success',
       data: { practiceTests: testsWithAvailability }
     });
   } catch (err) {
     console.error('Error in getAvailablePracticeTests:', err);
+    console.error('Error stack:', err.stack);
     res.status(500).json({
       status: 'error',
-      message: 'Failed to fetch available practice tests'
+      message: 'Failed to fetch available practice tests',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };

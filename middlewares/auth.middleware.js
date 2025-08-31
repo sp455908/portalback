@@ -2,12 +2,16 @@ const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 
 exports.protect = async (req, res, next) => {
+  console.log('Auth middleware called');
+  console.log('Authorization header:', req.headers.authorization);
+  
   let token;
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
     token = req.headers.authorization.split(' ')[1];
+    console.log('Token extracted:', token ? 'Present' : 'Missing');
   }
   
   if (!token) {
@@ -19,10 +23,14 @@ exports.protect = async (req, res, next) => {
 
   try {
     // Verify JWT token
+    console.log('Verifying JWT token...');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('Token decoded, user ID:', decoded.id);
     
     // Find user using Sequelize (PostgreSQL)
+    console.log('Looking up user in database...');
     const user = await User.findByPk(decoded.id);
+    console.log('User found:', user ? { id: user.id, role: user.role, userType: user.userType } : 'Not found');
     
     if (!user) {
       return res.status(401).json({ 
