@@ -51,6 +51,10 @@ exports.protect = async (req, res, next) => {
     req.user = user;
     next();
   } catch (err) {
+    console.error('Auth middleware error:', err);
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({ 
         status: 'fail',
