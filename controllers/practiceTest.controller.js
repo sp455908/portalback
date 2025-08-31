@@ -184,6 +184,8 @@ exports.getAvailablePracticeTests = async (req, res) => {
     console.log('Total practice tests found:', practiceTests.length);
 
     let filteredTests = practiceTests;
+    let batchAssignedTests = [];
+    
     if (req.user) {
       // Handle both userType and role fields
       let userType = req.user.userType;
@@ -194,10 +196,57 @@ exports.getAvailablePracticeTests = async (req, res) => {
       console.log('User type for filtering:', userType);
       console.log('User object:', { id: req.user.id, role: req.user.role, userType: req.user.userType });
       
+      // Get tests assigned to user's batches
+      console.log('About to query user batches and assigned tests...');
+      const userBatches = await req.user.getEnrolledBatches({
+        include: [{
+          model: PracticeTest,
+          as: 'assignedTests',
+          where: { isActive: true },
+          attributes: ['id', 'title', 'description', 'category', 'totalQuestions', 'questionsPerTest', 'duration', 'passingScore', 'repeatAfterHours', 'enableCooldown', 'questions', 'targetUserType', 'showInPublic'],
+          through: { attributes: [] }
+        }]
+      });
+      
+      console.log('User batches query completed');
+      console.log('User batches:', userBatches.map(b => ({ id: b.id, batchId: b.batchId, userType: b.userType })));
+      
+      // Extract tests assigned to user's batches
+      userBatches.forEach(batch => {
+        if (batch.assignedTests && batch.assignedTests.length > 0) {
+          console.log(`Batch ${batch.batchId} has ${batch.assignedTests.length} assigned tests:`, 
+            batch.assignedTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+          batchAssignedTests.push(...batch.assignedTests);
+        }
+      });
+      
+      // Remove duplicates from batch assigned tests
+      const uniqueBatchTests = batchAssignedTests.filter((test, index, self) => 
+        index === self.findIndex(t => t.id === test.id)
+      );
+      
+      console.log('Unique batch assigned tests:', uniqueBatchTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+      
       if (userType) {
-        // Only show tests for the user's type
-        filteredTests = practiceTests.filter(test => test.targetUserType === userType);
-        console.log('Filtered tests for user type', userType, ':', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+        // Show tests that are either:
+        // 1. Targeted for the user's type, OR
+        // 2. Assigned to the user's batch
+        const typeFilteredTests = practiceTests.filter(test => test.targetUserType === userType);
+        console.log('Type filtered tests for user type', userType, ':', typeFilteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+        
+        // Combine type-filtered tests with batch-assigned tests
+        const allAvailableTests = [...typeFilteredTests, ...uniqueBatchTests];
+        
+        // Remove duplicates
+        filteredTests = allAvailableTests.filter((test, index, self) => 
+          index === self.findIndex(t => t.id === test.id)
+        );
+        
+        console.log('Combined filtered tests (type + batch):', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+      } else {
+        // If no userType, just show batch-assigned tests
+        filteredTests = uniqueBatchTests;
+        console.log('No userType, showing only batch-assigned tests:', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
       }
     } else {
       console.log('No user object found in request');
@@ -222,13 +271,18 @@ exports.getAvailablePracticeTests = async (req, res) => {
         const lastAttempt = userTestAttempts.length > 0 
           ? userTestAttempts.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0]
           : null;
+        
+        // Check if this test is assigned to user's batch
+        const isBatchAssigned = batchAssignedTests.some(bt => bt.id === test.id);
+        
         return {
           ...test.toObject(),
           canTakeTest: true,
           lastAttemptDate: lastAttempt ? lastAttempt.completedAt : null,
           attemptsCount: userTestAttempts.length,
           cooldownHours: 0,
-          nextAvailableTime: null
+          nextAvailableTime: null,
+          isBatchAssigned: isBatchAssigned
         };
       });
     } else {
@@ -256,7 +310,8 @@ exports.getAvailablePracticeTests = async (req, res) => {
           lastAttemptDate: null,
           attemptsCount: 0,
           cooldownHours: 0,
-          nextAvailableTime: null
+          nextAvailableTime: null,
+          isBatchAssigned: false
         };
       });
     }
