@@ -1,4 +1,4 @@
-const { Course, User } = require('../models');
+const { Course, User, sequelize } = require('../models');
 
 // Create a new course (admin only)
 exports.createCourse = async (req, res) => {
@@ -77,6 +77,17 @@ exports.getCourseById = async (req, res) => {
 exports.updateCourse = async (req, res) => {
   try {
     const updates = { ...req.body };
+    console.log('Updating course with data:', updates);
+    console.log('Course ID to update:', req.params.id);
+    
+    // First, let's check if the course exists
+    const existingCourse = await Course.findByPk(req.params.id);
+    if (!existingCourse) {
+      console.log('Course not found with ID:', req.params.id);
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    console.log('Existing course found:', existingCourse.toJSON());
+    
     const course = await Course.findByPk(req.params.id, {
       include: [{
         model: User,
@@ -84,12 +95,19 @@ exports.updateCourse = async (req, res) => {
         attributes: ['firstName', 'lastName', 'email']
       }]
     });
-    if (!course) return res.status(404).json({ message: 'Course not found' });
+    
+    if (!course) {
+      console.log('Course not found with ID:', req.params.id);
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    
+    console.log('Found course with instructor:', course.toJSON());
     
     // Update the course with new data
-    await course.update(updates);
+    const updateResult = await course.update(updates);
+    console.log('Course update result:', updateResult.toJSON());
     
-    // Fetch the updated course with instructor info
+    // Fetch the updated course with instructor info to ensure associations are loaded
     const updatedCourse = await Course.findByPk(req.params.id, {
       include: [{
         model: User,
@@ -98,9 +116,51 @@ exports.updateCourse = async (req, res) => {
       }]
     });
     
-    res.json(updatedCourse);
+    if (!updatedCourse) {
+      console.error('Failed to retrieve updated course');
+      return res.status(500).json({ 
+        message: 'Failed to retrieve updated course',
+        error: 'Database error'
+      });
+    }
+    
+    console.log('Retrieved updated course:', updatedCourse.toJSON());
+    console.log('Instructor data:', updatedCourse.instructor);
+    
+    // Return the updated course data
+    const responseData = {
+      id: updatedCourse.id,
+      title: updatedCourse.title,
+      description: updatedCourse.description,
+      duration: updatedCourse.duration,
+      modules: updatedCourse.modules,
+      fee: updatedCourse.fee,
+      isActive: updatedCourse.isActive,
+      targetUserType: updatedCourse.targetUserType,
+      createdAt: updatedCourse.createdAt,
+      instructor: updatedCourse.instructor,
+      students: updatedCourse.students || 0,
+      rating: updatedCourse.rating || 0
+    };
+    
+    // Validate that all required fields are present
+    if (!responseData.id || !responseData.title || !responseData.description) {
+      console.error('Missing required fields in response:', responseData);
+      return res.status(500).json({ 
+        message: 'Course update failed: Missing required fields',
+        error: 'Internal server error'
+      });
+    }
+    
+    console.log('Sending response:', responseData);
+    res.json(responseData);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error updating course:', err);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({ 
+      message: 'Failed to update course',
+      error: err.message 
+    });
   }
 };
 

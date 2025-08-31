@@ -51,17 +51,30 @@ exports.getUserById = async (req, res) => {
     const user = await User.findByPk(req.params.id, {
       attributes: { exclude: ['password'] }
     });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    if (!user) {
+      return res.status(404).json({ 
+        status: 'fail',
+        message: 'User not found' 
+      });
+    }
+    res.status(200).json({
+      status: 'success',
+      data: { user }
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error fetching user:', err);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to fetch user',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
 // Update user (admin or self)
 exports.updateUser = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = req.params.id;
     const updates = { ...req.body };
 
     // Check if user exists
@@ -235,9 +248,23 @@ exports.getProfile = async (req, res) => {
     const user = await User.findByPk(req.user.id, {
       attributes: { exclude: ['password'] }
     });
-    res.json(user);
+    if (!user) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User profile not found'
+      });
+    }
+    res.status(200).json({
+      status: 'success',
+      data: { user }
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error fetching profile:', err);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to fetch profile',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
@@ -250,13 +277,28 @@ exports.updateProfile = async (req, res) => {
       updates.password = await bcrypt.hash(updates.password, 12);
     }
     const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User profile not found'
+      });
+    }
     await user.update(updates);
     const updatedUser = await User.findByPk(req.user.id, {
       attributes: { exclude: ['password'] }
     });
-    res.json(updatedUser);
+    res.status(200).json({
+      status: 'success',
+      message: 'Profile updated successfully',
+      data: { user: updatedUser }
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error updating profile:', err);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to update profile',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
