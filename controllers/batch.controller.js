@@ -33,10 +33,11 @@ exports.createBatch = async (req, res) => {
       });
     }
 
-    if (!userType || !['student', 'corporate', 'government'].includes(userType)) {
+    // Validate userType if provided, but make it optional for backward compatibility
+    if (userType && !['student', 'corporate', 'government'].includes(userType)) {
       return res.status(400).json({
         status: 'fail',
-        message: 'User type is required and must be student, corporate, or government'
+        message: 'User type must be student, corporate, or government'
       });
     }
 
@@ -70,7 +71,6 @@ exports.createBatch = async (req, res) => {
       batchId,
       batchName,
       description,
-      userType,
       adminId: req.user.id,
       status: 'active',
       maxStudents: maxStudents || 50,
@@ -83,6 +83,11 @@ exports.createBatch = async (req, res) => {
       startDate: startDate ? new Date(startDate) : new Date(),
       endDate: endDate ? new Date(endDate) : null
     };
+
+    // Add userType if the column exists, otherwise skip it
+    if (userType) {
+      batchData.userType = userType;
+    }
 
     console.log('Creating batch with data:', batchData);
 
@@ -97,11 +102,17 @@ exports.createBatch = async (req, res) => {
       }]
     });
 
+    // Add userType to response if it doesn't exist in the database
+    const responseBatch = {
+      ...populatedBatch.toJSON(),
+      userType: populatedBatch.userType || userType || 'student'
+    };
+
     res.status(201).json({
       status: 'success',
       message: 'Batch created successfully',
       data: {
-        batch: populatedBatch
+        batch: responseBatch
       }
     });
   } catch (err) {
@@ -142,31 +153,87 @@ exports.getAllBatches = async (req, res) => {
     console.log('Batch query where clause:', whereClause);
     console.log('Pagination:', { offset, limit });
     
-    const { count, rows: batches } = await Batch.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: User,
-          as: 'admin',
-          attributes: ['firstName', 'lastName', 'email']
-        },
-        {
-          model: User,
-          as: 'students',
-          attributes: ['id'],
-          through: { attributes: [] }
-        },
-        {
-          model: PracticeTest,
-          as: 'assignedTests',
-          attributes: ['id'],
-          through: { attributes: [] }
-        }
-      ],
-      order: [['createdAt', 'DESC']],
-      offset: parseInt(offset),
-      limit: parseInt(limit)
-    });
+    // Try to get batches with userType, fallback to basic query if column doesn't exist
+    let batches, count;
+    try {
+      const result = await Batch.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: User,
+            as: 'admin',
+            attributes: ['firstName', 'lastName', 'email']
+          },
+          {
+            model: User,
+            as: 'students',
+            attributes: ['id'],
+            through: { attributes: [] }
+          },
+          {
+            model: PracticeTest,
+            as: 'assignedTests',
+            attributes: ['id'],
+            through: { attributes: [] }
+          }
+        ],
+        order: [['createdAt', 'DESC']],
+        offset: parseInt(offset),
+        limit: parseInt(limit)
+      });
+      
+      batches = result.rows;
+      count = result.count;
+      
+      // Add default userType for batches that don't have it yet
+      batches = batches.map(batch => ({
+        ...batch.toJSON(),
+        userType: batch.userType || 'student'
+      }));
+      
+    } catch (error) {
+      if (error.message.includes('userType') || error.message.includes('column') || error.message.includes('does not exist')) {
+        console.log('userType column not found, using fallback query...');
+        
+        // Fallback query without userType
+        const result = await Batch.findAndCountAll({
+          where: whereClause,
+          include: [
+            {
+              model: User,
+              as: 'admin',
+              attributes: ['firstName', 'lastName', 'email']
+            },
+            {
+              model: User,
+              as: 'students',
+              attributes: ['id'],
+              through: { attributes: [] }
+            },
+            {
+              model: PracticeTest,
+              as: 'assignedTests',
+              attributes: ['id'],
+              through: { attributes: [] }
+            }
+          ],
+          order: [['createdAt', 'DESC']],
+          offset: parseInt(offset),
+          limit: parseInt(limit)
+        });
+        
+        batches = result.rows;
+        count = result.count;
+        
+        // Add default userType for all batches
+        batches = batches.map(batch => ({
+          ...batch.toJSON(),
+          userType: 'student'
+        }));
+      } else {
+        throw error;
+      }
+    }
 
     console.log('Batch query result:', { count, batchesCount: batches.length });
 
