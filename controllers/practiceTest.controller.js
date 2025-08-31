@@ -196,29 +196,60 @@ exports.getAvailablePracticeTests = async (req, res) => {
       console.log('User type for filtering:', userType);
       console.log('User object:', { id: req.user.id, role: req.user.role, userType: req.user.userType });
       
-      // Get tests assigned to user's batches
+      // Get tests assigned to user's batches using a more direct approach
       console.log('About to query user batches and assigned tests...');
-      const userBatches = await req.user.getEnrolledBatches({
-        include: [{
-          model: PracticeTest,
-          as: 'assignedTests',
-          where: { isActive: true },
-          attributes: ['id', 'title', 'description', 'category', 'totalQuestions', 'questionsPerTest', 'duration', 'passingScore', 'repeatAfterHours', 'enableCooldown', 'questions', 'targetUserType', 'showInPublic'],
-          through: { attributes: [] }
-        }]
-      });
-      
-      console.log('User batches query completed');
-      console.log('User batches:', userBatches.map(b => ({ id: b.id, batchId: b.batchId, userType: b.userType })));
-      
-      // Extract tests assigned to user's batches
-      userBatches.forEach(batch => {
-        if (batch.assignedTests && batch.assignedTests.length > 0) {
-          console.log(`Batch ${batch.batchId} has ${batch.assignedTests.length} assigned tests:`, 
-            batch.assignedTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-          batchAssignedTests.push(...batch.assignedTests);
+      try {
+        // First get the user's batch IDs
+        const userBatchIds = await sequelize.query(`
+          SELECT DISTINCT "batchId" 
+          FROM "BatchStudents" 
+          WHERE "userId" = :userId
+        `, {
+          replacements: { userId: req.user.id },
+          type: sequelize.QueryTypes.SELECT
+        });
+        
+        console.log('User batch IDs:', userBatchIds);
+        
+        if (userBatchIds.length > 0) {
+          const batchIds = userBatchIds.map(b => b.batchId);
+          
+          // Get tests assigned to these batches
+          const batchTests = await sequelize.query(`
+            SELECT DISTINCT pt.* 
+            FROM "PracticeTests" pt
+            INNER JOIN "BatchAssignedTests" bat ON pt.id = bat."testId"
+            WHERE bat."batchId" IN (:batchIds) AND pt."isActive" = true
+          `, {
+            replacements: { batchIds: batchIds },
+            type: sequelize.QueryTypes.SELECT
+          });
+          
+          console.log('Batch assigned tests found:', batchTests.length);
+          console.log('Batch assigned tests:', batchTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+          
+          // Convert to the format expected by the rest of the function
+          batchAssignedTests = batchTests.map(test => ({
+            id: test.id,
+            title: test.title,
+            description: test.description,
+            category: test.category,
+            totalQuestions: test.totalQuestions,
+            questionsPerTest: test.questionsPerTest,
+            duration: test.duration,
+            passingScore: test.passingScore,
+            repeatAfterHours: test.repeatAfterHours,
+            enableCooldown: test.enableCooldown,
+            questions: test.questions,
+            targetUserType: test.targetUserType,
+            showInPublic: test.showInPublic
+          }));
         }
-      });
+      } catch (batchError) {
+        console.error('Error querying user batches:', batchError);
+        // Continue without batch tests if there's an error
+        batchAssignedTests = [];
+      }
       
       // Remove duplicates from batch assigned tests
       const uniqueBatchTests = batchAssignedTests.filter((test, index, self) => 
