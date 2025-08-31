@@ -1,9 +1,10 @@
-let PracticeTest, TestAttempt, User;
+let PracticeTest, TestAttempt, User, sequelize;
 try {
   const models = require('../models');
   PracticeTest = models.PracticeTest;
   TestAttempt = models.TestAttempt;
   User = models.User;
+  sequelize = models.sequelize;
   console.log('Models imported successfully');
 } catch (error) {
   console.error('Error importing models:', error);
@@ -1779,5 +1780,95 @@ exports.downloadAttemptPDF = async (req, res) => {
   } catch (err) {
     console.error('PDF generation error:', err);
     res.status(500).json({ status: 'error', message: 'Failed to generate PDF' });
+  }
+}; 
+
+// Debug endpoint to check user batch and test assignments
+exports.debugUserBatchTests = async (req, res) => {
+  try {
+    console.log('=== debugUserBatchTests START ===');
+    console.log('User:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
+    
+    if (!req.user) {
+      return res.status(401).json({ status: 'error', message: 'User not authenticated' });
+    }
+    
+    // Get user's batch IDs
+    const userBatchIds = await sequelize.query(`
+      SELECT DISTINCT "batchId" 
+      FROM "BatchStudents" 
+      WHERE "userId" = :userId
+    `, {
+      replacements: { userId: req.user.id },
+      type: sequelize.QueryTypes.SELECT
+    });
+    
+    console.log('User batch IDs:', userBatchIds);
+    
+    let batchDetails = [];
+    let assignedTests = [];
+    
+    if (userBatchIds.length > 0) {
+      const batchIds = userBatchIds.map(b => b.batchId);
+      
+      // Get batch details
+      batchDetails = await sequelize.query(`
+        SELECT * FROM "Batches" WHERE id IN (:batchIds)
+      `, {
+        replacements: { batchIds: batchIds },
+        type: sequelize.QueryTypes.SELECT
+      });
+      
+      // Get tests assigned to these batches
+      assignedTests = await sequelize.query(`
+        SELECT pt.*, bat."batchId"
+        FROM "PracticeTests" pt
+        INNER JOIN "BatchAssignedTests" bat ON pt.id = bat."testId"
+        WHERE bat."batchId" IN (:batchIds)
+      `, {
+        replacements: { batchIds: batchIds },
+        type: sequelize.QueryTypes.SELECT
+      });
+    }
+    
+    // Get all practice tests for comparison
+    const allTests = await PracticeTest.findAll({
+      attributes: ['id', 'title', 'isActive', 'targetUserType']
+    });
+    
+    console.log('=== debugUserBatchTests END ===');
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        user: {
+          id: req.user.id,
+          role: req.user.role,
+          userType: req.user.userType
+        },
+        userBatchIds,
+        batchDetails,
+        assignedTests: assignedTests.map(t => ({
+          id: t.id,
+          title: t.title,
+          isActive: t.isActive,
+          targetUserType: t.targetUserType,
+          batchId: t.batchId
+        })),
+        allTests: allTests.map(t => ({
+          id: t.id,
+          title: t.title,
+          isActive: t.isActive,
+          targetUserType: t.targetUserType
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('Error in debugUserBatchTests:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Debug failed',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 }; 
