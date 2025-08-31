@@ -150,16 +150,28 @@ exports.getPracticeTestById = async (req, res) => {
 // Get available practice tests for students and corporate users
 exports.getAvailablePracticeTests = async (req, res) => {
   try {
+    console.log('getAvailablePracticeTests called with user:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
+    
     const practiceTests = await PracticeTest.findAll({
       where: { isActive: true },
       attributes: ['id', 'title', 'description', 'category', 'totalQuestions', 'questionsPerTest', 'duration', 'passingScore', 'repeatAfterHours', 'enableCooldown', 'questions', 'targetUserType', 'showInPublic'],
       order: [['createdAt', 'DESC']]
     });
+    
+    console.log('Found practice tests:', practiceTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
 
     let filteredTests = practiceTests;
-    if (req.user && req.user.userType) {
-      // Only show tests for the user's type
-      filteredTests = practiceTests.filter(test => test.targetUserType === req.user.userType);
+    if (req.user) {
+      // Handle both userType and role fields
+      let userType = req.user.userType;
+      if (!userType && req.user.role && req.user.role !== 'admin') {
+        userType = req.user.role; // Use role if userType is not available
+      }
+      
+      if (userType) {
+        // Only show tests for the user's type
+        filteredTests = practiceTests.filter(test => test.targetUserType === userType);
+      }
     }
 
     let testsWithAvailability;
