@@ -597,17 +597,36 @@ exports.assignTestsToBatch = async (req, res) => {
     }
 
     // Validate test assignments
-    // Validate test assignments
     const testIds = testAssignments.map(assignment => Number(assignment.testId)).filter(n => !isNaN(n));
     if (!testIds.length) {
       return res.status(400).json({ status: 'fail', message: 'Invalid test IDs' });
     }
+    
+    // Get batch details to check userType
+    const batchDetails = await Batch.findByPk(batchId);
+    if (!batchDetails) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Batch not found'
+      });
+    }
+    
     const tests = await PracticeTest.findAll({ where: { id: { [Op.in]: testIds } } });
 
     if (tests.length !== testIds.length) {
       return res.status(400).json({
         status: 'fail',
         message: 'Some tests are not valid'
+      });
+    }
+    
+    // Validate that all tests match the batch's userType
+    const mismatchedTests = tests.filter(test => test.targetUserType !== batchDetails.userType);
+    if (mismatchedTests.length > 0) {
+      const testNames = mismatchedTests.map(t => t.title).join(', ');
+      return res.status(400).json({
+        status: 'fail',
+        message: `Cannot assign tests with different user types. The following tests are for ${mismatchedTests[0].targetUserType} users but this batch is for ${batchDetails.userType} users: ${testNames}`
       });
     }
 
