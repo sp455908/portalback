@@ -26,6 +26,14 @@ const Batch = sequelize.define('Batch', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  userType: {
+    type: DataTypes.ENUM('student', 'corporate', 'government'),
+    allowNull: false,
+    defaultValue: 'student',
+    validate: {
+      isIn: [['student', 'corporate', 'government']]
+    }
+  },
   adminId: {
     type: DataTypes.INTEGER,
     allowNull: false,

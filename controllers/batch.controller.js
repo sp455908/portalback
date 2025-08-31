@@ -23,13 +23,20 @@ exports.createBatch = async (req, res) => {
       headers: req.headers
     });
 
-    const { batchName, description, maxStudents, tags, startDate, endDate } = req.body;
+    const { batchName, description, maxStudents, tags, startDate, endDate, userType } = req.body;
 
     // Validate required fields
     if (!batchName) {
       return res.status(400).json({
         status: 'fail',
         message: 'Batch name is required'
+      });
+    }
+
+    if (!userType || !['student', 'corporate', 'government'].includes(userType)) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'User type is required and must be student, corporate, or government'
       });
     }
 
@@ -63,6 +70,7 @@ exports.createBatch = async (req, res) => {
       batchId,
       batchName,
       description,
+      userType,
       adminId: req.user.id,
       status: 'active',
       maxStudents: maxStudents || 50,
@@ -260,6 +268,14 @@ exports.updateBatch = async (req, res) => {
           message: 'Batch name already exists'
         });
       }
+    }
+
+    // Validate userType if being updated
+    if (updates.userType && !['student', 'corporate', 'government'].includes(updates.userType)) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'User type must be student, corporate, or government'
+      });
     }
 
     const updatedBatch = await batch.update(updates);
