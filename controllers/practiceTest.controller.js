@@ -158,7 +158,14 @@ exports.getAvailablePracticeTests = async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
     
+    // Also check for all practice tests (including inactive ones) for debugging
+    const allPracticeTests = await PracticeTest.findAll({
+      attributes: ['id', 'title', 'isActive', 'targetUserType']
+    });
+    console.log('All practice tests (including inactive):', allPracticeTests.map(t => ({ id: t.id, title: t.title, isActive: t.isActive, targetUserType: t.targetUserType })));
+    
     console.log('Found practice tests:', practiceTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+    console.log('Total practice tests found:', practiceTests.length);
 
     let filteredTests = practiceTests;
     if (req.user) {
@@ -168,9 +175,12 @@ exports.getAvailablePracticeTests = async (req, res) => {
         userType = req.user.role; // Use role if userType is not available
       }
       
+      console.log('User type for filtering:', userType);
+      
       if (userType) {
         // Only show tests for the user's type
         filteredTests = practiceTests.filter(test => test.targetUserType === userType);
+        console.log('Filtered tests for user type', userType, ':', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
       }
     }
 
@@ -230,6 +240,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
       });
     }
 
+    console.log('Final response - testsWithAvailability count:', testsWithAvailability.length);
     res.status(200).json({
       status: 'success',
       data: { practiceTests: testsWithAvailability }
