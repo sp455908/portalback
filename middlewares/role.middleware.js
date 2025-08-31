@@ -8,13 +8,19 @@ module.exports = (...allowedRoles) => {
       });
     }
     
-    if (!req.user.role) {
+    // Handle both role (string) and roles (array) cases
+    let userRole = req.user.role;
+    if (!userRole && req.user.roles && Array.isArray(req.user.roles)) {
+      userRole = req.user.roles[0]; // Use first role if roles is an array
+    }
+    
+    if (!userRole) {
       return res.status(403).json({ 
         message: "Forbidden: User has no role defined"
       });
     }
     
-    if (!allowedRoles.includes(req.user.role)) {
+    if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({ 
         message: "Forbidden: insufficient permissions"
       });
