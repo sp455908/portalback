@@ -369,12 +369,78 @@ exports.getAvailablePracticeTests = async (req, res) => {
 exports.startPracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
+    console.log('=== startPracticeTest START ===');
+    console.log('User:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
+    console.log('Test ID:', testId);
+    
     // Check if test exists and is active
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest || !practiceTest.isActive) {
       return res.status(404).json({
         status: 'fail',
         message: 'Practice test not found or inactive'
+      });
+    }
+    
+    // Check user type compatibility
+    let userType = req.user.userType;
+    if (!userType && req.user.role && req.user.role !== 'admin') {
+      userType = req.user.role;
+    }
+    
+    if (practiceTest.targetUserType && practiceTest.targetUserType !== userType) {
+      return res.status(403).json({
+        status: 'fail',
+        message: `Access Denied: This test is for ${practiceTest.targetUserType} users only.`
+      });
+    }
+    
+    // Check if user has access to this test through batch assignment
+    try {
+      const userBatchIds = await sequelize.query(`
+        SELECT DISTINCT "batchId" 
+        FROM "BatchStudents" 
+        WHERE "userId" = :userId
+      `, {
+        replacements: { userId: req.user.id },
+        type: sequelize.QueryTypes.SELECT
+      });
+      
+      if (userBatchIds.length > 0) {
+        const batchIds = userBatchIds.map(b => b.batchId);
+        
+        // Check if this test is assigned to any of the user's batches
+        const batchTestAssignment = await sequelize.query(`
+          SELECT COUNT(*) as count
+          FROM "BatchAssignedTests" 
+          WHERE "batchId" IN (:batchIds) AND "testId" = :testId AND "isActive" = true
+        `, {
+          replacements: { batchIds: batchIds, testId: testId },
+          type: sequelize.QueryTypes.SELECT
+        });
+        
+        const hasBatchAccess = batchTestAssignment[0]?.count > 0;
+        
+        if (!hasBatchAccess) {
+          return res.status(403).json({
+            status: 'fail',
+            message: 'Access Denied: This test is not assigned to your batch. Please contact an administrator.'
+          });
+        }
+      } else {
+        // User is not in any batches, check if test is public
+        if (!practiceTest.showInPublic) {
+          return res.status(403).json({
+            status: 'fail',
+            message: 'Access Denied: You are not enrolled in any batches and this test is not publicly available.'
+          });
+        }
+      }
+    } catch (batchError) {
+      console.error('Error checking batch access:', batchError);
+      return res.status(500).json({
+        status: 'fail',
+        message: 'Error verifying test access. Please try again.'
       });
     }
 
@@ -469,6 +535,14 @@ exports.startPracticeTest = async (req, res) => {
       attemptsCount: (await TestAttempt.count({ where: { userId: req.user.id, practiceTestId: testId } })) + 1
     };
     const newTestAttempt = await TestAttempt.create(testAttemptData);
+    
+    console.log('Test attempt created successfully:', {
+      testAttemptId: newTestAttempt.id,
+      userId: req.user.id,
+      testId: testId,
+      questionsCount: selectedQuestions.length
+    });
+    
     res.status(200).json({
       status: 'success',
       data: {
@@ -483,12 +557,16 @@ exports.startPracticeTest = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('Error in startPracticeTest:', err);
+    console.error('Error stack:', err.stack);
     res.status(500).json({
       status: 'error',
       message: 'Failed to start practice test',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
+  
+  console.log('=== startPracticeTest END ===');
 };
 
 // Submit practice test answers

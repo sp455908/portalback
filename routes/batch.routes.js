@@ -35,9 +35,6 @@ router.get('/stats', protect, authorize('admin'), batchController.getDashboardSt
 // Individual batch statistics
 router.get('/:batchId/stats', batchController.getBatchStats);
 
-// Batch settings update
-router.put('/:batchId/settings', batchController.updateBatchSettings);
-
 // Student management in batches
 router.post('/:batchId/students', batchController.addStudentsToBatch);
 router.delete('/:batchId/students', batchController.removeStudentsFromBatch);
@@ -46,8 +43,5 @@ router.get('/:batchId/students/check-conflicts', batchController.checkStudentsCo
 // Test assignment in batches
 router.post('/:batchId/tests', batchController.assignTestsToBatch);
 router.delete('/:batchId/tests', batchController.removeTestsFromBatch);
-
-// Batch settings
-router.put('/:batchId/settings', batchController.updateBatchSettings);
 
 module.exports = router; 
