@@ -54,6 +54,9 @@ router.put('/admin/bulk-settings', protect, authorize('admin'), practiceTestCont
 // Route to get available tests (requires authentication to filter by user type)
 router.get('/available', protect, authorize('student', 'corporate', 'government'), practiceTestController.getAvailablePracticeTests);
 
+// Debug endpoint for troubleshooting
+router.get('/debug-user', protect, authorize('student', 'corporate', 'government'), practiceTestController.debugUserBatchTests);
+
 // Student/Corporate/Government routes
 router.post('/:testId/start', protect, authorize('student', 'corporate', 'government'), practiceTestController.startPracticeTest);
 router.post('/attempt/:testAttemptId/submit', protect, authorize('student', 'corporate', 'government'), practiceTestController.submitPracticeTest);

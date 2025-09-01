@@ -1,5 +1,6 @@
 const { Batch, User, PracticeTest, BatchStudent } = require('../models');
 const { Op } = require('sequelize');
+const { sequelize } = require('../config/database');
 // Helper: resolve batch by numeric primary key or by string batchId code
 const findBatchByParam = async (batchIdParam, include = undefined) => {
   if (!batchIdParam) return null;
@@ -313,6 +314,8 @@ exports.updateBatch = async (req, res) => {
     const { batchId } = req.params;
     const updates = req.body;
 
+    console.log('Update batch request:', { batchId, updates });
+
     const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
@@ -326,7 +329,7 @@ exports.updateBatch = async (req, res) => {
       const existingBatch = await Batch.findOne({ 
         where: {
           batchName: updates.batchName,
-          id: { [sequelize.Op.ne]: batchId }
+          id: { [sequelize.Op.ne]: batch.id }
         }
       });
       if (existingBatch) {
@@ -345,7 +348,29 @@ exports.updateBatch = async (req, res) => {
       });
     }
 
-    const updatedBatch = await batch.update(updates);
+    // Handle settings updates separately
+    let settingsUpdates = {};
+    if (updates.settings) {
+      settingsUpdates = {
+        maxStudents: updates.settings.maxStudents,
+        allowTestRetakes: updates.settings.allowTestRetakes,
+        requireCompletion: updates.settings.requireCompletion,
+        autoAssignTests: updates.settings.autoAssignTests,
+        emailNotifications: updates.settings.notificationSettings?.emailNotifications,
+        testReminders: updates.settings.notificationSettings?.testReminders,
+        dueDateAlerts: updates.settings.notificationSettings?.dueDateAlerts
+      };
+    }
+
+    // Remove settings from main updates to avoid conflicts
+    const { settings, ...mainUpdates } = updates;
+    
+    // Combine main updates with settings
+    const allUpdates = { ...mainUpdates, ...settingsUpdates };
+    
+    console.log('Applying updates:', allUpdates);
+
+    const updatedBatch = await batch.update(allUpdates);
 
     // Fetch the updated batch with associations
     const populatedBatch = await findBatchByParam(batchId, [
@@ -361,6 +386,8 @@ exports.updateBatch = async (req, res) => {
       }
     ]);
 
+    console.log('Batch updated successfully');
+
     res.status(200).json({
       status: 'success',
       message: 'Batch updated successfully',
@@ -369,6 +396,8 @@ exports.updateBatch = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('Error in updateBatch:', err);
+    console.error('Error stack:', err.stack);
     res.status(500).json({
       status: 'error',
       message: 'Failed to update batch',
@@ -877,29 +906,34 @@ exports.updateBatchSettings = async (req, res) => {
 }; 
 
 // Get batch statistics for dashboard
-exports.getBatchStats = async (req, res) => {
+exports.getDashboardStats = async (req, res) => {
   try {
     console.log('Getting batch statistics for dashboard');
-    console.log('Request URL:', req.url);
-    console.log('Request method:', req.method);
-    console.log('Request params:', req.params);
     
-    // For now, return default values to get the endpoint working
-    // We can enhance this later with actual database queries
-    const totalStudents = 0;
-    const totalAssignedTests = 0;
+    // Get actual statistics from database
+    const totalStudents = await BatchStudent.count({
+      where: { status: 'active' }
+    });
     
-    console.log('Batch statistics (default):', { totalStudents, totalAssignedTests });
+    const totalAssignedTests = await sequelize.query(`
+      SELECT COUNT(*) as count 
+      FROM "BatchAssignedTests" 
+      WHERE "isActive" = true
+    `, { type: sequelize.QueryTypes.SELECT });
+    
+    const totalAssignedTestsCount = totalAssignedTests[0]?.count || 0;
+    
+    console.log('Batch statistics:', { totalStudents, totalAssignedTests: totalAssignedTestsCount });
     
     res.status(200).json({
       status: 'success',
       data: {
         totalStudents,
-        totalAssignedTests
+        totalAssignedTests: totalAssignedTestsCount
       }
     });
   } catch (err) {
-    console.error('Error in getBatchStats:', err);
+    console.error('Error in getDashboardStats:', err);
     console.error('Error stack:', err.stack);
     res.status(500).json({
       status: 'error',
