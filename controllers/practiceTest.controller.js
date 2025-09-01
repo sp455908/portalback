@@ -389,9 +389,16 @@ exports.startPracticeTest = async (req, res) => {
     }
     
     if (practiceTest.targetUserType && practiceTest.targetUserType !== userType) {
+      console.log('User type mismatch:', {
+        userId: req.user.id,
+        userType: userType,
+        requiredUserType: practiceTest.targetUserType,
+        testId: testId,
+        testTitle: practiceTest.title
+      });
       return res.status(403).json({
         status: 'fail',
-        message: `Access Denied: This test is for ${practiceTest.targetUserType} users only.`
+        message: `Access Denied: This test "${practiceTest.title}" is for ${practiceTest.targetUserType} users only. Your account type is: ${userType || 'undefined'}.`
       });
     }
     
@@ -422,17 +429,31 @@ exports.startPracticeTest = async (req, res) => {
         const hasBatchAccess = batchTestAssignment[0]?.count > 0;
         
         if (!hasBatchAccess) {
+          console.log('User batch access check failed:', {
+            userId: req.user.id,
+            testId: testId,
+            userBatches: batchIds,
+            testTargetUserType: practiceTest.targetUserType,
+            userType: userType
+          });
           return res.status(403).json({
             status: 'fail',
-            message: 'Access Denied: This test is not assigned to your batch. Please contact an administrator.'
+            message: `Access Denied: This test is not assigned to your batch. You are in batches [${batchIds.join(', ')}] but test ${testId} is not assigned to any of them. Please contact an administrator.`
           });
         }
       } else {
         // User is not in any batches, check if test is public
+        console.log('User not in any batches:', {
+          userId: req.user.id,
+          userType: userType,
+          testId: testId,
+          testTitle: practiceTest.title,
+          testPublic: practiceTest.showInPublic
+        });
         if (!practiceTest.showInPublic) {
           return res.status(403).json({
             status: 'fail',
-            message: 'Access Denied: You are not enrolled in any batches and this test is not publicly available.'
+            message: `Access Denied: You are not enrolled in any batches and test "${practiceTest.title}" is not publicly available. Please contact an administrator to be added to a batch.`
           });
         }
       }
