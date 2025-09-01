@@ -285,6 +285,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
     }
 
     let testsWithAvailability;
+    const serializeTest = (test) => (test && typeof test.toJSON === 'function' ? test.toJSON() : test);
     if (req.user) {
       console.log('About to query user attempts...');
       const userAttempts = await TestAttempt.findAll({ 
@@ -308,7 +309,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
         const isBatchAssigned = batchAssignedTests.some(bt => bt.id === test.id);
         
         return {
-          ...test.toObject(),
+          ...serializeTest(test),
           canTakeTest: true,
           lastAttemptDate: lastAttempt ? lastAttempt.completedAt : null,
           attemptsCount: userTestAttempts.length,
