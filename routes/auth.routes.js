@@ -64,5 +64,11 @@ router.get('/me', protect, authController.getMe);
 
 // Logout (optional, for client-side token removal)
 router.post('/logout', protect, authController.logout);
+
+// Validate session endpoint
+router.get('/validate-session', authController.validateSession);
+
+// Get user stats
 router.get('/stats', protect, userController.getUserStats);
+
 module.exports = router;

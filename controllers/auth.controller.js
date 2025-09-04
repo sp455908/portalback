@@ -1,10 +1,16 @@
-const { User, LoginAttempt } = require('../models');
+const { User, LoginAttempt, UserSession } = require('../models');
 // D:\IIFTL Backend\controllers\auth.controller.js
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { promisify } = require('util');
 const crypto = require('crypto');
 const { userCache, adminCountCache } = require('../utils/cache');
+const { 
+  createSession, 
+  deactivateSession, 
+  enforceSingleSession,
+  SESSION_TIMEOUT_MINUTES 
+} = require('../middlewares/sessionManagement.middleware');
 
 // Promisify jwt.verify
 const verifyToken = promisify(jwt.verify);
@@ -24,12 +30,28 @@ const signRefreshToken = (id) => {
 };
 
 // Create and send token with refresh token
-const createSendToken = (user, statusCode, res) => {
+const createSendToken = async (user, statusCode, res, req = null) => {
   const accessToken = signToken(user.id);
   const refreshToken = signRefreshToken(user.id);
   
   // Remove password from output
   user.password = undefined;
+
+  // Create session if request object is provided
+  let session = null;
+  if (req) {
+    try {
+      session = await createSession(user, req);
+      // Update session with tokens
+      await session.update({
+        accessToken,
+        refreshToken
+      });
+    } catch (error) {
+      console.error('Error creating session:', error);
+      // Continue without session if creation fails
+    }
+  }
 
   // Set refresh token as HTTP-only cookie
   res.cookie('refreshToken', refreshToken, {
@@ -43,7 +65,9 @@ const createSendToken = (user, statusCode, res) => {
     status: 'success',
     token: accessToken,
     refreshToken: refreshToken,
+    sessionId: session ? session.sessionId : null,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, // in seconds
     data: {
       user
     }
@@ -137,7 +161,7 @@ exports.register = async (req, res, next) => {
     }
 
     // Log user in, send JWT
-    createSendToken(newUser, 201, res);
+    await createSendToken(newUser, 201, res, req);
 
   } catch (err) {
     console.error('Registration error:', err);
@@ -328,7 +352,7 @@ exports.login = async (req, res, next) => {
     });
 
     // 5) If everything ok, send token to client
-    createSendToken(user, 200, res);
+    await createSendToken(user, 200, res, req);
 
   } catch (err) {
     console.error('Login error:', err);
@@ -437,6 +461,13 @@ exports.refreshToken = async (req, res, next) => {
 // Logout user (invalidate refresh token)
 exports.logout = async (req, res, next) => {
   try {
+    const sessionId = req.headers['x-session-id'];
+    
+    // Deactivate session if sessionId is provided
+    if (sessionId) {
+      await deactivateSession(sessionId);
+    }
+    
     // Clear refresh token cookie
     res.clearCookie('refreshToken');
     
@@ -445,9 +476,69 @@ exports.logout = async (req, res, next) => {
       message: 'Logged out successfully'
     });
   } catch (err) {
+    console.error('Logout error:', err);
     res.status(500).json({
       status: 'error',
       message: 'Logout failed'
+    });
+  }
+};
+
+// Validate session endpoint
+exports.validateSession = async (req, res, next) => {
+  try {
+    const sessionId = req.headers['x-session-id'];
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Session ID required'
+      });
+    }
+    
+    const session = await UserSession.findOne({
+      where: { sessionId, isActive: true },
+      include: [{ model: User, attributes: ['id', 'email', 'role', 'userType', 'isActive'] }]
+    });
+    
+    if (!session) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Invalid or expired session',
+        code: 'SESSION_INVALID'
+      });
+    }
+    
+    // Check if session is idle or expired
+    if (session.isIdle(30) || session.isExpired()) {
+      await deactivateSession(sessionId);
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Session expired due to inactivity',
+        code: 'SESSION_EXPIRED'
+      });
+    }
+    
+    // Update last activity
+    await session.updateActivity();
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        session: {
+          id: session.id,
+          sessionId: session.sessionId,
+          lastActivity: session.lastActivity,
+          expiresAt: session.expiresAt
+        },
+        user: session.user
+      }
+    });
+  } catch (err) {
+    console.error('Session validation error:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Session validation failed'
     });
   }
 };
