@@ -342,7 +342,7 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 4) Check for other active sessions (for alert-only UX) and cleanup expired/idle
+    // 4) Check other active sessions and cleanup expired/idle
     let otherActiveSessions = [];
     try {
       const existingSessions = await UserSession.findUserActiveSessions(user.id);
@@ -358,8 +358,22 @@ exports.login = async (req, res, next) => {
         }
       }
       otherActiveSessions = validSessions;
-      if (validSessions.length > 0) {
-        console.log(`⚠️ Login with existing active session(s): ${validSessions.length} for user ${user.email}`);
+      // Strict single-session enforcement for admin users: block new login if any active session exists
+      if (user.role === 'admin' && validSessions.length > 0) {
+        console.log(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
+        return res.status(409).json({
+          status: 'fail',
+          message: 'You are already logged in on another device. Please logout there first.',
+          code: 'SESSION_ALREADY_ACTIVE',
+          data: {
+            activeSessions: validSessions.map(s => ({
+              lastActivity: s.lastActivity,
+              ipAddress: s.ipAddress,
+              userAgent: s.userAgent
+            })),
+            count: validSessions.length
+          }
+        });
       }
     } catch (sessionError) {
       console.error('Active session lookup/cleanup failed (continuing):', sessionError);
@@ -376,7 +390,7 @@ exports.login = async (req, res, next) => {
     });
 
     // 6) If everything ok, send token to client with session conflict meta (for alert)
-    const conflict = otherActiveSessions.length > 0;
+    const conflict = otherActiveSessions.length > 0 && user.role !== 'admin';
     await createSendToken(user, 200, res, req, conflict ? {
       sessionConflict: true,
       activeSessions: otherActiveSessions.slice(0, 3).map(s => ({
