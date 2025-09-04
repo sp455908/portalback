@@ -358,23 +358,7 @@ exports.login = async (req, res, next) => {
         }
       }
       otherActiveSessions = validSessions;
-      // Strict single-session enforcement for admin users: block new login if any active session exists
-      if (user.role === 'admin' && validSessions.length > 0) {
-        console.log(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
-        return res.status(409).json({
-          status: 'fail',
-          message: 'You are already logged in on another device. Please logout there first.',
-          code: 'SESSION_ALREADY_ACTIVE',
-          data: {
-            activeSessions: validSessions.map(s => ({
-              lastActivity: s.lastActivity,
-              ipAddress: s.ipAddress,
-              userAgent: s.userAgent
-            })),
-            count: validSessions.length
-          }
-        });
-      }
+      // Do not block admin login due to other active sessions; proceed and only surface info in meta if needed
     } catch (sessionError) {
       console.error('Active session lookup/cleanup failed (continuing):', sessionError);
     }

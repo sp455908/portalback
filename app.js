@@ -58,6 +58,7 @@ const corsOptions = {
     'X-Requested-With',
     'Accept',
     'Origin',
+    'x-csrf-token',
     'x-session-id',
     'Access-Control-Request-Method',
     'Access-Control-Request-Headers'
