@@ -30,7 +30,7 @@ const signRefreshToken = (id) => {
 };
 
 // Create and send token with refresh token
-const createSendToken = async (user, statusCode, res, req = null) => {
+const createSendToken = async (user, statusCode, res, req = null, extra = {}) => {
   const accessToken = signToken(user.id);
   const refreshToken = signRefreshToken(user.id);
   
@@ -80,7 +80,8 @@ const createSendToken = async (user, statusCode, res, req = null) => {
     sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, // in seconds
     data: {
       user
-    }
+    },
+    meta: extra.meta || undefined
   });
 };
 
@@ -361,20 +362,36 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    // 5) Enforce single session - deactivate existing sessions
+    // 5) Check for existing active sessions to inform UI
+    let existingSessionsCount = 0;
+    let existingSessionsBrief = [];
     try {
       const existingSessions = await UserSession.findUserActiveSessions(user.id);
+      existingSessionsCount = existingSessions.length;
+      existingSessionsBrief = existingSessions.map(s => ({
+        lastActivity: s.lastActivity,
+        ipAddress: s.ipAddress,
+        userAgent: s.userAgent
+      }));
+      
+      // Enforce single session - deactivate existing sessions
       if (existingSessions.length > 0) {
         console.log(`🔐 Deactivating ${existingSessions.length} existing sessions for user ${user.email}`);
         await UserSession.deactivateUserSessions(user.id);
       }
     } catch (sessionError) {
-      console.error('Error deactivating existing sessions:', sessionError);
+      console.error('Error checking/deactivating existing sessions:', sessionError);
       // Continue with login even if session cleanup fails
     }
 
-    // 6) If everything ok, send token to client
-    await createSendToken(user, 200, res, req);
+    // 6) If everything ok, send token to client with meta to show alert
+    await createSendToken(user, 200, res, req, {
+      meta: existingSessionsCount > 0 ? {
+        alreadyLoggedElsewhere: true,
+        priorActiveSessions: existingSessionsCount,
+        sessions: existingSessionsBrief.slice(0, 3)
+      } : undefined
+    });
 
   } catch (err) {
     console.error('Login error:', err);
