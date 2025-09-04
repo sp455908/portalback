@@ -358,7 +358,23 @@ exports.login = async (req, res, next) => {
         }
       }
       otherActiveSessions = validSessions;
-      // Do not block admin login due to other active sessions; proceed and only surface info in meta if needed
+      // Strict single-session enforcement for admin users: block new login if any active session exists
+      if (user.role === 'admin' && validSessions.length > 0) {
+        console.log(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
+        return res.status(409).json({
+          status: 'fail',
+          message: 'You are already logged in on another device. Please logout there first.',
+          code: 'SESSION_ALREADY_ACTIVE',
+          data: {
+            activeSessions: validSessions.map(s => ({
+              lastActivity: s.lastActivity,
+              ipAddress: s.ipAddress,
+              userAgent: s.userAgent
+            })),
+            count: validSessions.length
+          }
+        });
+      }
     } catch (sessionError) {
       console.error('Active session lookup/cleanup failed (continuing):', sessionError);
     }
@@ -373,7 +389,16 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    // 6) If everything ok, send token to client with session conflict meta (for alert)
+    // 6) Enforce single-session for non-admin users only: deactivate existing active sessions
+    if (user.role !== 'admin') {
+      try {
+        await UserSession.deactivateUserSessions(user.id);
+      } catch (deactivateErr) {
+        console.error('Single-session enforcement deactivation failed (continuing):', deactivateErr);
+      }
+    }
+
+    // 7) If everything ok, send token to client with session conflict meta (for alert)
     const conflict = otherActiveSessions.length > 0 && user.role !== 'admin';
     await createSendToken(user, 200, res, req, conflict ? {
       sessionConflict: true,
