@@ -6,25 +6,50 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set. Please check your .env file.');
 }
 
+// Decide whether to use SSL for Postgres
+// Use SSL if any of the following are true:
+// - Explicitly enabled via DB_SSL=true
+// - Running in production (NODE_ENV=production)
+// - Detected Render environment (RENDER=true)
+// - DATABASE_URL already requests it via sslmode=require
+const databaseUrl = process.env.DATABASE_URL;
+const hasSslModeRequire = /[?&]sslmode=require/i.test(databaseUrl);
+const shouldUseSsl = (
+  String(process.env.DB_SSL || '').toLowerCase() === 'true' ||
+  process.env.NODE_ENV === 'production' ||
+  String(process.env.RENDER || '').toLowerCase() === 'true' ||
+  hasSslModeRequire
+);
+
+// Base dialect options shared for both SSL and non-SSL
+const baseDialectOptions = {
+  // Performance optimizations
+  statement_timeout: 60000, // 60 seconds
+  idle_in_transaction_session_timeout: 60000, // 60 seconds
+  // Connection optimizations
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
+  // Connection timeout settings
+  connectTimeout: 30000, // 30 seconds
+  acquireTimeout: 30000, // 30 seconds
+  timeout: 30000 // 30 seconds
+};
+
+// Conditionally add SSL options
+const dialectOptions = shouldUseSsl
+  ? {
+      ...baseDialectOptions,
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    }
+  : { ...baseDialectOptions };
+
 // Create Sequelize instance with optimized settings
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
+const sequelize = new Sequelize(databaseUrl, {
   dialect: 'postgres',
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false
-    },
-    // Performance optimizations
-    statement_timeout: 60000, // 60 seconds
-    idle_in_transaction_session_timeout: 60000, // 60 seconds
-    // Connection optimizations
-    keepAlive: true,
-    keepAliveInitialDelayMillis: 10000,
-    // Connection timeout settings
-    connectTimeout: 30000, // 30 seconds
-    acquireTimeout: 30000, // 30 seconds
-    timeout: 30000 // 30 seconds
-  },
+  dialectOptions,
   logging: process.env.NODE_ENV === 'development' ? console.log : false,
   // OPTIMIZED: Better connection pooling for performance
   pool: {
