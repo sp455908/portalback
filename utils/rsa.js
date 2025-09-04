@@ -49,9 +49,23 @@ function decryptBase64RsaOaepSha256(base64Ciphertext) {
   return decrypted.toString('utf8');
 }
 
+function decryptBase64RsaOaepSha256ToBuffer(base64Ciphertext) {
+  const privateKeyPem = getPrivateKey();
+  const buffer = Buffer.from(base64Ciphertext, 'base64');
+  return crypto.privateDecrypt(
+    {
+      key: privateKeyPem,
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256'
+    },
+    buffer
+  );
+}
+
 module.exports = {
   getPublicKey,
   getPrivateKey,
   decryptBase64RsaOaepSha256,
+  decryptBase64RsaOaepSha256ToBuffer,
 };
 
