@@ -7,6 +7,17 @@ const securityMonitor = require('../utils/securityMonitor');
 const { User, UserSession } = require('../models');
 const { getPublicKey } = require('../utils/rsa');
 
+// Public RSA key endpoint (no auth)
+// Expose at /api/security/public-key via main router mount
+router.get('/public-key', (req, res) => {
+  try {
+    const pub = getPublicKey();
+    res.status(200).json({ status: 'success', key: pub });
+  } catch (e) {
+    res.status(500).json({ status: 'error', message: 'Failed to load public key' });
+  }
+});
+
 // ✅ ADD: Security monitoring routes (admin only)
 router.get('/events', 
   protect, 
@@ -346,14 +357,3 @@ router.post('/cleanup',
 );
 
 module.exports = router;
-
-// Public RSA key endpoint (no auth)
-// Expose at /api/security/public-key via main router mount
-router.get('/public-key', (req, res) => {
-  try {
-    const pub = getPublicKey();
-    res.status(200).json({ status: 'success', key: pub });
-  } catch (e) {
-    res.status(500).json({ status: 'error', message: 'Failed to load public key' });
-  }
-});
