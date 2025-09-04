@@ -1,4 +1,4 @@
-const { decryptBase64RsaOaepSha256 } = require('../utils/rsa');
+const { decryptBase64RsaOaepSha256, decryptBase64RsaOaepSha256ToBuffer } = require('../utils/rsa');
 const crypto = require('crypto');
 
 // Expect body in shape: { encrypted: true, payload: "base64", iv?: string }
@@ -10,8 +10,7 @@ function decryptRequestBody(req, res, next) {
       // Hybrid mode: { encrypted: true, alg: 'RSA-OAEP+AES-GCM', key, iv, payload }
       if (req.body.alg === 'RSA-OAEP+AES-GCM' && typeof req.body.key === 'string' && typeof req.body.iv === 'string') {
         // 1) Decrypt AES key using RSA
-        const aesKeyRawB64 = decryptBase64RsaOaepSha256(req.body.key);
-        const aesKeyRaw = Buffer.from(aesKeyRawB64, 'binary');
+        const aesKeyRaw = decryptBase64RsaOaepSha256ToBuffer(req.body.key);
         // 2) AES-GCM decrypt payload
         const iv = Buffer.from(req.body.iv, 'base64');
         const ct = Buffer.from(req.body.payload, 'base64');
