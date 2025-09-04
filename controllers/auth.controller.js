@@ -513,10 +513,26 @@ exports.refreshToken = async (req, res, next) => {
 exports.logout = async (req, res, next) => {
   try {
     const sessionId = req.headers['x-session-id'];
+    const authHeader = req.headers.authorization && req.headers.authorization.startsWith('Bearer')
+      ? req.headers.authorization.split(' ')[1]
+      : null;
     
     // Deactivate session if sessionId is provided
     if (sessionId) {
+      // Prefer direct update to ensure DB is flipped even if helper fails
+      try {
+        await UserSession.update(
+          { isActive: false },
+          { where: { userId: req.user?.id, sessionId } }
+        );
+      } catch (_) {}
       await deactivateSession(sessionId);
+    } else if (req.user?.id && authHeader) {
+      // Fallback: deactivate by access token bound to this session
+      await UserSession.update(
+        { isActive: false },
+        { where: { userId: req.user.id, accessToken: authHeader, isActive: true } }
+      );
     }
     
     // Clear refresh token cookie
