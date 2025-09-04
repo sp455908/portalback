@@ -342,16 +342,27 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 4) Check for other active sessions (for alert-only UX)
+    // 4) Check for other active sessions (for alert-only UX) and cleanup expired/idle
     let otherActiveSessions = [];
     try {
       const existingSessions = await UserSession.findUserActiveSessions(user.id);
-      otherActiveSessions = existingSessions;
-      if (existingSessions.length > 0) {
-        console.log(`⚠️ Login with existing active session(s): ${existingSessions.length} for user ${user.email}`);
+      const now = Date.now();
+      const validSessions = [];
+      for (const s of existingSessions) {
+        const isIdle = s.isIdle(30);
+        const isExpired = s.isExpired();
+        if (isIdle || isExpired) {
+          await UserSession.update({ isActive: false }, { where: { sessionId: s.sessionId } });
+        } else {
+          validSessions.push(s);
+        }
+      }
+      otherActiveSessions = validSessions;
+      if (validSessions.length > 0) {
+        console.log(`⚠️ Login with existing active session(s): ${validSessions.length} for user ${user.email}`);
       }
     } catch (sessionError) {
-      console.error('Active session lookup failed (continuing):', sessionError);
+      console.error('Active session lookup/cleanup failed (continuing):', sessionError);
     }
 
     // 5) Record successful login attempt
