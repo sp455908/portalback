@@ -21,6 +21,18 @@ exports.protect = async (req, res, next) => {
     console.log('Session ID extracted:', sessionId ? 'Present' : 'Missing');
   }
   
+  // Require session ID for all protected routes
+  if (!req.headers['x-session-id']) {
+    return res.status(401).json({
+      status: 'fail',
+      message: 'Session ID required',
+      code: 'SESSION_ID_REQUIRED'
+    });
+  }
+
+  sessionId = req.headers['x-session-id'];
+  console.log('Session ID extracted:', sessionId ? 'Present' : 'Missing');
+
   if (!token) {
     return res.status(401).json({ 
       status: 'fail',
@@ -54,42 +66,50 @@ exports.protect = async (req, res, next) => {
       });
     }
     
-    // If session ID is provided, validate the session
-    if (sessionId) {
-      console.log('Validating session...');
-      const session = await UserSession.findActiveSession(user.id, sessionId);
-      
-      if (!session) {
-        return res.status(401).json({
-          status: 'fail',
-          message: 'Invalid or expired session. Please login again.',
-          code: 'SESSION_INVALID'
-        });
+    // Validate the session (required)
+    console.log('Validating session...');
+    const session = await UserSession.findActiveSession(user.id, sessionId);
+    
+    if (!session) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Invalid or expired session. Please login again.',
+        code: 'SESSION_INVALID'
+      });
+    }
+    
+    // Check if session is idle (30 minutes of inactivity)
+    if (session.isIdle(30)) {
+      await UserSession.update({ isActive: false }, { where: { sessionId } });
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Session expired due to inactivity. Please login again.',
+        code: 'SESSION_IDLE_TIMEOUT'
+      });
+    }
+    
+    // Check if session is expired
+    if (session.isExpired()) {
+      await UserSession.update({ isActive: false }, { where: { sessionId } });
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Session has expired. Please login again.',
+        code: 'SESSION_EXPIRED'
+      });
+    }
+    
+    // Update session activity
+    await session.updateActivity();
+    console.log('Session validated and activity updated');
+
+    // Enforce single active session: deactivate all other sessions for this user
+    try {
+      const result = await UserSession.deactivateUserSessions(user.id, sessionId);
+      if (Array.isArray(result) && result[0] > 0) {
+        console.log(`Single-session enforcement: deactivated ${result[0]} other session(s) for user ${user.email}`);
       }
-      
-      // Check if session is idle (30 minutes of inactivity)
-      if (session.isIdle(30)) {
-        await UserSession.update({ isActive: false }, { where: { sessionId } });
-        return res.status(401).json({
-          status: 'fail',
-          message: 'Session expired due to inactivity. Please login again.',
-          code: 'SESSION_IDLE_TIMEOUT'
-        });
-      }
-      
-      // Check if session is expired
-      if (session.isExpired()) {
-        await UserSession.update({ isActive: false }, { where: { sessionId } });
-        return res.status(401).json({
-          status: 'fail',
-          message: 'Session has expired. Please login again.',
-          code: 'SESSION_EXPIRED'
-        });
-      }
-      
-      // Update session activity
-      await session.updateActivity();
-      console.log('Session validated and activity updated');
+    } catch (e) {
+      console.error('Error enforcing single-session policy:', e);
     }
     
     // Attach user to request
