@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,x-session-id');
   res.setHeader('Access-Control-Expose-Headers', 'Authorization,Set-Cookie');
 
   // Handle CORS preflight request FIRST - before any other logic
