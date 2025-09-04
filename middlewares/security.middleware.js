@@ -123,7 +123,8 @@ const securityMiddleware = {
       'admin-action'
     ];
 
-    if (securityEvents.some(event => req.path.includes(event))) {
+    if (process.env.NODE_ENV !== 'production' && securityEvents.some(event => req.path.includes(event))) {
+      // eslint-disable-next-line no-console
       console.log(`[SECURITY] ${req.method} ${req.path} from ${req.ip} at ${new Date().toISOString()}`);
     }
 

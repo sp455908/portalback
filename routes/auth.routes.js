@@ -5,11 +5,12 @@ const { protect } = require('../middlewares/auth.middleware');
 const userController = require('../controllers/user.controller');
 const { User } = require('../models');
 const { Op, fn, col } = require('sequelize');
+const { decryptRequestBody } = require('../middlewares/decrypt.middleware');
 
 // Register a new user
-router.post('/user-auth/register', authController.register);
+router.post('/user-auth/register', decryptRequestBody, authController.register);
 // Alias for frontend compatibility
-router.post('/register', authController.register);
+router.post('/register', decryptRequestBody, authController.register);
 
 // Check if email exists
 router.get('/check-email', async (req, res) => {
@@ -51,7 +52,7 @@ router.post('/verify-token', protect, (req, res) => {
 });
 
 // Login user
-router.post('/login', authController.login);
+router.post('/login', decryptRequestBody, authController.login);
 
 // Refresh access token
 router.post('/refresh-token', authController.refreshToken);

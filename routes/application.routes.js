@@ -3,9 +3,10 @@ const router = express.Router();
 const applicationController = require('../controllers/application.controller');
 const { protect } = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/role.middleware');
+const { decryptRequestBody } = require('../middlewares/decrypt.middleware');
 
 // Create a new application (any user or guest)
-router.post('/', applicationController.createApplication);
+router.post('/', decryptRequestBody, applicationController.createApplication);
 
 // Get all applications (admin only)
 router.get('/', protect, authorize('admin'), applicationController.getAllApplications);

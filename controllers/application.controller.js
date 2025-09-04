@@ -3,6 +3,7 @@ const { Application, User, Course } = require('../models');
 // Create a new application (admission form)
 exports.createApplication = async (req, res) => {
   try {
+    const encryptionService = require('../utils/encryption');
     const {
       firstName,
       lastName,
@@ -36,13 +37,13 @@ exports.createApplication = async (req, res) => {
       firstName,
       lastName,
       email,
-      phone,
+      phone: phone ? encryptionService.encrypt(String(phone)) : phone,
       dateOfBirth,
       gender,
-      address,
+      address: address ? encryptionService.encrypt(String(address)) : address,
       city,
       state,
-      pincode,
+      pincode: pincode ? encryptionService.encrypt(String(pincode)) : pincode,
       country,
       qualification,
       institution,
@@ -51,7 +52,7 @@ exports.createApplication = async (req, res) => {
       selectedCourse,
       preferredSchedule,
       workExperience,
-      motivation,
+      motivation: motivation ? encryptionService.encrypt(String(motivation)) : motivation,
       documentsUploaded,
       agreeTerms,
       agreeMarketing,

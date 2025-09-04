@@ -5,6 +5,7 @@ const restrictTo = require('../middlewares/role.middleware');
 const { csrfProtection } = require('../middlewares/session.middleware');
 const securityMonitor = require('../utils/securityMonitor');
 const { User, UserSession } = require('../models');
+const { getPublicKey } = require('../utils/rsa');
 
 // ✅ ADD: Security monitoring routes (admin only)
 router.get('/events', 
@@ -13,6 +14,9 @@ router.get('/events',
   csrfProtection.validateToken, 
   (req, res) => {
     try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ status: 'fail', message: 'Disabled in production' });
+      }
       const { limit = 100, severity } = req.query;
       const events = securityMonitor.getEvents(parseInt(limit), severity);
       
@@ -40,6 +44,9 @@ router.get('/report',
   csrfProtection.validateToken, 
   (req, res) => {
     try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ status: 'fail', message: 'Disabled in production' });
+      }
       const report = securityMonitor.generateReport();
       
       res.status(200).json({
@@ -65,6 +72,9 @@ router.get('/stats',
   csrfProtection.validateToken, 
   (req, res) => {
     try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ status: 'fail', message: 'Disabled in production' });
+      }
       const stats = securityMonitor.getStats();
       
       res.status(200).json({
@@ -246,6 +256,9 @@ router.post('/test-csrf',
   restrictTo('admin'), 
   csrfProtection.validateToken, 
   (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ status: 'fail', message: 'Disabled in production' });
+    }
     res.status(200).json({
       status: 'success',
       message: 'CSRF protection is working correctly',
@@ -259,6 +272,9 @@ router.post('/test-xss',
   restrictTo('admin'), 
   csrfProtection.validateToken, 
   (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ status: 'fail', message: 'Disabled in production' });
+    }
     const { testInput } = req.body;
     
     if (!testInput) {
@@ -308,6 +324,9 @@ router.post('/cleanup',
   csrfProtection.validateToken, 
   (req, res) => {
     try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ status: 'fail', message: 'Disabled in production' });
+      }
       const { days = 7 } = req.body;
       securityMonitor.clearOldEvents(parseInt(days));
       
@@ -327,3 +346,14 @@ router.post('/cleanup',
 );
 
 module.exports = router;
+
+// Public RSA key endpoint (no auth)
+// Expose at /api/security/public-key via main router mount
+router.get('/public-key', (req, res) => {
+  try {
+    const pub = getPublicKey();
+    res.status(200).json({ status: 'success', key: pub });
+  } catch (e) {
+    res.status(500).json({ status: 'error', message: 'Failed to load public key' });
+  }
+});

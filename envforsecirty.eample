@@ -1,0 +1,4 @@
+ENCRYPTION_KEY=change_this_to_a_strong_aes_passphrase
+RSA_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkq...replace_with_your_key...\n-----END PUBLIC KEY-----\n
+RSA_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkq...replace_with_your_key...\n-----END PRIVATE KEY-----\n
+JWT_COOKIE_EXPIRES_IN=7

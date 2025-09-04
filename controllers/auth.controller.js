@@ -12,6 +12,14 @@ const {
   SESSION_TIMEOUT_MINUTES 
 } = require('../middlewares/sessionManagement.middleware');
 
+// Development logger (no-op in production)
+const devLog = (...args) => {
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  }
+};
+
 // Promisify jwt.verify
 const verifyToken = promisify(jwt.verify);
 
@@ -79,6 +87,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
 exports.register = async (req, res, next) => {
   try {
     const { firstName, lastName, email, password, role, userType, phone, address, city, state, pincode } = req.body;
+    const encryptionService = require('../utils/encryption');
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
 
     if (!role || !userType) {
@@ -134,11 +143,11 @@ exports.register = async (req, res, next) => {
         password,
         role,
         userType,
-        phone,
-        address,
+        phone: phone ? encryptionService.encrypt(String(phone)) : phone,
+        address: address ? encryptionService.encrypt(String(address)) : address,
         city,
         state,
-        pincode
+        pincode: pincode ? encryptionService.encrypt(String(pincode)) : pincode
       });
     } catch (createErr) {
       if (createErr.name === 'SequelizeUniqueConstraintError' && createErr?.fields?.studentId) {
@@ -150,11 +159,11 @@ exports.register = async (req, res, next) => {
           password,
           role,
           userType,
-          phone,
-          address,
+          phone: phone ? encryptionService.encrypt(String(phone)) : phone,
+          address: address ? encryptionService.encrypt(String(address)) : address,
           city,
           state,
-          pincode
+          pincode: pincode ? encryptionService.encrypt(String(pincode)) : pincode
         });
       } else {
         throw createErr;
@@ -239,7 +248,7 @@ exports.login = async (req, res, next) => {
     if (!user || !(await user.comparePassword(password))) {
       // Record failed login attempt and check blocking
       if (user) {
-        console.log(`🔐 Failed login attempt for user: ${user.email} (ID: ${user.id})`);
+        devLog(`🔐 Failed login attempt for user: ${user.email} (ID: ${user.id})`);
         
         const loginResult = await LoginAttempt.processLoginAttempt({
           userId: user.id,
@@ -249,11 +258,11 @@ exports.login = async (req, res, next) => {
           success: false
         });
 
-        console.log(`📊 Login result:`, loginResult);
+        devLog(`📊 Login result:`, loginResult);
 
         // Check if user should be blocked (5 failed attempts in 15 minutes)
         if (loginResult.shouldBlock && user.role !== 'admin') {
-          console.log(`🚫 Blocking user ${user.email} after ${loginResult.failedCount} failed attempts`);
+          devLog(`🚫 Blocking user ${user.email} after ${loginResult.failedCount} failed attempts`);
           
           // Block the user permanently (no time limit)
           const blockedUntil = await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
@@ -261,7 +270,7 @@ exports.login = async (req, res, next) => {
           // Set user as inactive when blocked
           await user.update({ isActive: false });
           
-          console.log(`✅ User ${user.email} blocked successfully and marked as inactive`);
+          devLog(`✅ User ${user.email} blocked successfully and marked as inactive`);
           
           return res.status(423).json({
             status: 'fail',
@@ -273,7 +282,7 @@ exports.login = async (req, res, next) => {
             contactAdmin: true
           });
         } else {
-          console.log(`⚠️ User ${user.email} has ${loginResult.failedCount || 0} failed attempts, not blocked yet`);
+          devLog(`⚠️ User ${user.email} has ${loginResult.failedCount || 0} failed attempts, not blocked yet`);
         }
       }
 
@@ -360,7 +369,7 @@ exports.login = async (req, res, next) => {
       otherActiveSessions = validSessions;
       // Strict single-session enforcement for all users: block new login if any active session exists
       if (validSessions.length > 0) {
-        console.log(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
+        devLog(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
         return res.status(409).json({
           status: 'fail',
           message: 'You are already logged in on another device. Please logout there first.',
@@ -378,7 +387,10 @@ exports.login = async (req, res, next) => {
         });
       }
     } catch (sessionError) {
-      console.error('Active session lookup/cleanup failed (continuing):', sessionError);
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.error('Active session lookup/cleanup failed (continuing):', sessionError);
+      }
     }
 
     // 5) Record successful login attempt
@@ -406,7 +418,10 @@ exports.login = async (req, res, next) => {
     } : {});
 
   } catch (err) {
-    console.error('Login error:', err);
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.error('Login error:', err);
+    }
     res.status(500).json({
       status: 'error',
       message: 'An error occurred during login',
@@ -715,7 +730,7 @@ exports.logoutAllOtherSessions = async (req, res, next) => {
     // Deactivate all other sessions for this user
     const result = await UserSession.deactivateUserSessions(userId, currentSessionId);
     
-    console.log(`🔐 Force logged out ${result[0]} other sessions for user ${req.user.email}`);
+    devLog(`🔐 Force logged out ${result[0]} other sessions for user ${req.user.email}`);
     
     res.status(200).json({
       status: 'success',
@@ -770,7 +785,7 @@ exports.createInitialAdmin = async (req, res, next) => {
       isActive: true
     });
 
-    console.log('🎉 Initial admin user created successfully:', adminUser.email);
+    devLog('🎉 Initial admin user created successfully:', adminUser.email);
 
     res.status(201).json({
       status: 'success',
