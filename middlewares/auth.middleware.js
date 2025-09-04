@@ -21,10 +21,8 @@ exports.protect = async (req, res, next) => {
     console.log('Session ID extracted:', sessionId ? 'Present' : 'Missing');
   }
   
-  // Require session ID for all protected routes (from header or cookie)
-  const headerSessionId = req.headers['x-session-id'];
-  const cookieSessionId = req.cookies?.sessionId;
-  if (!headerSessionId && !cookieSessionId) {
+  // Require session ID for all protected routes
+  if (!req.headers['x-session-id']) {
     return res.status(401).json({
       status: 'fail',
       message: 'Session ID required',
@@ -32,7 +30,7 @@ exports.protect = async (req, res, next) => {
     });
   }
 
-  sessionId = headerSessionId || cookieSessionId;
+  sessionId = req.headers['x-session-id'];
   console.log('Session ID extracted:', sessionId ? 'Present' : 'Missing');
 
   if (!token) {
@@ -103,16 +101,6 @@ exports.protect = async (req, res, next) => {
     // Update session activity
     await session.updateActivity();
     console.log('Session validated and activity updated');
-
-    // Enforce single active session: deactivate all other sessions for this user
-    try {
-      const result = await UserSession.deactivateUserSessions(user.id, sessionId);
-      if (Array.isArray(result) && result[0] > 0) {
-        console.log(`Single-session enforcement: deactivated ${result[0]} other session(s) for user ${user.email}`);
-      }
-    } catch (e) {
-      console.error('Error enforcing single-session policy:', e);
-    }
     
     // Attach user to request
     req.user = user;

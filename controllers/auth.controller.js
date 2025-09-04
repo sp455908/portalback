@@ -30,7 +30,7 @@ const signRefreshToken = (id) => {
 };
 
 // Create and send token with refresh token
-const createSendToken = async (user, statusCode, res, req = null, extra = {}) => {
+const createSendToken = async (user, statusCode, res, req = null) => {
   const accessToken = signToken(user.id);
   const refreshToken = signRefreshToken(user.id);
   
@@ -61,16 +61,6 @@ const createSendToken = async (user, statusCode, res, req = null, extra = {}) =>
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   });
 
-  // Also set sessionId as HTTP-only cookie so initial requests work without header
-  if (session && session.sessionId) {
-    res.cookie('sessionId', session.sessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: SESSION_TIMEOUT_MINUTES * 60 * 1000
-    });
-  }
-
   res.status(statusCode).json({
     status: 'success',
     token: accessToken,
@@ -80,8 +70,7 @@ const createSendToken = async (user, statusCode, res, req = null, extra = {}) =>
     sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, // in seconds
     data: {
       user
-    },
-    meta: extra.meta || undefined
+    }
   });
 };
 
@@ -352,7 +341,36 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 4) Record successful login attempt
+    // 4) Strict single-session policy: block login if another active session exists
+    try {
+      const existingSessions = await UserSession.findUserActiveSessions(user.id);
+      if (existingSessions.length > 0) {
+        console.log(`🚫 Login blocked: ${existingSessions.length} active session(s) already exist for user ${user.email}`);
+        return res.status(409).json({
+          status: 'fail',
+          message: 'You are already logged in on another device. Please logout from the other device to continue.',
+          code: 'SESSION_ALREADY_ACTIVE',
+          data: {
+            activeSessions: existingSessions.map(s => ({
+              id: s.id,
+              sessionId: s.sessionId,
+              lastActivity: s.lastActivity,
+              ipAddress: s.ipAddress,
+              userAgent: s.userAgent
+            }))
+          }
+        });
+      }
+    } catch (sessionError) {
+      console.error('Active session check failed:', sessionError);
+      // Fail closed if we cannot verify sessions
+      return res.status(503).json({
+        status: 'error',
+        message: 'Unable to verify session status. Please try again later.'
+      });
+    }
+
+    // 5) Record successful login attempt (only after session check passes)
     await LoginAttempt.create({
       userId: user.id,
       email,
@@ -362,36 +380,8 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    // 5) Check for existing active sessions to inform UI
-    let existingSessionsCount = 0;
-    let existingSessionsBrief = [];
-    try {
-      const existingSessions = await UserSession.findUserActiveSessions(user.id);
-      existingSessionsCount = existingSessions.length;
-      existingSessionsBrief = existingSessions.map(s => ({
-        lastActivity: s.lastActivity,
-        ipAddress: s.ipAddress,
-        userAgent: s.userAgent
-      }));
-      
-      // Enforce single session - deactivate existing sessions
-      if (existingSessions.length > 0) {
-        console.log(`🔐 Deactivating ${existingSessions.length} existing sessions for user ${user.email}`);
-        await UserSession.deactivateUserSessions(user.id);
-      }
-    } catch (sessionError) {
-      console.error('Error checking/deactivating existing sessions:', sessionError);
-      // Continue with login even if session cleanup fails
-    }
-
-    // 6) If everything ok, send token to client with meta to show alert
-    await createSendToken(user, 200, res, req, {
-      meta: existingSessionsCount > 0 ? {
-        alreadyLoggedElsewhere: true,
-        priorActiveSessions: existingSessionsCount,
-        sessions: existingSessionsBrief.slice(0, 3)
-      } : undefined
-    });
+    // 6) If everything ok, send token to client
+    await createSendToken(user, 200, res, req);
 
   } catch (err) {
     console.error('Login error:', err);
