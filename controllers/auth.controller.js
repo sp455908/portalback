@@ -30,7 +30,7 @@ const signRefreshToken = (id) => {
 };
 
 // Create and send token with refresh token
-const createSendToken = async (user, statusCode, res, req = null) => {
+const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}) => {
   const accessToken = signToken(user.id);
   const refreshToken = signRefreshToken(user.id);
   
@@ -68,6 +68,7 @@ const createSendToken = async (user, statusCode, res, req = null) => {
     sessionId: session ? session.sessionId : null,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, // in seconds
+    meta: extraMeta,
     data: {
       user
     }
@@ -341,36 +342,19 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 4) Strict single-session policy: block login if another active session exists
+    // 4) Check for other active sessions (for alert-only UX)
+    let otherActiveSessions = [];
     try {
       const existingSessions = await UserSession.findUserActiveSessions(user.id);
+      otherActiveSessions = existingSessions;
       if (existingSessions.length > 0) {
-        console.log(`🚫 Login blocked: ${existingSessions.length} active session(s) already exist for user ${user.email}`);
-        return res.status(409).json({
-          status: 'fail',
-          message: 'You are already logged in on another device. Please logout from the other device to continue.',
-          code: 'SESSION_ALREADY_ACTIVE',
-          data: {
-            activeSessions: existingSessions.map(s => ({
-              id: s.id,
-              sessionId: s.sessionId,
-              lastActivity: s.lastActivity,
-              ipAddress: s.ipAddress,
-              userAgent: s.userAgent
-            }))
-          }
-        });
+        console.log(`⚠️ Login with existing active session(s): ${existingSessions.length} for user ${user.email}`);
       }
     } catch (sessionError) {
-      console.error('Active session check failed:', sessionError);
-      // Fail closed if we cannot verify sessions
-      return res.status(503).json({
-        status: 'error',
-        message: 'Unable to verify session status. Please try again later.'
-      });
+      console.error('Active session lookup failed (continuing):', sessionError);
     }
 
-    // 5) Record successful login attempt (only after session check passes)
+    // 5) Record successful login attempt
     await LoginAttempt.create({
       userId: user.id,
       email,
@@ -380,8 +364,17 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    // 6) If everything ok, send token to client
-    await createSendToken(user, 200, res, req);
+    // 6) If everything ok, send token to client with session conflict meta (for alert)
+    const conflict = otherActiveSessions.length > 0;
+    await createSendToken(user, 200, res, req, conflict ? {
+      sessionConflict: true,
+      activeSessions: otherActiveSessions.slice(0, 3).map(s => ({
+        lastActivity: s.lastActivity,
+        ipAddress: s.ipAddress,
+        userAgent: s.userAgent
+      })),
+      count: otherActiveSessions.length
+    } : {});
 
   } catch (err) {
     console.error('Login error:', err);
