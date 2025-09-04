@@ -61,6 +61,16 @@ const createSendToken = async (user, statusCode, res, req = null) => {
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   });
 
+  // Also set sessionId as HTTP-only cookie so initial requests work without header
+  if (session && session.sessionId) {
+    res.cookie('sessionId', session.sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: SESSION_TIMEOUT_MINUTES * 60 * 1000
+    });
+  }
+
   res.status(statusCode).json({
     status: 'success',
     token: accessToken,

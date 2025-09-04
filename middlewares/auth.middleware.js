@@ -21,8 +21,10 @@ exports.protect = async (req, res, next) => {
     console.log('Session ID extracted:', sessionId ? 'Present' : 'Missing');
   }
   
-  // Require session ID for all protected routes
-  if (!req.headers['x-session-id']) {
+  // Require session ID for all protected routes (from header or cookie)
+  const headerSessionId = req.headers['x-session-id'];
+  const cookieSessionId = req.cookies?.sessionId;
+  if (!headerSessionId && !cookieSessionId) {
     return res.status(401).json({
       status: 'fail',
       message: 'Session ID required',
@@ -30,7 +32,7 @@ exports.protect = async (req, res, next) => {
     });
   }
 
-  sessionId = req.headers['x-session-id'];
+  sessionId = headerSessionId || cookieSessionId;
   console.log('Session ID extracted:', sessionId ? 'Present' : 'Missing');
 
   if (!token) {
