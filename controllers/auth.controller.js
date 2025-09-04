@@ -351,7 +351,19 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    // 5) If everything ok, send token to client
+    // 5) Enforce single session - deactivate existing sessions
+    try {
+      const existingSessions = await UserSession.findUserActiveSessions(user.id);
+      if (existingSessions.length > 0) {
+        console.log(`🔐 Deactivating ${existingSessions.length} existing sessions for user ${user.email}`);
+        await UserSession.deactivateUserSessions(user.id);
+      }
+    } catch (sessionError) {
+      console.error('Error deactivating existing sessions:', sessionError);
+      // Continue with login even if session cleanup fails
+    }
+
+    // 6) If everything ok, send token to client
     await createSendToken(user, 200, res, req);
 
   } catch (err) {
@@ -590,6 +602,78 @@ exports.protect = async (req, res, next) => {
     res.status(401).json({
       status: 'fail',
       message: 'Invalid token or session expired'
+    });
+  }
+};
+
+// Get active sessions for current user
+exports.getActiveSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const currentSessionId = req.headers['x-session-id'];
+    
+    const activeSessions = await UserSession.findUserActiveSessions(userId);
+    
+    // Filter out current session
+    const otherSessions = currentSessionId 
+      ? activeSessions.filter(session => session.sessionId !== currentSessionId)
+      : activeSessions;
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        activeSessions: activeSessions.map(session => ({
+          id: session.id,
+          sessionId: session.sessionId,
+          lastActivity: session.lastActivity,
+          ipAddress: session.ipAddress,
+          userAgent: session.userAgent,
+          deviceInfo: session.deviceInfo,
+          isCurrent: session.sessionId === currentSessionId
+        })),
+        totalSessions: activeSessions.length,
+        otherSessions: otherSessions.length
+      }
+    });
+  } catch (err) {
+    console.error('Get active sessions error:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch active sessions'
+    });
+  }
+};
+
+// Force logout from all other sessions
+exports.logoutAllOtherSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const currentSessionId = req.headers['x-session-id'];
+    
+    if (!currentSessionId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Current session ID required'
+      });
+    }
+    
+    // Deactivate all other sessions for this user
+    const result = await UserSession.deactivateUserSessions(userId, currentSessionId);
+    
+    console.log(`🔐 Force logged out ${result[0]} other sessions for user ${req.user.email}`);
+    
+    res.status(200).json({
+      status: 'success',
+      message: `Successfully logged out from ${result[0]} other sessions`,
+      data: {
+        deactivatedSessions: result[0]
+      }
+    });
+  } catch (err) {
+    console.error('Logout all other sessions error:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to logout other sessions'
     });
   }
 };

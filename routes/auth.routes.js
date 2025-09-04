@@ -71,4 +71,10 @@ router.get('/validate-session', authController.validateSession);
 // Get user stats
 router.get('/stats', protect, userController.getUserStats);
 
+// Get active sessions for current user
+router.get('/active-sessions', protect, authController.getActiveSessions);
+
+// Force logout from all other sessions
+router.post('/logout-all-other-sessions', protect, authController.logoutAllOtherSessions);
+
 module.exports = router;

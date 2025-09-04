@@ -1,17 +1,24 @@
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const { User, UserSession } = require('../models');
 
 exports.protect = async (req, res, next) => {
   console.log('Auth middleware called');
   console.log('Authorization header:', req.headers.authorization);
   
   let token;
+  let sessionId;
+  
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
     token = req.headers.authorization.split(' ')[1];
     console.log('Token extracted:', token ? 'Present' : 'Missing');
+  }
+  
+  if (req.headers['x-session-id']) {
+    sessionId = req.headers['x-session-id'];
+    console.log('Session ID extracted:', sessionId ? 'Present' : 'Missing');
   }
   
   if (!token) {
@@ -47,6 +54,44 @@ exports.protect = async (req, res, next) => {
       });
     }
     
+    // If session ID is provided, validate the session
+    if (sessionId) {
+      console.log('Validating session...');
+      const session = await UserSession.findActiveSession(user.id, sessionId);
+      
+      if (!session) {
+        return res.status(401).json({
+          status: 'fail',
+          message: 'Invalid or expired session. Please login again.',
+          code: 'SESSION_INVALID'
+        });
+      }
+      
+      // Check if session is idle (30 minutes of inactivity)
+      if (session.isIdle(30)) {
+        await UserSession.update({ isActive: false }, { where: { sessionId } });
+        return res.status(401).json({
+          status: 'fail',
+          message: 'Session expired due to inactivity. Please login again.',
+          code: 'SESSION_IDLE_TIMEOUT'
+        });
+      }
+      
+      // Check if session is expired
+      if (session.isExpired()) {
+        await UserSession.update({ isActive: false }, { where: { sessionId } });
+        return res.status(401).json({
+          status: 'fail',
+          message: 'Session has expired. Please login again.',
+          code: 'SESSION_EXPIRED'
+        });
+      }
+      
+      // Update session activity
+      await session.updateActivity();
+      console.log('Session validated and activity updated');
+    }
+    
     // Attach user to request
     req.user = user;
     next();
@@ -73,5 +118,37 @@ exports.protect = async (req, res, next) => {
       status: 'fail',
       message: 'Token verification failed' 
     });
+  }
+};
+
+// Middleware to detect session conflicts
+exports.detectSessionConflict = async (req, res, next) => {
+  try {
+    if (req.user && req.headers['x-session-id']) {
+      const userId = req.user.id;
+      const currentSessionId = req.headers['x-session-id'];
+      
+      // Check for other active sessions
+      const activeSessions = await UserSession.findUserActiveSessions(userId);
+      const otherSessions = activeSessions.filter(session => session.sessionId !== currentSessionId);
+      
+      if (otherSessions.length > 0) {
+        // Log the conflict
+        console.log(`⚠️ Session conflict detected for user ${req.user.email}: ${otherSessions.length} other active sessions`);
+        
+        // You can choose to either:
+        // 1. Allow the request but log the conflict (current behavior)
+        // 2. Block the request and force re-login
+        // 3. Automatically deactivate other sessions
+        
+        // For now, we'll just log and continue
+        // In a production environment, you might want to be more strict
+      }
+    }
+    
+    next();
+  } catch (error) {
+    console.error('Session conflict detection error:', error);
+    next(); // Continue even if detection fails
   }
 };
