@@ -14,25 +14,29 @@ if (!process.env.DATABASE_URL) {
 // - DATABASE_URL already requests it via sslmode=require
 const databaseUrl = process.env.DATABASE_URL;
 const hasSslModeRequire = /[?&]sslmode=require/i.test(databaseUrl);
+// Detect Render-managed Postgres by hostname
+let isRenderManaged = false;
+try {
+  const parsed = new URL(databaseUrl);
+  isRenderManaged = /render\.com$/i.test(parsed.hostname || '');
+} catch (_) {
+  isRenderManaged = false;
+}
 const shouldUseSsl = (
   String(process.env.DB_SSL || '').toLowerCase() === 'true' ||
   process.env.NODE_ENV === 'production' ||
   String(process.env.RENDER || '').toLowerCase() === 'true' ||
-  hasSslModeRequire
+  hasSslModeRequire ||
+  isRenderManaged // Auto-enable SSL for Render Postgres
 );
 
 // Base dialect options shared for both SSL and non-SSL
+// These options are passed through to node-postgres (pg) Client
 const baseDialectOptions = {
-  // Performance optimizations
   statement_timeout: 60000, // 60 seconds
   idle_in_transaction_session_timeout: 60000, // 60 seconds
-  // Connection optimizations
-  keepAlive: true,
-  keepAliveInitialDelayMillis: 10000,
-  // Connection timeout settings
-  connectTimeout: 30000, // 30 seconds
-  acquireTimeout: 30000, // 30 seconds
-  timeout: 30000 // 30 seconds
+  // node-postgres uses these names
+  connectionTimeoutMillis: 30000 // 30 seconds
 };
 
 // Conditionally add SSL options
@@ -53,8 +57,8 @@ const sequelize = new Sequelize(databaseUrl, {
   logging: process.env.NODE_ENV === 'development' ? console.log : false,
   // OPTIMIZED: Better connection pooling for performance
   pool: {
-    max: 20,           // Increased from 5 to 20 for better concurrency
-    min: 5,            // Increased from 0 to 5 for faster response
+    max: 5,
+    min: 0,
     acquire: 30000,    // 30 seconds to acquire connection
     idle: 10000,       // 10 seconds idle timeout
     evict: 60000,      // Check for dead connections every minute
@@ -63,8 +67,7 @@ const sequelize = new Sequelize(databaseUrl, {
   // Performance optimizations
   benchmark: process.env.NODE_ENV === 'development',
   retry: {
-    max: 3,
-    timeout: 1000
+    max: 2
   },
   // Query optimization
   define: {
