@@ -1,5 +1,6 @@
 const { User, Batch, PracticeTest, TestAttempt, Course } = require('../models');
 const { sequelize } = require('../config/database');
+const { Op } = require('sequelize');
 
 // Helper to format safe number average
 function average(numbers) {
@@ -19,11 +20,11 @@ exports.getStudentsProgress = async (req, res) => {
     // 1) Load students (filterable)
     const userQuery = { role: 'student' };
     if (search) {
-      userQuery[sequelize.Op.or] = [
-        { firstName: { [sequelize.Op.iLike]: `%${search}%` } },
-        { lastName: { [sequelize.Op.iLike]: `%${search}%` } },
-        { email: { [sequelize.Op.iLike]: `%${search}%` } },
-        { studentId: { [sequelize.Op.iLike]: `%${search}%` } }
+      userQuery[Op.or] = [
+        { firstName: { [Op.iLike]: `%${search}%` } },
+        { lastName: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+        { studentId: { [Op.iLike]: `%${search}%` } }
       ];
     }
 
@@ -224,12 +225,15 @@ exports.getStudentProgressDetail = async (req, res) => {
     });
     if (!user) return res.status(404).json({ status: 'fail', message: 'User not found' });
 
-    const batch = await Batch.findOne({
-      where: {
-        id: uid
-      },
-      attributes: ['batchName', 'assignedTests']
-    });
+    // Get one batch the user belongs to (if any)
+    let batch = null;
+    const batchRows = await sequelize.query(
+      `SELECT b."batchName" AS "batchName"\n       FROM "BatchStudents" bs\n       INNER JOIN "Batches" b ON b.id = bs."batchId"\n       WHERE bs."userId" = :uid\n       ORDER BY bs."createdAt" DESC\n       LIMIT 1`,
+      { replacements: { uid }, type: sequelize.QueryTypes.SELECT }
+    );
+    if (batchRows && batchRows.length > 0) {
+      batch = { batchName: batchRows[0].batchName };
+    }
 
     const attempts = await TestAttempt.findAll({
       where: { userId: uid },
@@ -238,14 +242,14 @@ exports.getStudentProgressDetail = async (req, res) => {
     });
 
     const testIds = Array.from(new Set(attempts.map(a => String(a.practiceTestId))));
-    const tests = await PracticeTest.findAll({
+    const tests = testIds.length ? await PracticeTest.findAll({
       where: {
         id: {
-          [sequelize.Op.in]: testIds
+          [Op.in]: testIds
         }
       },
       attributes: ['id', 'title', 'category', 'passingScore']
-    });
+    }) : [];
     const testMap = new Map(tests.map(t => [String(t.id), t]));
 
     // Group attempts by test
@@ -262,11 +266,7 @@ exports.getStudentProgressDetail = async (req, res) => {
       const bestScore = completed.length ? Math.max(...completed.map(a => a.score || 0)) : 0;
       const latest = arr[0] || null; // sorted desc
       // assignedAt from batch assignment if available
-      let assignedAt = null;
-      if (batch && Array.isArray(batch.assignedTests)) {
-        const match = batch.assignedTests.find(x => String(x.testId) === tid);
-        if (match && match.assignedAt) assignedAt = match.assignedAt;
-      }
+      let assignedAt = null; // Not tracked currently without BatchAssignedTests join
       return {
         testId: tid,
         title: t?.title || arr[0]?.testTitle || 'Test',
