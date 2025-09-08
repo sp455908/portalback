@@ -57,11 +57,50 @@ exports.getAlertById = async (req, res) => {
 // Update an alert (admin only)
 exports.updateAlert = async (req, res) => {
   try {
-    const updates = { ...req.body };
+    const allowedFields = [
+      'title',
+      'content',
+      'category',
+      'priority',
+      'date',
+      'impact',
+      'tags',
+      'isActive'
+    ];
+
+    const updates = {};
+    for (const key of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    // Coerce isActive to boolean if present
+    if (Object.prototype.hasOwnProperty.call(updates, 'isActive')) {
+      updates.isActive = Boolean(updates.isActive);
+    }
+
     const alert = await Alert.findByPk(req.params.id);
     if (!alert) return res.status(404).json({ message: 'Alert not found' });
+
     await alert.update(updates);
+    res.json(alert);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Toggle alert active status (admin only)
+exports.toggleAlertStatus = async (req, res) => {
+  try {
+    const alert = await Alert.findByPk(req.params.id);
     if (!alert) return res.status(404).json({ message: 'Alert not found' });
+
+    // If isActive provided, set explicitly; otherwise toggle
+    const hasIsActive = Object.prototype.hasOwnProperty.call(req.body, 'isActive');
+    const nextIsActive = hasIsActive ? Boolean(req.body.isActive) : !alert.isActive;
+
+    await alert.update({ isActive: nextIsActive });
     res.json(alert);
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -16,7 +16,7 @@ exports.getStudentsProgress = async (req, res) => {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
-    // 1) Load all students
+    // 1) Load students (filterable)
     const userQuery = { role: 'student' };
     if (search) {
       userQuery[sequelize.Op.or] = [
@@ -36,44 +36,171 @@ exports.getStudentsProgress = async (req, res) => {
       offset: (pageNum - 1) * limitNum
     });
 
-    // Simplified student summaries without complex batch/test relationships
-    const studentSummaries = students.map(s => {
-      return {
-        userId: s.id,
-        name: `${s.firstName} ${s.lastName}`,
-        email: s.email,
-        studentId: s.studentId,
-        isActive: s.isActive,
-        batch: null, // Simplified for now
-        primaryCourse: 'Unassigned',
-        courseCategories: [],
-        assignments: { total: 0, completed: 0 },
-        progressPercent: 0,
-        averageScore: 0,
-        lastActive: null
-      };
+    const studentIds = students.map(s => s.id);
+
+    // 2) Fetch per-student attempts (optional filter by testId)
+    const attemptWhere = { userId: studentIds };
+    if (testId) attemptWhere.practiceTestId = testId;
+    const attempts = studentIds.length
+      ? await TestAttempt.findAll({
+          where: attemptWhere,
+          attributes: ['userId', 'practiceTestId', 'score', 'status', 'completedAt', 'startedAt'],
+          order: [['completedAt', 'DESC'], ['startedAt', 'DESC']]
+        })
+      : [];
+
+    // Group attempts by user
+    const userIdToAttempts = new Map();
+    attempts.forEach(a => {
+      const key = String(a.userId);
+      if (!userIdToAttempts.has(key)) userIdToAttempts.set(key, []);
+      userIdToAttempts.get(key).push(a);
     });
 
-    // Get basic counts for summary
-    const activeTests = await PracticeTest.count({ where: { isActive: true } });
-    const totalCourses = await Course.count();
+    // 3) Fetch batch assignments -> number of assigned tests per user
+    // Derive user's batches then tests assigned to those batches
+    let batchAssignedTests = [];
+    if (studentIds.length) {
+      // get batchIds for all students
+      const userBatchRows = await sequelize.query(
+        `SELECT DISTINCT bs."userId" AS "userId", bs."batchId" AS "batchId"
+         FROM "BatchStudents" bs
+         WHERE bs."userId" IN (:studentIds)`,
+        { replacements: { studentIds }, type: sequelize.QueryTypes.SELECT }
+      );
 
-    res.status(200).json({
+      const userIdToBatchIds = new Map();
+      userBatchRows.forEach(r => {
+        const uid = String(r.userId);
+        if (!userIdToBatchIds.has(uid)) userIdToBatchIds.set(uid, new Set());
+        userIdToBatchIds.get(uid).add(r.batchId);
+      });
+
+      const allBatchIds = Array.from(new Set(userBatchRows.map(r => r.batchId)));
+      if (allBatchIds.length) {
+        batchAssignedTests = await sequelize.query(
+          `SELECT bat."batchId" AS "batchId", bat."testId" AS "testId", pt."category" AS "category", pt."title" AS "title"
+           FROM "BatchAssignedTests" bat
+           INNER JOIN "PracticeTests" pt ON pt.id = bat."testId"
+           WHERE bat."batchId" IN (:batchIds) AND (pt."isActive" = true)`,
+          { replacements: { batchIds: allBatchIds }, type: sequelize.QueryTypes.SELECT }
+        );
+      }
+
+      // Map: user -> assigned testIds (via their batches)
+      var userIdToAssignedTestIds = new Map();
+      students.forEach(s => {
+        const uid = String(s.id);
+        const batches = Array.from(userIdToBatchIds.get(uid) || []);
+        const assigned = batchAssignedTests.filter(x => batches.includes(x.batchId)).map(x => x.testId);
+        userIdToAssignedTestIds.set(uid, Array.from(new Set(assigned)));
+      });
+
+      // 4) Compute per-student aggregates
+      const summaries = students.map(s => {
+        const uid = String(s.id);
+        const userAttempts = userIdToAttempts.get(uid) || [];
+        const completedAttempts = userAttempts.filter(a => a.status === 'completed');
+
+        // Average score over completed attempts
+        const averageScore = completedAttempts.length
+          ? Math.round(
+              completedAttempts.reduce((acc, a) => acc + (Number(a.score) || 0), 0) / completedAttempts.length
+            )
+          : 0;
+
+        // Last active time
+        const lastAttempt = userAttempts.length ? userAttempts[0] : null;
+        const lastActive = lastAttempt ? (lastAttempt.completedAt || lastAttempt.startedAt) : null;
+
+        // Assignments based on batch assigned tests
+        const assignedTestIds = userIdToAssignedTestIds.get(uid) || [];
+        const totalAssigned = assignedTestIds.length;
+        const completedDistinct = new Set(
+          completedAttempts
+            .filter(a => assignedTestIds.includes(a.practiceTestId))
+            .map(a => String(a.practiceTestId))
+        ).size;
+
+        // Progress percent: if there are assignments, completed/total * 100; otherwise use avg score as proxy
+        const progressPercent = totalAssigned > 0
+          ? Math.round((completedDistinct / totalAssigned) * 100)
+          : averageScore;
+
+        // Course categories: union of categories from assigned tests and attempted tests
+        const assignedCategories = new Set(
+          batchAssignedTests
+            .filter(x => (userIdToAssignedTestIds.get(uid) || []).includes(x.testId))
+            .map(x => x.category)
+            .filter(Boolean)
+        );
+        // If we want to include attempted categories too, we need their tests; fallback to assigned
+        const courseCategories = Array.from(assignedCategories);
+
+        // Primary course: pick first category if available
+        const primaryCourse = courseCategories.length ? courseCategories[0] : 'Unassigned';
+
+        return {
+          userId: s.id,
+          name: `${s.firstName} ${s.lastName}`.trim(),
+          email: s.email,
+          studentId: s.studentId,
+          isActive: s.isActive,
+          batch: null,
+          primaryCourse,
+          courseCategories,
+          assignments: { total: totalAssigned, completed: completedDistinct },
+          progressPercent,
+          averageScore,
+          lastActive
+        };
+      });
+
+      // Summary metrics
+      const totalCourses = await Course.count();
+      const avgProgress = summaries.length
+        ? Math.round(summaries.reduce((acc, s) => acc + (Number(s.progressPercent) || 0), 0) / summaries.length)
+        : 0;
+      const completionFractions = summaries
+        .filter(s => s.assignments.total > 0)
+        .map(s => s.assignments.completed / s.assignments.total);
+      const completionRate = completionFractions.length
+        ? Math.round((completionFractions.reduce((a, b) => a + b, 0) / completionFractions.length) * 100)
+        : 0;
+
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          summary: {
+            totalStudents,
+            activeCourses: totalCourses,
+            avgProgress,
+            completionRate
+          },
+          students: summaries,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: totalStudents,
+            totalPages: Math.ceil(totalStudents / limitNum)
+          }
+        }
+      });
+    }
+
+    // If no students, return empty
+    const totalCourses = await Course.count();
+    return res.status(200).json({
       status: 'success',
       data: {
         summary: {
-          totalStudents,
+          totalStudents: 0,
           activeCourses: totalCourses,
           avgProgress: 0,
           completionRate: 0
         },
-        students: studentSummaries,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total: totalStudents,
-          totalPages: Math.ceil(totalStudents / limitNum)
-        }
+        students: [],
+        pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 }
       }
     });
   } catch (err) {

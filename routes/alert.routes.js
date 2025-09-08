@@ -17,6 +17,9 @@ router.get('/:id', alertController.getAlertById);
 // Update an alert (admin only)
 router.put('/:id', protect, authorize('admin'), alertController.updateAlert);
 
+// Toggle alert active status (admin only)
+router.patch('/:id/toggle', protect, authorize('admin'), alertController.toggleAlertStatus);
+
 // Delete an alert (admin only)
 router.delete('/:id', protect, authorize('admin'), alertController.deleteAlert);
 

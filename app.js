@@ -70,8 +70,25 @@ const corsOptions = {
 };
 
 // Apply middleware in correct order
+app.disable('x-powered-by');
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'", "https://iiftl-portal.vercel.app"],
+      frameSrc: ["'self'", "https://iiftl-portal.vercel.app"],
+      objectSrc: ["'none'"]
+    }
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  frameguard: { action: 'deny' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
 })); // Security headers first
 app.use(morgan('dev')); // Logging
 app.use(performanceMonitor); // Performance monitoring

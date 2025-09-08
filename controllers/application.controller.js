@@ -153,7 +153,18 @@ exports.getMyApplications = async (req, res) => {
       where: { userId: req.user.id },
       order: [['submittedAt', 'DESC']]
     });
-    res.json(applications);
+    const encryptionService = require('../utils/encryption');
+    const decrypted = applications.map((app) => {
+      const json = app.toJSON();
+      return {
+        ...json,
+        phone: json.phone ? encryptionService.decrypt(String(json.phone)) : json.phone,
+        address: json.address ? encryptionService.decrypt(String(json.address)) : json.address,
+        pincode: json.pincode ? encryptionService.decrypt(String(json.pincode)) : json.pincode,
+        motivation: json.motivation ? encryptionService.decrypt(String(json.motivation)) : json.motivation
+      };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
