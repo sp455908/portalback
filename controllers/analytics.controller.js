@@ -223,13 +223,8 @@ exports.getStudentProgressDetail = async (req, res) => {
       attributes: ['id', 'firstName', 'lastName', 'email', 'studentId', 'isActive']
     });
     if (!user) return res.status(404).json({ status: 'fail', message: 'User not found' });
-
-    const batch = await Batch.findOne({
-      where: {
-        id: uid
-      },
-      attributes: ['batchName', 'assignedTests']
-    });
+    // Note: batch details are not tied to user primary key; avoid invalid query that can error in some DBs
+    const batch = null;
 
     const attempts = await TestAttempt.findAll({
       where: { userId: uid },
@@ -261,12 +256,8 @@ exports.getStudentProgressDetail = async (req, res) => {
       const completed = arr.filter(a => a.status === 'completed');
       const bestScore = completed.length ? Math.max(...completed.map(a => a.score || 0)) : 0;
       const latest = arr[0] || null; // sorted desc
-      // assignedAt from batch assignment if available
+      // assignedAt computation omitted here; requires explicit batch assignment lookup
       let assignedAt = null;
-      if (batch && Array.isArray(batch.assignedTests)) {
-        const match = batch.assignedTests.find(x => String(x.testId) === tid);
-        if (match && match.assignedAt) assignedAt = match.assignedAt;
-      }
       return {
         testId: tid,
         title: t?.title || arr[0]?.testTitle || 'Test',
@@ -299,7 +290,7 @@ exports.getStudentProgressDetail = async (req, res) => {
           studentId: user.studentId,
           isActive: user.isActive
         },
-        batch: batch ? { name: batch.batchName } : null,
+        batch: null,
         tests: testsDetail
       }
     });
