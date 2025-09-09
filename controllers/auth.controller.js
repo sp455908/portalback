@@ -442,10 +442,18 @@ exports.getMe = async (req, res, next) => {
       });
     }
 
+    // Import encryption service and decrypt phone number
+    const encryptionService = require('../utils/encryption');
+    const userJson = user.toJSON();
+    const decryptedUser = {
+      ...userJson,
+      phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone
+    };
+
     res.status(200).json({
       status: 'success',
       data: {
-        user
+        user: decryptedUser
       }
     });
   } catch (err) {

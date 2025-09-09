@@ -15,12 +15,18 @@ exports.getAllUsers = async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    // Get blocking status for each user
+    // Import encryption service
+    const encryptionService = require('../utils/encryption');
+
+    // Get blocking status for each user and decrypt phone numbers
     const usersWithBlockStatus = await Promise.all(
       users.map(async (user) => {
         const blockStatus = await LoginAttempt.isUserBlocked(user.id);
+        const userJson = user.toJSON();
+        
         return {
-          ...user.toJSON(),
+          ...userJson,
+          phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone,
           isBlocked: !!blockStatus,
           blockedUntil: blockStatus?.blockedUntil || null,
           blockReason: blockStatus?.blockReason || null
@@ -57,9 +63,18 @@ exports.getUserById = async (req, res) => {
         message: 'User not found' 
       });
     }
+
+    // Import encryption service and decrypt phone number
+    const encryptionService = require('../utils/encryption');
+    const userJson = user.toJSON();
+    const decryptedUser = {
+      ...userJson,
+      phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone
+    };
+
     res.status(200).json({
       status: 'success',
-      data: { user }
+      data: { user: decryptedUser }
     });
   } catch (err) {
     console.error('Error fetching user:', err);
@@ -254,9 +269,18 @@ exports.getProfile = async (req, res) => {
         message: 'User profile not found'
       });
     }
+
+    // Import encryption service and decrypt phone number
+    const encryptionService = require('../utils/encryption');
+    const userJson = user.toJSON();
+    const decryptedUser = {
+      ...userJson,
+      phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone
+    };
+
     res.status(200).json({
       status: 'success',
-      data: { user }
+      data: { user: decryptedUser }
     });
   } catch (err) {
     console.error('Error fetching profile:', err);
