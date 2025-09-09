@@ -260,21 +260,31 @@ exports.getAvailablePracticeTests = async (req, res) => {
       console.log('Unique batch assigned tests:', uniqueBatchTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
       
       if (userType) {
-        // Show tests that are either:
-        // 1. Targeted for the user's type, OR
-        // 2. Assigned to the user's batch
-        const typeFilteredTests = practiceTests.filter(test => test.targetUserType === userType);
-        console.log('Type filtered tests for user type', userType, ':', typeFilteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-        
-        // Combine type-filtered tests with batch-assigned tests
-        const allAvailableTests = [...typeFilteredTests, ...uniqueBatchTests];
-        
-        // Remove duplicates
-        filteredTests = allAvailableTests.filter((test, index, self) => 
-          index === self.findIndex(t => t.id === test.id)
-        );
-        
-        console.log('Combined filtered tests (type + batch):', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+        // For corporate and government users: ONLY show batch-assigned tests
+        // For students: show both type-filtered tests AND batch-assigned tests
+        if (userType === 'corporate' || userType === 'government') {
+          // Corporate and government users must be in batches to see tests
+          filteredTests = uniqueBatchTests;
+          console.log('Corporate/Government user - showing only batch-assigned tests:', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+        } else if (userType === 'student') {
+          // Students can see both type-filtered tests and batch-assigned tests
+          const typeFilteredTests = practiceTests.filter(test => test.targetUserType === userType);
+          console.log('Student - type filtered tests:', typeFilteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+          
+          // Combine type-filtered tests with batch-assigned tests
+          const allAvailableTests = [...typeFilteredTests, ...uniqueBatchTests];
+          
+          // Remove duplicates
+          filteredTests = allAvailableTests.filter((test, index, self) => 
+            index === self.findIndex(t => t.id === test.id)
+          );
+          
+          console.log('Student - combined filtered tests (type + batch):', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+        } else {
+          // Fallback for any other user types
+          filteredTests = uniqueBatchTests;
+          console.log('Other user type - showing only batch-assigned tests:', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
+        }
       } else {
         // If no userType, just show batch-assigned tests
         filteredTests = uniqueBatchTests;
