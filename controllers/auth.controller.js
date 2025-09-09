@@ -625,6 +625,49 @@ exports.validateSession = async (req, res, next) => {
   }
 };
 
+// Update session activity endpoint
+exports.updateSessionActivity = async (req, res, next) => {
+  try {
+    const { sessionId, lastActivity } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Session ID is required'
+      });
+    }
+    
+    const session = await UserSession.findOne({
+      where: { sessionId, isActive: true }
+    });
+    
+    if (!session) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Invalid or expired session',
+        code: 'SESSION_INVALID'
+      });
+    }
+    
+    // Update last activity timestamp
+    await session.updateActivity();
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Session activity updated',
+      data: {
+        lastActivity: session.lastActivity
+      }
+    });
+  } catch (err) {
+    console.error('Update session activity error:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to update session activity'
+    });
+  }
+};
+
 // Protect middleware (already in auth.middleware.js)
 // This is just for reference of what it does
 exports.protect = async (req, res, next) => {

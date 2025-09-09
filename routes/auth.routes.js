@@ -69,6 +69,9 @@ router.post('/logout', protect, authController.logout);
 // Validate session endpoint
 router.get('/validate-session', authController.validateSession);
 
+// Update session activity endpoint
+router.post('/update-activity', authController.updateSessionActivity);
+
 // Get user stats
 router.get('/stats', protect, userController.getUserStats);
 
