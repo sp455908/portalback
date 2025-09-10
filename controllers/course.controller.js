@@ -16,7 +16,8 @@ exports.createCourse = async (req, res) => {
       duration,
       modules,
       fee,
-      isActive: isActive || false, // Default to false if not provided
+      // Default to true unless explicitly false
+      isActive: (isActive === false || isActive === 'false' || isActive === 0 || isActive === '0') ? false : true,
       targetUserType: targetUserType || 'student' // Default to student if not provided
     });
 
@@ -43,7 +44,16 @@ exports.createCourse = async (req, res) => {
 // Get all courses
 exports.getAllCourses = async (req, res) => {
   try {
+    const where = {};
+    // Optional filter: ?isActive=true|false (supports 1/0 and 'true'/'false')
+    if (typeof req.query.isActive !== 'undefined') {
+      const q = req.query.isActive;
+      const active = !(q === 'false' || q === '0' || q === 0 || q === false);
+      where.isActive = active;
+    }
+
     const courses = await Course.findAll({
+      where,
       include: [{
         model: User,
         as: 'instructor',
@@ -77,6 +87,11 @@ exports.getCourseById = async (req, res) => {
 exports.updateCourse = async (req, res) => {
   try {
     const updates = { ...req.body };
+    // Normalize isActive if provided (accepts true/false, 'true'/'false', 1/0)
+    if (Object.prototype.hasOwnProperty.call(updates, 'isActive')) {
+      const v = updates.isActive;
+      updates.isActive = !(v === false || v === 'false' || v === 0 || v === '0');
+    }
     console.log('Updating course with data:', updates);
     console.log('Course ID to update:', req.params.id);
     
