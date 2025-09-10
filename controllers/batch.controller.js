@@ -819,8 +819,15 @@ exports.getBatchStats = async (req, res) => {
 exports.getStudentBatches = async (req, res) => {
   try {
     const { studentId } = req.params;
-    const numericStudentId = Number(studentId);
-    if (isNaN(numericStudentId)) {
+    // Prefer authenticated user id if available to prevent IDOR
+    let numericStudentId = null;
+    if (req.user && req.user.id) {
+      numericStudentId = Number(req.user.id);
+    } else if (studentId) {
+      numericStudentId = Number(studentId);
+    }
+
+    if (isNaN(Number(numericStudentId))) {
       return res.status(400).json({ status: 'fail', message: 'Invalid studentId' });
     }
 
@@ -855,10 +862,40 @@ exports.getStudentBatches = async (req, res) => {
 
     console.log('Found batches for student:', batches.length);
 
+    // Compute dynamic students count per batch (active students)
+    const batchIds = batches.map(b => b.id);
+    let countsByBatchId = {};
+    if (batchIds.length > 0) {
+      try {
+        const counts = await BatchStudent.findAll({
+          where: { batchId: batchIds, status: 'active' },
+          attributes: ['batchId', [sequelize.fn('COUNT', sequelize.col('userId')), 'count']],
+          group: ['batchId']
+        });
+        countsByBatchId = counts.reduce((acc, row) => {
+          const r = row.toJSON();
+          acc[String(r.batchId)] = Number(r.count) || 0;
+          return acc;
+        }, {});
+      } catch (countErr) {
+        console.error('Failed to compute students count:', countErr);
+      }
+    }
+
+    // Attach computed fields and ensure userType default
+    const enrichedBatches = batches.map(b => {
+      const json = b.toJSON();
+      return {
+        ...json,
+        userType: json.userType || 'student',
+        studentsCount: countsByBatchId[String(json.id)] || 0
+      };
+    });
+
     res.status(200).json({
       status: 'success',
       data: {
-        batches
+        batches: enrichedBatches
       }
     });
   } catch (err) {
