@@ -69,6 +69,20 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   });
 
+  // Decrypt sensitive fields for response (e.g., phone)
+  let userForResponse = user && typeof user.toJSON === 'function' ? user.toJSON() : user;
+  try {
+    const encryptionService = require('../utils/encryption');
+    if (userForResponse && userForResponse.phone) {
+      userForResponse = {
+        ...userForResponse,
+        phone: encryptionService.decrypt(String(userForResponse.phone))
+      };
+    }
+  } catch (_) {
+    // ignore decryption issues in login response
+  }
+
   res.status(statusCode).json({
     status: 'success',
     token: accessToken,
@@ -78,7 +92,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, // in seconds
     meta: extraMeta,
     data: {
-      user
+      user: userForResponse
     }
   });
 };
@@ -591,7 +605,7 @@ exports.validateSession = async (req, res, next) => {
     
     const session = await UserSession.findOne({
       where: { sessionId, isActive: true },
-      include: [{ model: User, attributes: ['id', 'email', 'role', 'userType', 'isActive'] }]
+      include: [{ model: User, as: 'user', attributes: ['id', 'email', 'role', 'userType', 'isActive'] }]
     });
     
     if (!session) {
