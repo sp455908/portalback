@@ -323,10 +323,20 @@ exports.updateProfile = async (req, res) => {
     const updatedUser = await User.findByPk(req.user.id, {
       attributes: { exclude: ['password'] }
     });
+
+    // Decrypt phone for response consistency
+    let userForResponse = updatedUser && typeof updatedUser.toJSON === 'function' ? updatedUser.toJSON() : updatedUser;
+    try {
+      const encryptionService = require('../utils/encryption');
+      if (userForResponse && userForResponse.phone) {
+        userForResponse = { ...userForResponse, phone: encryptionService.decrypt(String(userForResponse.phone)) };
+      }
+    } catch (_) { /* ignore */ }
+
     res.status(200).json({
       status: 'success',
       message: 'Profile updated successfully',
-      data: { user: updatedUser }
+      data: { user: userForResponse }
     });
   } catch (err) {
     console.error('Error updating profile:', err);
