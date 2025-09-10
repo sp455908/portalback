@@ -286,9 +286,14 @@ exports.login = async (req, res, next) => {
         }
       }
 
+      // Also include current failed attempts count to assist frontend UI
+      const failedAttemptsCount = user ? await LoginAttempt.getFailedAttemptsCount(user.id) : await LoginAttempt.getFailedAttemptsCountByEmail(email);
       return res.status(401).json({
         status: 'fail',
-        message: 'Incorrect email or password'
+        message: 'Incorrect email or password',
+        code: 'INVALID_CREDENTIALS',
+        shouldCountFailedAttempt: true,
+        failedAttemptsCount: failedAttemptsCount || 0
       });
     }
 
@@ -351,31 +356,24 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 4) Check other active sessions and cleanup expired/idle
+    // 4) Check other active sessions (strict single-session)
     let otherActiveSessions = [];
     try {
       const existingSessions = await UserSession.findUserActiveSessions(user.id);
-      const now = Date.now();
-      const validSessions = [];
-      for (const s of existingSessions) {
-        const isIdle = s.isIdle(30);
-        const isExpired = s.isExpired();
-        if (isIdle || isExpired) {
-          await UserSession.update({ isActive: false }, { where: { sessionId: s.sessionId } });
-        } else {
-          validSessions.push(s);
-        }
-      }
+      // Treat any active, non-expired session as a conflict. Do not auto-deactivate here.
+      const validSessions = existingSessions.filter(s => s.isActive && !s.isExpired());
       otherActiveSessions = validSessions;
       // Strict single-session enforcement for all users: block new login if any active session exists
       if (validSessions.length > 0) {
         devLog(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
+        const statusInfo = await LoginAttempt.getLoginStatus(user.id, email);
         return res.status(409).json({
           status: 'fail',
           message: 'You are already logged in on another device. Please logout there first.',
           code: 'SESSION_ALREADY_ACTIVE',
           failedAttempt: false,
           shouldCountFailedAttempt: false,
+          failedAttemptsCount: statusInfo?.failedAttemptsCount || 0,
           data: {
             activeSessions: validSessions.map(s => ({
               lastActivity: s.lastActivity,
