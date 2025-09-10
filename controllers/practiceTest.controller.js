@@ -650,6 +650,9 @@ exports.submitPracticeTest = async (req, res) => {
       const questionIndex = testAttempt.questionsAsked[i];
       const correctAnswer = practiceTest.questions[questionIndex].correctAnswer;
       const isCorrect = answer.selectedAnswer === correctAnswer;
+      const marks = Number(practiceTest.questions[questionIndex].marks ?? 1);
+      const negativeMarks = Number(practiceTest.questions[questionIndex].negativeMarks ?? 0);
+      const earned = isCorrect ? marks : (negativeMarks ? -Math.abs(negativeMarks) : 0);
       
       if (isCorrect) correctAnswers++;
 
@@ -657,6 +660,7 @@ exports.submitPracticeTest = async (req, res) => {
         questionIndex,
         selectedAnswer: answer.selectedAnswer,
         isCorrect,
+        marksAwarded: earned,
         timeSpent: answer.timeSpent || 0
       });
     }
@@ -664,7 +668,27 @@ exports.submitPracticeTest = async (req, res) => {
     // Always set totalQuestions to the number of questions actually asked in this attempt
     testAttempt.totalQuestions = testAttempt.questionsAsked.length;
 
-    const score = Math.round((correctAnswers / testAttempt.totalQuestions) * 100);
+    // Compute total possible marks and obtained marks considering negative marking
+    let totalPossible = 0;
+    let obtained = 0;
+    for (let i = 0; i < testAttempt.questionsAsked.length; i++) {
+      const qIdx = testAttempt.questionsAsked[i];
+      const q = practiceTest.questions[qIdx] || {};
+      const marks = Number(q.marks ?? 1);
+      const negativeMarks = Number(q.negativeMarks ?? 0);
+      totalPossible += Math.max(0, marks); // total possible when all correct
+      const ans = detailedAnswers[i];
+      if (ans && typeof ans.marksAwarded === 'number') {
+        obtained += ans.marksAwarded;
+      } else {
+        // fallback maintain backwards safety
+        const isCorrect = ans ? ans.isCorrect : false;
+        obtained += isCorrect ? marks : (negativeMarks ? -Math.abs(negativeMarks) : 0);
+      }
+    }
+
+    // Score as percentage of totalPossible, clamp to [0,100]
+    const score = totalPossible > 0 ? Math.round(Math.max(0, (obtained / totalPossible) * 100)) : 0;
     const passed = score >= practiceTest.passingScore;
     const timeTaken = Math.floor((new Date() - new Date(testAttempt.startedAt)) / 1000);
 
@@ -1018,7 +1042,8 @@ exports.importQuestionsFromJSON = async (req, res) => {
         explanation: q.explanation || '',
         category: q.category || category,
         difficulty: q.difficulty || 'medium',
-        marks: q.marks || 1
+        marks: typeof q.marks === 'number' ? q.marks : 1,
+        negativeMarks: typeof q.negativeMarks === 'number' ? q.negativeMarks : 0
       };
     });
 
@@ -1167,7 +1192,8 @@ exports.importQuestionsFromExcel = async (req, res) => {
         explanation: '',
         category: category,
         difficulty: 'medium',
-        marks: 1
+        marks: 1,
+        negativeMarks: 0
       });
     }
 
@@ -1502,7 +1528,8 @@ exports.updateTestWithJSON = async (req, res) => {
         explanation: q.explanation || '',
         category: q.category || practiceTest.category,
         difficulty: q.difficulty || 'medium',
-        marks: q.marks || 1
+        marks: typeof q.marks === 'number' ? q.marks : 1,
+        negativeMarks: typeof q.negativeMarks === 'number' ? q.negativeMarks : 0
       };
     });
 
