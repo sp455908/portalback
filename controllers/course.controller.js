@@ -60,6 +60,13 @@ exports.getAllCourses = async (req, res) => {
         attributes: ['firstName', 'lastName', 'email']
       }]
     });
+    // Prevent caching on intermediaries/browsers to reflect admin toggles immediately
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
     res.json(courses);
   } catch (err) {
     res.status(500).json({ message: err.message });
