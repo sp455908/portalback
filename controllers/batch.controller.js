@@ -173,8 +173,8 @@ exports.getAllBatches = async (req, res) => {
           {
             model: PracticeTest,
             as: 'assignedTests',
-            attributes: ['id'],
-            through: { attributes: [] }
+            attributes: ['id', 'title', 'description', 'targetUserType', 'duration', 'passingScore', 'questionsPerTest', 'totalQuestions', 'category'],
+            through: { attributes: ['dueDate', 'instructions', 'assignedAt', 'assignedBy', 'isActive'] }
           }
         ],
         order: [['createdAt', 'DESC']],
@@ -213,8 +213,8 @@ exports.getAllBatches = async (req, res) => {
             {
               model: PracticeTest,
               as: 'assignedTests',
-              attributes: ['id'],
-              through: { attributes: [] }
+              attributes: ['id', 'title', 'description', 'targetUserType', 'duration', 'passingScore', 'questionsPerTest', 'totalQuestions', 'category'],
+              through: { attributes: ['dueDate', 'instructions', 'assignedAt', 'assignedBy', 'isActive'] }
             }
           ],
           order: [['createdAt', 'DESC']],

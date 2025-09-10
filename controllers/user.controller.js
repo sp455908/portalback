@@ -24,9 +24,21 @@ exports.getAllUsers = async (req, res) => {
         const blockStatus = await LoginAttempt.isUserBlocked(user.id);
         const userJson = user.toJSON();
         
+        // Safely decrypt phone number with error handling
+        let decryptedPhone = userJson.phone;
+        if (userJson.phone && userJson.phone.trim() !== '') {
+          try {
+            decryptedPhone = encryptionService.decrypt(String(userJson.phone));
+          } catch (error) {
+            console.warn(`Failed to decrypt phone for user ${user.id}:`, error.message);
+            // Keep the original encrypted value if decryption fails
+            decryptedPhone = userJson.phone;
+          }
+        }
+        
         return {
           ...userJson,
-          phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone,
+          phone: decryptedPhone,
           isBlocked: !!blockStatus,
           blockedUntil: blockStatus?.blockedUntil || null,
           blockReason: blockStatus?.blockReason || null
