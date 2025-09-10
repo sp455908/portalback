@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const practiceTestController = require('../controllers/practiceTest.controller');
-const { protect } = require('../middlewares/auth.middleware');
+const { protect, protectWithQueryToken } = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/role.middleware');
 const multer = require('multer');
 
@@ -62,6 +62,7 @@ router.post('/:testId/start', protect, authorize('student', 'corporate', 'govern
 router.post('/attempt/:testAttemptId/submit', protect, authorize('student', 'corporate', 'government'), practiceTestController.submitPracticeTest);
 router.get('/attempts', protect, authorize('student', 'corporate', 'government'), practiceTestController.getUserTestAttempts);
 router.delete('/attempt/:attemptId', protect, practiceTestController.deleteAttempt);
-router.get('/attempt/:testAttemptId/pdf', protect, authorize('student', 'corporate', 'government', 'admin'), practiceTestController.downloadAttemptPDF);
+// Allow either Bearer header or token query for PDF download to support new-tab downloads
+router.get('/attempt/:testAttemptId/pdf', protectWithQueryToken, authorize('student', 'corporate', 'government', 'admin'), practiceTestController.downloadAttemptPDF);
 
 module.exports = router; 

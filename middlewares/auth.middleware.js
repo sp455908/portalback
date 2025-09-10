@@ -125,6 +125,61 @@ exports.protect = async (req, res, next) => {
   }
 };
 
+// Variant: allow JWT via query token (e.g., for file downloads opened in a new tab)
+exports.protectWithQueryToken = async (req, res, next) => {
+  console.log('Auth middleware (query token allowed) called');
+  let token;
+  let sessionId;
+
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  // Fallback to query token (e.g., /path?token=...)
+  if (!token && req.query && typeof req.query.token === 'string') {
+    token = req.query.token;
+  }
+
+  if (req.headers['x-session-id']) {
+    sessionId = req.headers['x-session-id'];
+  }
+
+  if (!token) {
+    return res.status(401).json({ 
+      status: 'fail',
+      message: 'Not authorized - No token provided' 
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findByPk(decoded.id);
+    if (!user) {
+      return res.status(401).json({ status: 'fail', message: 'User not found' });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({ status: 'fail', message: 'Account is disabled' });
+    }
+
+    if (sessionId) {
+      const session = await UserSession.findActiveSession(user.id, sessionId);
+      if (!session) {
+        return res.status(401).json({ status: 'fail', message: 'Invalid or expired session', code: 'SESSION_INVALID' });
+      }
+      if (session.isIdle(30) || session.isExpired()) {
+        await UserSession.update({ isActive: false }, { where: { sessionId } });
+        return res.status(401).json({ status: 'fail', message: 'Session expired', code: 'SESSION_EXPIRED' });
+      }
+      await session.updateActivity();
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    console.error('Auth (query token) error:', err);
+    return res.status(401).json({ status: 'fail', message: 'Invalid token or session expired' });
+  }
+};
 // Middleware to detect session conflicts
 exports.detectSessionConflict = async (req, res, next) => {
   try {

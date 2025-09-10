@@ -83,7 +83,7 @@ const LoginAttempt = sequelize.define('LoginAttempt', {
 });
 
 // OPTIMIZED: Single method to get all blocking info and failed attempts count
-LoginAttempt.getLoginStatus = async function(userId, email, timeWindow = 15 * 60 * 1000) {
+LoginAttempt.getLoginStatus = async function(userId, email, timeWindow = 60 * 60 * 1000) {
   const since = new Date(Date.now() - timeWindow);
   
   // Single query to get all needed information
@@ -139,7 +139,7 @@ LoginAttempt.getLoginStatus = async function(userId, email, timeWindow = 15 * 60
 
 // OPTIMIZED: Single method to create login attempt and check blocking
 LoginAttempt.processLoginAttempt = async function(loginData) {
-  const { userId, email, ipAddress, userAgent, success, timeWindow = 15 * 60 * 1000 } = loginData;
+  const { userId, email, ipAddress, userAgent, success, timeWindow = 60 * 60 * 1000 } = loginData;
   
   // Create login attempt record
   const attempt = await this.create({
@@ -224,7 +224,7 @@ LoginAttempt.isEmailBlocked = async function(email) {
 };
 
 // Static method to get failed login attempts count for a user
-LoginAttempt.getFailedAttemptsCount = async function(userId, timeWindow = 15 * 60 * 1000) { // 15 minutes default
+LoginAttempt.getFailedAttemptsCount = async function(userId, timeWindow = 60 * 60 * 1000) { // 60 minutes default
   const since = new Date(Date.now() - timeWindow);
   
   const count = await this.count({
@@ -241,7 +241,7 @@ LoginAttempt.getFailedAttemptsCount = async function(userId, timeWindow = 15 * 6
 };
 
 // Static method to get failed login attempts count for an email
-LoginAttempt.getFailedAttemptsCountByEmail = async function(email, timeWindow = 15 * 60 * 1000) { // 15 minutes default
+LoginAttempt.getFailedAttemptsCountByEmail = async function(email, timeWindow = 60 * 60 * 1000) { // 60 minutes default
   const since = new Date(Date.now() - timeWindow);
   
   const count = await this.count({

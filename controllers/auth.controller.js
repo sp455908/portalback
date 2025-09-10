@@ -260,7 +260,7 @@ exports.login = async (req, res, next) => {
 
         devLog(`📊 Login result:`, loginResult);
 
-        // Check if user should be blocked (5 failed attempts in 15 minutes)
+        // Check if user should be blocked (5 failed attempts in 60 minutes)
         if (loginResult.shouldBlock && user.role !== 'admin') {
           devLog(`🚫 Blocking user ${user.email} after ${loginResult.failedCount} failed attempts`);
           
@@ -282,7 +282,12 @@ exports.login = async (req, res, next) => {
             contactAdmin: true
           });
         } else {
-          devLog(`⚠️ User ${user.email} has ${loginResult.failedCount || 0} failed attempts, not blocked yet`);
+          // For admin, explicitly log no blocking
+          if (user.role === 'admin') {
+            devLog(`🛡️ Admin ${user.email} failed attempt count ${loginResult.failedCount || 0} – block skipped by policy`);
+          } else {
+            devLog(`⚠️ User ${user.email} has ${loginResult.failedCount || 0} failed attempts, not blocked yet`);
+          }
         }
       }
 
@@ -297,11 +302,11 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 2) Get all blocking status in single query
+    // 2) Get all blocking status in single query (60-minute window)
     const loginStatus = await LoginAttempt.getLoginStatus(user.id, email);
     
-    // Check if user or email is currently blocked
-    if (loginStatus.isUserBlocked || loginStatus.isEmailBlocked) {
+    // Check if user or email is currently blocked (Admins are never blocked)
+    if ((loginStatus.isUserBlocked || loginStatus.isEmailBlocked) && user.role !== 'admin') {
       // Record this failed attempt
       await LoginAttempt.create({
         userId: user.id,
