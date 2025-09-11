@@ -548,10 +548,10 @@ exports.checkStudentsConflicts = async (req, res) => {
       studentName: `${conflict.user.firstName} ${conflict.user.lastName}`,
       studentEmail: conflict.user.email,
       studentStudentId: conflict.user.studentId,
-      batchId: conflict.batch.batchId,
-      batchName: conflict.batch.batchName,
-      batchStatus: conflict.batch.status,
-      batchUserType: conflict.batch.userType
+      batchId: conflict.Batch.batchId,
+      batchName: conflict.Batch.batchName,
+      batchStatus: conflict.Batch.status,
+      batchUserType: conflict.Batch.userType
     }));
 
     return res.status(200).json({
@@ -1104,7 +1104,7 @@ exports.getAllStudentConflicts = async (req, res) => {
       include: [
         {
           model: Batch,
-          as: 'batch',
+          as: 'Batch',
           attributes: ['id', 'batchId', 'batchName', 'status', 'userType'],
           required: true
         }
@@ -1119,10 +1119,10 @@ exports.getAllStudentConflicts = async (req, res) => {
         studentName: user ? `${user.firstName} ${user.lastName}` : 'Unknown User',
         studentEmail: user ? user.email : '',
         studentStudentId: user ? user.studentId : '',
-        batchId: conflict.batch.batchId,
-        batchName: conflict.batch.batchName,
-        batchStatus: conflict.batch.status,
-        batchUserType: conflict.batch.userType
+        batchId: conflict.Batch.batchId,
+        batchName: conflict.Batch.batchName,
+        batchStatus: conflict.Batch.status,
+        batchUserType: conflict.Batch.userType
       };
     });
 

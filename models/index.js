@@ -116,8 +116,8 @@ PracticeTest.belongsToMany(Batch, {
 });
 
 // Junction table associations
-BatchStudent.belongsTo(Batch, { foreignKey: 'batchId' });
-BatchStudent.belongsTo(User, { foreignKey: 'userId' });
+BatchStudent.belongsTo(Batch, { foreignKey: 'batchId', as: 'Batch' });
+BatchStudent.belongsTo(User, { foreignKey: 'userId', as: 'User' });
 BatchAssignedTest.belongsTo(Batch, { foreignKey: 'batchId' });
 BatchAssignedTest.belongsTo(PracticeTest, { foreignKey: 'testId' });
 BatchAssignedTest.belongsTo(User, { foreignKey: 'assignedBy', as: 'assignedByUser' });
