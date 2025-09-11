@@ -1903,18 +1903,20 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`);
       doc.text(`Score: ${attempt.score}%`);
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`);
-      // Place legend on the right side of header area
+
+      // Legend in the header (top-right)
       try {
-        const legendStartY = doc.y - 36; // lift slightly into header block
-        const legendWidth = 220;
+        const legendWidth = 240;
         const legendX = doc.page.width - doc.page.margins.right - legendWidth;
+        const legendY = doc.y - 36; // place slightly above current y, aligned with header block
         doc.save();
         doc.fontSize(9);
-        doc.fillColor('green').text('• Correct option', legendX, legendStartY, { width: legendWidth, align: 'right' });
-        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendStartY + 12, { width: legendWidth, align: 'right' });
+        doc.fillColor('green').text('• Correct option', legendX, legendY, { width: legendWidth, align: 'right' });
+        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendY + 12, { width: legendWidth, align: 'right' });
         doc.fillColor('black');
         doc.restore();
       } catch (_) { /* ignore legend placement errors */ }
+
       doc.moveDown();
 
       for (let i = 0; i < attempt.answers.length; i++) {
