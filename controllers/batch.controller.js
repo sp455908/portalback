@@ -1126,13 +1126,18 @@ exports.getAllStudentConflicts = async (req, res) => {
       };
     });
 
-    // Create a map of user conflicts for easy lookup
+    // Create a map of user conflicts for easy lookup using user.id as key
     const userConflictsMap = {};
     conflictingStudents.forEach(conflict => {
-      if (!userConflictsMap[conflict.studentId]) {
-        userConflictsMap[conflict.studentId] = [];
+      // Find the user to get their actual id
+      const user = users.find(u => u.id === Number(conflict.studentId));
+      if (user) {
+        const userKey = String(user.id); // Use user.id as the key
+        if (!userConflictsMap[userKey]) {
+          userConflictsMap[userKey] = [];
+        }
+        userConflictsMap[userKey].push(conflict);
       }
-      userConflictsMap[conflict.studentId].push(conflict);
     });
 
     return res.status(200).json({
