@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User, UserSession, Owner } = require('../models');
+const { User, UserSession, Owner, Settings } = require('../models');
 
 // Basic validators to reduce injection risk from untrusted inputs
 const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0;
@@ -133,6 +133,17 @@ exports.protect = async (req, res, next) => {
       await session.updateActivity();
     }
     
+    // Maintenance mode check: block all non-admin/owner access
+    try {
+      const settings = await Settings.findOne();
+      if (settings?.maintenanceMode) {
+        const role = user.role;
+        if (role !== 'admin' && role !== 'owner') {
+          return res.status(503).json({ status: 'fail', message: 'Platform is under maintenance' });
+        }
+      }
+    } catch (_) {}
+
     // Attach user to request
     req.user = user;
     next();

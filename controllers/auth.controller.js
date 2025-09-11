@@ -1,4 +1,4 @@
-const { User, LoginAttempt, UserSession } = require('../models');
+const { User, LoginAttempt, UserSession, Settings } = require('../models');
 // D:\IIFTL Backend\controllers\auth.controller.js
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -247,8 +247,21 @@ exports.login = async (req, res, next) => {
       });
     }
 
+    // 0) Maintenance mode gate for logins (allow only admin/owner)
+    const currentSettings = await Settings.findOne();
+    
     // 1) Check if user exists && password is correct
     const user = await User.findOne({ where: { email } });
+
+    if (currentSettings?.maintenanceMode) {
+      // During maintenance, only admin or owner can login
+      if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+        return res.status(503).json({
+          status: 'fail',
+          message: 'Platform is under maintenance. Only admin access is allowed.'
+        });
+      }
+    }
     
     // Cache user data for future use
     if (user) {
@@ -510,6 +523,15 @@ exports.refreshToken = async (req, res, next) => {
       return res.status(401).json({
         status: 'fail',
         message: 'User not found or inactive'
+      });
+    }
+
+    // Maintenance gate for refresh: allow only admin/owner to remain active
+    const currentSettings = await Settings.findOne();
+    if (currentSettings?.maintenanceMode && user.role !== 'admin' && user.role !== 'owner') {
+      return res.status(503).json({
+        status: 'fail',
+        message: 'Platform under maintenance. Please try again later.'
       });
     }
 

@@ -36,7 +36,39 @@ exports.updateSettings = catchAsync(async (req, res) => {
       settings = await Settings.create(req.body);
     } else {
       // Update existing settings
+      const previousMaintenance = Boolean(settings.maintenanceMode);
+      const nextMaintenance = req.body.hasOwnProperty('maintenanceMode')
+        ? Boolean(req.body.maintenanceMode)
+        : previousMaintenance;
+
       await settings.update(req.body);
+
+      // If maintenance mode toggled ON, deactivate all non-admin/owner sessions
+      if (!previousMaintenance && nextMaintenance) {
+        const { sequelize, UserSession, User } = require('../models');
+        // Find non-admin/owner users and kill their active sessions
+        const [rows] = await sequelize.query(
+          `SELECT us.id AS "sessionIdPk" FROM "UserSessions" us
+           INNER JOIN "Users" u ON u.id = us."userId"
+           WHERE us."isActive" = true AND u.role NOT IN ('admin','owner')`
+        );
+        if (Array.isArray(rows) && rows.length) {
+          await UserSession.update({ isActive: false }, {
+            where: { id: rows.map(r => r.sessionIdPk) }
+          });
+        } else {
+          // Fallback: bulk deactivate by join conditions
+          await UserSession.update({ isActive: false }, {
+            where: { isActive: true }
+          });
+          // Re-activate admin/owner sessions if needed
+          const adminOwnerIds = (await User.findAll({ where: { role: ['admin','owner'] }, attributes: ['id'] }))
+            .map(u => u.id);
+          if (adminOwnerIds.length) {
+            await UserSession.update({ isActive: true }, { where: { userId: adminOwnerIds } });
+          }
+        }
+      }
     }
     
     res.status(200).json({
@@ -89,11 +121,14 @@ exports.checkRegistrationEnabled = catchAsync(async (req, res, next) => {
 
 exports.checkMaintenanceMode = catchAsync(async (req, res, next) => {
   const settings = await Settings.findOne();
-  
   if (settings && settings.maintenanceMode) {
+    // Allow only admin/owner to pass; block others
+    const role = req.user?.role;
+    if (role === 'admin' || role === 'owner') {
+      return next();
+    }
     return next(new AppError('Platform is currently under maintenance', 503));
   }
-  
   next();
 });
 
