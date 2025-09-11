@@ -1715,7 +1715,7 @@ exports.getTestUsers = async (req, res) => {
 exports.updateTestSettings = async (req, res) => {
   try {
     const { testId } = req.params;
-    const { allowRepeat, repeatAfterHours, enableCooldown } = req.body;
+    const { allowRepeat, repeatAfterHours, enableCooldown, marksPerCorrect, enableNegative, negativeMarks } = req.body;
 
     // Check if admin
     if (req.user.role !== 'admin') {
@@ -1739,6 +1739,57 @@ exports.updateTestSettings = async (req, res) => {
       repeatAfterHours, 
       enableCooldown: enableCooldown !== undefined ? enableCooldown : true 
     });
+
+    // Optionally apply marking scheme to all questions if provided
+    const hasMarkingInputs = typeof marksPerCorrect !== 'undefined' || typeof enableNegative !== 'undefined' || typeof negativeMarks !== 'undefined';
+    if (hasMarkingInputs) {
+      try {
+        const normalizedMarksPerCorrect = typeof marksPerCorrect === 'number' && !Number.isNaN(marksPerCorrect)
+          ? marksPerCorrect
+          : undefined;
+        const normalizedNegativeMarks = typeof negativeMarks === 'number' && !Number.isNaN(negativeMarks)
+          ? negativeMarks
+          : undefined;
+
+        const updatedQuestions = (Array.isArray(practiceTest.questions) ? practiceTest.questions : []).map((q) => {
+          const next = { ...(q || {}) };
+          if (typeof normalizedMarksPerCorrect !== 'undefined') {
+            next.marks = normalizedMarksPerCorrect;
+          } else if (typeof next.marks !== 'number') {
+            next.marks = 1;
+          }
+
+          if (typeof enableNegative !== 'undefined') {
+            if (enableNegative) {
+              // Use provided negativeMarks if given; otherwise keep existing or default to -1
+              if (typeof normalizedNegativeMarks === 'number') {
+                next.negativeMarks = normalizedNegativeMarks;
+              } else if (typeof next.negativeMarks !== 'number' || next.negativeMarks === 0) {
+                next.negativeMarks = -1;
+              }
+            } else {
+              next.negativeMarks = 0;
+            }
+          } else if (typeof normalizedNegativeMarks === 'number') {
+            // If only negativeMarks provided without enableNegative flag, treat nonzero as enabling
+            next.negativeMarks = normalizedNegativeMarks;
+          }
+
+          return next;
+        });
+
+        practiceTest.questions = updatedQuestions;
+        await practiceTest.save();
+      } catch (markingErr) {
+        // If marking update fails, return clear message but keep settings update
+        return res.status(200).json({
+          status: 'success',
+          message: 'Test settings updated. Failed to apply marking scheme to questions.',
+          data: { test: practiceTest },
+          warning: process.env.NODE_ENV === 'development' ? String(markingErr?.message || markingErr) : undefined
+        });
+      }
+    }
 
     res.status(200).json({
       status: 'success',
