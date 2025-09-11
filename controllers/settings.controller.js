@@ -51,7 +51,7 @@ exports.updateSettings = catchAsync(async (req, res) => {
         const rows = await sequelize.query(
           `SELECT us.id AS "sessionIdPk" FROM "UserSessions" us
            INNER JOIN "Users" u ON u.id = us."userId"
-           WHERE us."isActive" = true AND u.role NOT IN ('admin','owner')`,
+           WHERE us."isActive" = true AND u.role <> 'admin'`,
           { type: QueryTypes.SELECT }
         );
         if (Array.isArray(rows) && rows.length) {

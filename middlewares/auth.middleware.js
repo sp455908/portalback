@@ -138,7 +138,7 @@ exports.protect = async (req, res, next) => {
       const settings = await Settings.findOne();
       if (settings?.maintenanceMode) {
         const role = user.role;
-        if (role !== 'admin' && role !== 'owner') {
+        if (role !== 'admin') {
           // Still return 503, but ensure CORS headers are present by echoing origin if available
           const origin = req.headers.origin;
           if (origin) {

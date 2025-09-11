@@ -254,8 +254,8 @@ exports.login = async (req, res, next) => {
     const user = await User.findOne({ where: { email } });
 
     if (currentSettings?.maintenanceMode) {
-      // During maintenance, only admin or owner can login
-      if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+      // During maintenance, only admin can login
+      if (!user || (user.role !== 'admin')) {
         return res.status(503).json({
           status: 'fail',
           message: 'Platform is under maintenance. Only admin access is allowed.'
@@ -528,7 +528,7 @@ exports.refreshToken = async (req, res, next) => {
 
     // Maintenance gate for refresh: allow only admin/owner to remain active
     const currentSettings = await Settings.findOne();
-    if (currentSettings?.maintenanceMode && user.role !== 'admin' && user.role !== 'owner') {
+    if (currentSettings?.maintenanceMode && user.role !== 'admin') {
       return res.status(503).json({
         status: 'fail',
         message: 'Platform under maintenance. Please try again later.'
