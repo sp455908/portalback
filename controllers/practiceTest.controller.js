@@ -671,6 +671,7 @@ exports.submitPracticeTest = async (req, res) => {
     // Compute total possible marks and obtained marks considering negative marking
     let totalPossible = 0;
     let obtained = 0;
+    let correctMarksSum = 0; // sum of marks for only correct answers
     for (let i = 0; i < testAttempt.questionsAsked.length; i++) {
       const qIdx = testAttempt.questionsAsked[i];
       const q = practiceTest.questions[qIdx] || {};
@@ -680,15 +681,21 @@ exports.submitPracticeTest = async (req, res) => {
       const ans = detailedAnswers[i];
       if (ans && typeof ans.marksAwarded === 'number') {
         obtained += ans.marksAwarded;
+        if (ans.isCorrect) {
+          correctMarksSum += Math.max(0, marks);
+        }
       } else {
         // fallback maintain backwards safety
         const isCorrect = ans ? ans.isCorrect : false;
         obtained += isCorrect ? marks : (negativeMarks ? -Math.abs(negativeMarks) : 0);
+        if (isCorrect) {
+          correctMarksSum += Math.max(0, marks);
+        }
       }
     }
 
-    // Score as percentage of totalPossible, clamp to [0,100]
-    const score = totalPossible > 0 ? Math.round(Math.max(0, (obtained / totalPossible) * 100)) : 0;
+    // Percentage score based on correct marks only (negatives affect obtained marks, not percentage)
+    const score = totalPossible > 0 ? Math.round((correctMarksSum / totalPossible) * 100) : 0;
     const passed = score >= practiceTest.passingScore;
     const timeTaken = Math.floor((new Date() - new Date(testAttempt.startedAt)) / 1000);
 
@@ -2031,7 +2038,8 @@ exports.downloadAttemptPDF = async (req, res) => {
 
         const askedIndices = Array.isArray(attempt.questionsAsked) ? attempt.questionsAsked : [];
         const perQuestionMarksEnabled = askedIndices.some(idx => getQuestionMarks(test.questions[idx]) !== 1);
-        const negativeMarkingEnabled = askedIndices.some(idx => getQuestionNegative(test.questions[idx]) > 0);
+        // Negative marking considered enabled if any question has negativeMarks < 0
+        const negativeMarkingEnabled = askedIndices.some(idx => getQuestionNegative(test.questions[idx]) < 0);
 
         const totalPossibleMarks = askedIndices.reduce((sum, idx) => {
           const q = test.questions[idx] || {};
