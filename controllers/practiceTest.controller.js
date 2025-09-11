@@ -1865,23 +1865,17 @@ exports.downloadAttemptPDF = async (req, res) => {
     drawBorder();
     doc.on('pageAdded', drawBorder);
 
-    // Add logo and full name at the top
-    const logoUrl = 'https://res.cloudinary.com/dtsbyvgqx/image/upload/v1753447947/favicon_pegz5v.jpg';
-    const https = require('https');
-    const getStream = (url) => new Promise((resolve, reject) => {
-      https.get(url, (response) => {
-        const data = [];
-        response.on('data', chunk => data.push(chunk));
-        response.on('end', () => resolve(Buffer.concat(data)));
-        response.on('error', reject);
-      });
-    });
+    // Add logo and full name at the top (use local logo file)
+    const fs = require('fs');
+    const path = require('path');
     (async () => {
       try {
-        const logoBuffer = await getStream(logoUrl);
-        doc.image(logoBuffer, doc.page.width / 2 - 30, 30, { width: 60, height: 60 });
+        const logoPath = path.join(__dirname, '..', 'models', 'logo.png');
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, doc.page.width / 2 - 30, 30, { width: 60, height: 60 });
+        }
       } catch (e) {
-        // If logo fails, just skip
+        // If logo fails, skip silently
       }
       doc.moveDown(4);
       doc.fontSize(20).font('Helvetica-Bold').text('IIFTL', { align: 'center' });
@@ -1896,20 +1890,47 @@ exports.downloadAttemptPDF = async (req, res) => {
 
       for (let i = 0; i < attempt.answers.length; i++) {
         const ans = attempt.answers[i];
-        if (typeof ans.selectedAnswer !== 'number') continue; // skip unanswered
         const qIdx = attempt.questionsAsked[i];
         const q = test.questions[qIdx];
-        const userIdx = ans.selectedAnswer;
+        const userIdx = typeof ans.selectedAnswer === 'number' ? ans.selectedAnswer : null;
         const correctIdx = q.correctAnswer;
+
+        // Question text
         doc.font('Helvetica-Bold').text(`${i + 1}. ${q.question}`);
         doc.font('Helvetica');
-        doc.text(`Your Answer: ${String.fromCharCode(65 + userIdx)}. ${q.options[userIdx]}`);
-        if (!ans.isCorrect) {
-          doc.text(`Correct Answer: ${String.fromCharCode(65 + correctIdx)}. ${q.options[correctIdx]}`);
-          doc.fillColor('red').text('Your answer is wrong').fillColor('black');
+
+        // Options list with indicators
+        const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
+        (q.options || []).forEach((opt, optIdx) => {
+          const isCorrect = Number(correctIdx) === optIdx;
+          const isUser = userIdx === optIdx;
+          const marker = isCorrect ? '✔' : isUser ? '●' : '•';
+          const label = optionLabels[optIdx] || String.fromCharCode(65 + optIdx);
+
+          if (isCorrect) doc.fillColor('green');
+          else if (isUser && !isCorrect) doc.fillColor('red');
+
+          doc.text(`${marker} ${label}. ${opt}`, { indent: 12, lineGap: 2 });
+          doc.fillColor('black');
+        });
+
+        // Summary for user's answer vs correct
+        if (userIdx !== null && userIdx !== undefined) {
+          doc.moveDown(0.3);
+          doc.text(`Your Answer: ${optionLabels[userIdx] || String.fromCharCode(65 + userIdx)}. ${q.options[userIdx]}`);
+          if (!ans.isCorrect) {
+            doc.text(`Correct Answer: ${optionLabels[correctIdx] || String.fromCharCode(65 + correctIdx)}. ${q.options[correctIdx]}`);
+            doc.fillColor('red').text('Your answer is wrong').fillColor('black');
+          } else {
+            doc.fillColor('green').text('Your answer is correct').fillColor('black');
+          }
         } else {
-          doc.fillColor('green').text('Your answer is correct').fillColor('black');
+          // Unanswered question
+          doc.moveDown(0.3);
+          doc.text('Your Answer: —');
+          doc.fillColor('green').text(`Correct Answer: ${optionLabels[correctIdx] || String.fromCharCode(65 + correctIdx)}. ${q.options[correctIdx]}`).fillColor('black');
         }
+
         doc.moveDown();
       }
       doc.end();
