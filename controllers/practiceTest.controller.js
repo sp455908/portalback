@@ -1882,7 +1882,7 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.fontSize(12).font('Helvetica').text('Indian Institute of Foreign Trade & Logistics', { align: 'center' });
       doc.moveDown(1.5);
       doc.fontSize(16).font('Helvetica-Bold').text('Practice Test Result', { align: 'center' });
-      doc.moveDown();
+      doc.moveDown(2);
       // Helper to sanitize text (remove control chars and normalize spacing/quotes)
       const sanitizeText = (input) => {
         try {
@@ -1967,6 +1967,78 @@ exports.downloadAttemptPDF = async (req, res) => {
 
         doc.moveDown(1);
       }
+
+      // Add a final page with a marks summary table
+      try {
+        const getQuestionMarks = (q) => {
+          try { return Number((q && q.marks) ?? 1); } catch (_) { return 1; }
+        };
+        const getQuestionNegative = (q) => {
+          try { return Number((q && q.negativeMarks) ?? 0); } catch (_) { return 0; }
+        };
+
+        const askedIndices = Array.isArray(attempt.questionsAsked) ? attempt.questionsAsked : [];
+        const perQuestionMarksEnabled = askedIndices.some(idx => getQuestionMarks(test.questions[idx]) !== 1);
+        const negativeMarkingEnabled = askedIndices.some(idx => getQuestionNegative(test.questions[idx]) > 0);
+
+        const totalPossibleMarks = askedIndices.reduce((sum, idx) => {
+          const q = test.questions[idx] || {};
+          const marks = getQuestionMarks(q);
+          return sum + Math.max(0, marks);
+        }, 0);
+
+        const obtainedMarks = (attempt.answers || []).reduce((sum, a) => {
+          const awarded = typeof a.marksAwarded === 'number' ? a.marksAwarded : 0;
+          return sum + awarded;
+        }, 0);
+
+        const outOf = Number(test.questionsPerTest || attempt.totalQuestions || askedIndices.length || 0);
+
+        doc.addPage();
+        drawBorder();
+        doc.moveDown(1);
+        doc.fontSize(16).font('Helvetica-Bold').text('Marks Summary', { align: 'center' });
+        doc.moveDown(1);
+
+        const tableContentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const startX = doc.page.margins.left;
+        let startY = doc.y;
+        const rowHeight = 24;
+        const col1Width = Math.min(240, Math.floor(tableContentWidth * 0.45));
+        const col2Width = tableContentWidth - col1Width;
+
+        const rows = [
+          ['Total Questions', String(attempt.totalQuestions ?? askedIndices.length ?? 0)],
+          ['Correct Answers', String(attempt.correctAnswers ?? '')],
+          ['Wrong Answers', String(attempt.wrongAnswers ?? '')],
+          ['Score (%)', `${typeof attempt.score === 'number' ? attempt.score : 0}%`],
+          ['Obtained Marks', `${obtainedMarks}`],
+          ['Total Possible Marks', `${totalPossibleMarks}`],
+          ['Out of', `${outOf}`],
+          ['Negative Marking', negativeMarkingEnabled ? 'Enabled' : '—'],
+          ['Per-question Marks', perQuestionMarksEnabled ? 'Enabled' : '—']
+        ];
+
+        // Table header
+        doc.save();
+        doc.fontSize(11).font('Helvetica-Bold');
+        doc.rect(startX, startY, col1Width, rowHeight).stroke();
+        doc.rect(startX + col1Width, startY, col2Width, rowHeight).stroke();
+        doc.text('Metric', startX + 8, startY + 6, { width: col1Width - 16, align: 'left' });
+        doc.text('Value', startX + col1Width + 8, startY + 6, { width: col2Width - 16, align: 'left' });
+        doc.restore();
+        startY += rowHeight;
+
+        // Table rows
+        doc.fontSize(11).font('Helvetica');
+        rows.forEach(([label, value]) => {
+          doc.rect(startX, startY, col1Width, rowHeight).stroke();
+          doc.rect(startX + col1Width, startY, col2Width, rowHeight).stroke();
+          doc.text(String(label), startX + 8, startY + 6, { width: col1Width - 16, align: 'left' });
+          doc.text(String(value), startX + col1Width + 8, startY + 6, { width: col2Width - 16, align: 'left' });
+          startY += rowHeight;
+        });
+      } catch (_) { /* ignore summary table errors */ }
       doc.end();
     })();
   } catch (err) {
