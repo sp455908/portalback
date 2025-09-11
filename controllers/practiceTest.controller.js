@@ -1883,7 +1883,24 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.moveDown(1.5);
       doc.fontSize(16).font('Helvetica-Bold').text('Practice Test Result', { align: 'center' });
       doc.moveDown();
-      doc.fontSize(12).font('Helvetica').text(`Test: ${test.title}`);
+      // Helper to sanitize text (remove control chars and normalize spacing/quotes)
+      const sanitizeText = (input) => {
+        try {
+          const str = String(input ?? '')
+            .replace(/[\u0000-\u001F\u007F]/g, ' ') // remove control chars
+            .replace(/[\u2018\u2019\u201A\u201B]/g, "'") // smart single quotes to '
+            .replace(/[\u201C\u201D\u201E\u201F]/g, '"') // smart double quotes to "
+            .replace(/[\u2026]/g, '...') // ellipsis
+            .replace(/[\u2013\u2014]/g, '-') // dashes
+            .replace(/\s+/g, ' ') // normalize spaces
+            .trim();
+          return str;
+        } catch (_) {
+          return String(input || '');
+        }
+      };
+
+      doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`);
       doc.text(`Score: ${attempt.score}%`);
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`);
       doc.moveDown();
@@ -1896,7 +1913,7 @@ exports.downloadAttemptPDF = async (req, res) => {
         const correctIdx = q.correctAnswer;
 
         // Question text
-        doc.font('Helvetica-Bold').text(`${i + 1}. ${q.question}`);
+        doc.font('Helvetica-Bold').text(`${i + 1}. ${sanitizeText(q.question)}`, { lineGap: 2 });
         doc.font('Helvetica');
 
         // Options list with indicators
@@ -1904,34 +1921,29 @@ exports.downloadAttemptPDF = async (req, res) => {
         (q.options || []).forEach((opt, optIdx) => {
           const isCorrect = Number(correctIdx) === optIdx;
           const isUser = userIdx === optIdx;
-          const marker = isCorrect ? '✔' : isUser ? '●' : '•';
+          const marker = '•'; // always show bullet dot
           const label = optionLabels[optIdx] || String.fromCharCode(65 + optIdx);
 
           if (isCorrect) doc.fillColor('green');
           else if (isUser && !isCorrect) doc.fillColor('red');
 
-          doc.text(`${marker} ${label}. ${opt}`, { indent: 12, lineGap: 2 });
+          doc.text(`${marker} ${label}. ${sanitizeText(opt)}`, { indent: 14, lineGap: 1.5 });
           doc.fillColor('black');
         });
 
-        // Summary for user's answer vs correct
-        if (userIdx !== null && userIdx !== undefined) {
+        // Remove verbose summary lines; rely on colors only
+        // If needed, add a subtle legend for colors on the first question
+        if (i === 0) {
           doc.moveDown(0.3);
-          doc.text(`Your Answer: ${optionLabels[userIdx] || String.fromCharCode(65 + userIdx)}. ${q.options[userIdx]}`);
-          if (!ans.isCorrect) {
-            doc.text(`Correct Answer: ${optionLabels[correctIdx] || String.fromCharCode(65 + correctIdx)}. ${q.options[correctIdx]}`);
-            doc.fillColor('red').text('Your answer is wrong').fillColor('black');
-          } else {
-            doc.fillColor('green').text('Your answer is correct').fillColor('black');
-          }
-        } else {
-          // Unanswered question
-          doc.moveDown(0.3);
-          doc.text('Your Answer: —');
-          doc.fillColor('green').text(`Correct Answer: ${optionLabels[correctIdx] || String.fromCharCode(65 + correctIdx)}. ${q.options[correctIdx]}`).fillColor('black');
+          doc.fontSize(9);
+          doc.fillColor('green').text('• Correct option', { continued: true });
+          doc.fillColor('black').text('   ');
+          doc.fillColor('red').text('• Your selected option (if incorrect)');
+          doc.fillColor('black');
+          doc.fontSize(12);
         }
 
-        doc.moveDown();
+        doc.moveDown(1);
       }
       doc.end();
     })();
