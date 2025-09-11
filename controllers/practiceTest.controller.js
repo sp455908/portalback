@@ -1900,9 +1900,24 @@ exports.downloadAttemptPDF = async (req, res) => {
         }
       };
 
+      // Left-side test meta
+      const headerStartY = doc.y;
       doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`);
       doc.text(`Score: ${attempt.score}%`);
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`);
+
+      // Right-side legend aligned with the meta block
+      try {
+        const legendX = doc.page.width - doc.page.margins.right - 220; // fixed width area on right
+        const legendY = headerStartY;
+        doc.save();
+        doc.fontSize(9);
+        doc.fillColor('green').text('• Correct option', legendX, legendY, { width: 200, align: 'right' });
+        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendY + 12, { width: 200, align: 'right' });
+        doc.fillColor('black');
+        doc.restore();
+      } catch (_) {}
+
       doc.moveDown();
 
       for (let i = 0; i < attempt.answers.length; i++) {
@@ -1931,16 +1946,14 @@ exports.downloadAttemptPDF = async (req, res) => {
           doc.fillColor('black');
         });
 
-        // Remove verbose summary lines; rely on colors only
-        // If needed, add a subtle legend for colors on the first question
-        if (i === 0) {
-          doc.moveDown(0.3);
-          doc.fontSize(9);
-          doc.fillColor('green').text('• Correct option', { continued: true });
-          doc.fillColor('black').text('   ');
-          doc.fillColor('red').text('• Your selected option (if incorrect)');
+        // Add concise verdict below options
+        if (userIdx !== null && userIdx !== undefined) {
+          if (ans.isCorrect) {
+            doc.fillColor('green').text('Your answer is correct');
+          } else {
+            doc.fillColor('red').text('Your answer is wrong');
+          }
           doc.fillColor('black');
-          doc.fontSize(12);
         }
 
         doc.moveDown(1);
