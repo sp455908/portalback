@@ -26,10 +26,18 @@ class EncryptionService {
     
     try {
       const decrypted = CryptoJS.AES.decrypt(encryptedText, this.secretKey);
-      return decrypted.toString(CryptoJS.enc.Utf8);
+      const decryptedString = decrypted.toString(CryptoJS.enc.Utf8);
+      
+      // If decryption results in empty string, the data was not encrypted
+      if (!decryptedString) {
+        return encryptedText; // Return original if not encrypted
+      }
+      
+      return decryptedString;
     } catch (error) {
       console.error('Decryption failed:', error);
-      throw new Error('Failed to decrypt data');
+      // Return original text if decryption fails (might not be encrypted)
+      return encryptedText;
     }
   }
 
@@ -63,13 +71,29 @@ class EncryptionService {
   isEncrypted(data) {
     if (!data || typeof data !== 'string') return false;
     
-    try {
-      // Try to decrypt - if it works, it was encrypted
-      this.decrypt(data);
-      return true;
-    } catch {
-      return false;
+    // Check if it looks like encrypted data (CryptoJS format)
+    if (data.startsWith('U2FsdGVkX1')) {
+      try {
+        const decrypted = CryptoJS.AES.decrypt(data, this.secretKey);
+        const decryptedString = decrypted.toString(CryptoJS.enc.Utf8);
+        return decryptedString.length > 0; // If we get a valid decrypted string, it was encrypted
+      } catch {
+        return false;
+      }
     }
+    
+    return false;
+  }
+
+  // Safe decrypt - returns original if not encrypted
+  safeDecrypt(data) {
+    if (!data) return data;
+    
+    if (this.isEncrypted(data)) {
+      return this.decrypt(data);
+    }
+    
+    return data; // Return as-is if not encrypted
   }
 }
 

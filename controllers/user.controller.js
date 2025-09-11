@@ -27,13 +27,7 @@ exports.getAllUsers = async (req, res) => {
         // Safely decrypt phone number with error handling
         let decryptedPhone = userJson.phone;
         if (userJson.phone && userJson.phone.trim() !== '') {
-          try {
-            decryptedPhone = encryptionService.decrypt(String(userJson.phone));
-          } catch (error) {
-            console.warn(`Failed to decrypt phone for user ${user.id}:`, error.message);
-            // Keep the original encrypted value if decryption fails
-            decryptedPhone = userJson.phone;
-          }
+          decryptedPhone = encryptionService.safeDecrypt(String(userJson.phone));
         }
         
         return {
@@ -81,7 +75,7 @@ exports.getUserById = async (req, res) => {
     const userJson = user.toJSON();
     const decryptedUser = {
       ...userJson,
-      phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone
+      phone: userJson.phone ? encryptionService.safeDecrypt(String(userJson.phone)) : userJson.phone
     };
 
     res.status(200).json({
@@ -287,7 +281,7 @@ exports.getProfile = async (req, res) => {
     const userJson = user.toJSON();
     const decryptedUser = {
       ...userJson,
-      phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone
+      phone: userJson.phone ? encryptionService.safeDecrypt(String(userJson.phone)) : userJson.phone
     };
 
     res.status(200).json({
@@ -329,7 +323,7 @@ exports.updateProfile = async (req, res) => {
     try {
       const encryptionService = require('../utils/encryption');
       if (userForResponse && userForResponse.phone) {
-        userForResponse = { ...userForResponse, phone: encryptionService.decrypt(String(userForResponse.phone)) };
+        userForResponse = { ...userForResponse, phone: encryptionService.safeDecrypt(String(userForResponse.phone)) };
       }
     } catch (_) { /* ignore */ }
 

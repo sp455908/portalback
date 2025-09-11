@@ -76,7 +76,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     if (userForResponse && userForResponse.phone) {
       userForResponse = {
         ...userForResponse,
-        phone: encryptionService.decrypt(String(userForResponse.phone))
+        phone: encryptionService.safeDecrypt(String(userForResponse.phone))
       };
     }
   } catch (_) {
@@ -465,7 +465,7 @@ exports.getMe = async (req, res, next) => {
     const userJson = user.toJSON();
     const decryptedUser = {
       ...userJson,
-      phone: userJson.phone ? encryptionService.decrypt(String(userJson.phone)) : userJson.phone
+      phone: userJson.phone ? encryptionService.safeDecrypt(String(userJson.phone)) : userJson.phone
     };
 
     res.status(200).json({

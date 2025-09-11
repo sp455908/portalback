@@ -78,7 +78,7 @@ exports.getAllApplications = async (req, res) => {
       const json = app.toJSON();
       return {
         ...json,
-        phone: json.phone ? encryptionService.decrypt(String(json.phone)) : json.phone,
+        phone: json.phone ? encryptionService.safeDecrypt(String(json.phone)) : json.phone,
         address: json.address ? encryptionService.decrypt(String(json.address)) : json.address,
         pincode: json.pincode ? encryptionService.decrypt(String(json.pincode)) : json.pincode,
         motivation: json.motivation ? encryptionService.decrypt(String(json.motivation)) : json.motivation
@@ -108,7 +108,7 @@ exports.getApplicationById = async (req, res) => {
     const json = application.toJSON();
     const decrypted = {
       ...json,
-      phone: json.phone ? encryptionService.decrypt(String(json.phone)) : json.phone,
+      phone: json.phone ? encryptionService.safeDecrypt(String(json.phone)) : json.phone,
       address: json.address ? encryptionService.decrypt(String(json.address)) : json.address,
       pincode: json.pincode ? encryptionService.decrypt(String(json.pincode)) : json.pincode,
       motivation: json.motivation ? encryptionService.decrypt(String(json.motivation)) : json.motivation
@@ -158,7 +158,7 @@ exports.getMyApplications = async (req, res) => {
       const json = app.toJSON();
       return {
         ...json,
-        phone: json.phone ? encryptionService.decrypt(String(json.phone)) : json.phone,
+        phone: json.phone ? encryptionService.safeDecrypt(String(json.phone)) : json.phone,
         address: json.address ? encryptionService.decrypt(String(json.address)) : json.address,
         pincode: json.pincode ? encryptionService.decrypt(String(json.pincode)) : json.pincode,
         motivation: json.motivation ? encryptionService.decrypt(String(json.motivation)) : json.motivation
