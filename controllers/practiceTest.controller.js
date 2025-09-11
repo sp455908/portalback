@@ -1904,6 +1904,7 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`, { width: contentWidth, align: 'left' });
       doc.text(`Score: ${attempt.score}%`, { width: contentWidth, align: 'left' });
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`, { width: contentWidth, align: 'left' });
+      doc.moveDown(1.5);
 
       // Legend in the header (top-right)
       try {
