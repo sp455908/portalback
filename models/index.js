@@ -19,6 +19,7 @@ const UserTestCooldown = require('./userTestCooldown.model');
 const Counter = require('./counter.model');
 const LoginAttempt = require('./loginAttempt.model');
 const UserSession = require('./userSession.model');
+const Owner = require('./owner.model');
 
 // Define associations
 // User associations
@@ -126,6 +127,7 @@ BatchAssignedTest.belongsTo(User, { foreignKey: 'assignedBy', as: 'assignedByUse
 module.exports = {
   sequelize,
   User,
+  Owner,
   Course,
   Enrollment,
   Application,

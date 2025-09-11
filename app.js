@@ -26,6 +26,7 @@ const settingsRoutes = require('./routes/settings.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const securityRoutes = require('./routes/security.routes');
 const captchaRoutes = require('./routes/captcha.routes');
+const ownerRoutes = require('./routes/owner.routes');
 
 const app = express();
 
@@ -137,6 +138,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/captcha', captchaRoutes);
+app.use('/api/owner', ownerRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

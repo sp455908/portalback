@@ -1,23 +1,24 @@
 const jwt = require('jsonwebtoken');
-const { User, UserSession } = require('../models');
+const { User, UserSession, Owner } = require('../models');
 
 exports.protect = async (req, res, next) => {
   let token;
   let sessionId;
-  
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
+
+  // Prefer JWT from HTTP-only cookie (set by backend auth)
+  if (req.cookies && typeof req.cookies.token === 'string') {
+    token = req.cookies.token;
+  }
+
+  // Fallback to Authorization header for legacy clients/tools
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
-  
+
+  // Optional session ID header for session validation (legacy/parallel systems)
   if (req.headers['x-session-id']) {
     sessionId = req.headers['x-session-id'];
   }
-  
-  // Optional session ID (JWT-only mode supported)
-  sessionId = req.headers['x-session-id'];
 
   if (!token) {
     return res.status(401).json({ 
@@ -30,6 +31,21 @@ exports.protect = async (req, res, next) => {
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
+    // Support Owner (superadmin) tokens
+    if (decoded && decoded.type === 'owner') {
+      const owner = await Owner.findByPk(decoded.id);
+      if (!owner || owner.isActive === false) {
+        return res.status(401).json({ status: 'fail', message: 'Owner not found or inactive' });
+      }
+      req.user = {
+        id: owner.id,
+        email: owner.email,
+        role: 'owner',
+        isOwner: true
+      };
+      return next();
+    }
+
     // Find user using Sequelize (PostgreSQL)
     const user = await User.findByPk(decoded.id);
     

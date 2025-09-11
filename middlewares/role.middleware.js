@@ -20,6 +20,11 @@ module.exports = (...allowedRoles) => {
       });
     }
     
+    // Owner (superadmin) bypass: if request is marked as owner, allow
+    if (req.user && req.user.isOwner === true) {
+      return next();
+    }
+
     if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({ 
         message: "Forbidden: insufficient permissions"
