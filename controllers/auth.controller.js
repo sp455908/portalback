@@ -56,7 +56,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
         refreshToken
       });
     } catch (error) {
-      console.error('Error creating session:', error);
+      // Error creating session - continue without session
       // Continue without session if creation fails
     }
   }
@@ -188,7 +188,7 @@ exports.register = async (req, res, next) => {
     await createSendToken(newUser, 201, res, req);
 
   } catch (err) {
-    console.error('Registration error:', err);
+    // Registration error
     
     // Handle validation errors
     if (err.name === 'ValidationError') {
@@ -406,7 +406,7 @@ exports.login = async (req, res, next) => {
     } catch (sessionError) {
       if (process.env.NODE_ENV !== 'production') {
         // eslint-disable-next-line no-console
-        console.error('Active session lookup/cleanup failed (continuing):', sessionError);
+        // Active session lookup/cleanup failed (continuing)
       }
     }
 
@@ -437,7 +437,7 @@ exports.login = async (req, res, next) => {
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.error('Login error:', err);
+      // Login error
     }
     res.status(500).json({
       status: 'error',
@@ -583,7 +583,7 @@ exports.logout = async (req, res, next) => {
       message: 'Logged out successfully'
     });
   } catch (err) {
-    console.error('Logout error:', err);
+    // Logout error
     res.status(500).json({
       status: 'error',
       message: 'Logout failed'
@@ -642,7 +642,7 @@ exports.validateSession = async (req, res, next) => {
       }
     });
   } catch (err) {
-    console.error('Session validation error:', err);
+    // Session validation error
     res.status(500).json({
       status: 'error',
       message: 'Session validation failed'
@@ -685,7 +685,7 @@ exports.updateSessionActivity = async (req, res, next) => {
       }
     });
   } catch (err) {
-    console.error('Update session activity error:', err);
+    // Update session activity error
     res.status(500).json({
       status: 'error',
       message: 'Failed to update session activity'
@@ -774,7 +774,7 @@ exports.getActiveSessions = async (req, res, next) => {
       }
     });
   } catch (err) {
-    console.error('Get active sessions error:', err);
+    // Get active sessions error
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch active sessions'

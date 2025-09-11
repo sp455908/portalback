@@ -513,28 +513,56 @@ exports.checkStudentsConflicts = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'userIds are required' });
     }
 
+    // Get current batch to exclude it from conflicts
+    const currentBatch = await findBatchByParam(batchId);
+    if (!currentBatch) {
+      return res.status(404).json({ status: 'fail', message: 'Batch not found' });
+    }
+
+    // Find conflicts with detailed batch information
     const conflicts = await BatchStudent.findAll({
       where: {
         userId: userIds,
-        status: 'active'
+        status: 'active',
+        batchId: { [Op.ne]: currentBatch.id } // Exclude current batch
       },
-      attributes: ['userId', 'batchId']
+      include: [
+        {
+          model: Batch,
+          as: 'batch',
+          attributes: ['id', 'batchId', 'batchName', 'status', 'userType'],
+          required: true
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'studentId'],
+          required: true
+        }
+      ]
     });
 
-    // Exclude the current batch regardless of whether frontend sent PK or code
-    const currentBatch = await findBatchByParam(batchId);
-    const currentBatchPk = currentBatch ? currentBatch.id : null;
-    const filtered = currentBatchPk
-      ? conflicts.filter(c => Number(c.batchId) !== Number(currentBatchPk))
-      : conflicts;
+    // Format conflicts for frontend
+    const conflictingStudents = conflicts.map(conflict => ({
+      studentId: String(conflict.userId),
+      studentName: `${conflict.user.firstName} ${conflict.user.lastName}`,
+      studentEmail: conflict.user.email,
+      studentStudentId: conflict.user.studentId,
+      batchId: conflict.batch.batchId,
+      batchName: conflict.batch.batchName,
+      batchStatus: conflict.batch.status,
+      batchUserType: conflict.batch.userType
+    }));
 
     return res.status(200).json({
       status: 'success',
       data: {
-        conflicts: filtered
+        conflicts: conflicts.map(c => ({ userId: c.userId, batchId: c.batchId })),
+        conflictingStudents: conflictingStudents
       }
     });
   } catch (err) {
+    console.error('Error in checkStudentsConflicts:', err);
     return res.status(500).json({
       status: 'error',
       message: 'Failed to check student conflicts',
@@ -996,6 +1024,131 @@ exports.getDashboardStats = async (req, res) => {
         totalStudents: 0,
         totalAssignedTests: 0
       }
+    });
+  }
+};
+
+// Get all student conflicts for a batch (optimized for frontend)
+exports.getAllStudentConflicts = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const { userType } = req.query;
+
+    // Input validation
+    if (!batchId || batchId === 'undefined' || batchId === 'null') {
+      return res.status(400).json({ status: 'fail', message: 'Invalid batchId' });
+    }
+
+    // Validate userType if provided
+    if (userType && !['student', 'corporate', 'government'].includes(userType)) {
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: 'Invalid userType. Must be student, corporate, or government' 
+      });
+    }
+
+    // Get current batch to exclude it from conflicts
+    const currentBatch = await findBatchByParam(batchId);
+    if (!currentBatch) {
+      return res.status(404).json({ status: 'fail', message: 'Batch not found' });
+    }
+
+    // Security check: Ensure user has access to this batch
+    if (req.user && req.user.role === 'admin') {
+      // Admin can access any batch
+    } else if (req.user && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        status: 'fail', 
+        message: 'Access denied. Admin privileges required.' 
+      });
+    }
+
+    // Get all users of the specified type with pagination to prevent large queries
+    let whereClause = { isActive: true };
+    if (userType && ['student', 'corporate', 'government'].includes(userType)) {
+      whereClause.userType = userType;
+    }
+
+    // Limit the number of users to prevent performance issues
+    const maxUsers = 1000;
+    const users = await User.findAll({
+      where: whereClause,
+      attributes: ['id', 'firstName', 'lastName', 'email', 'studentId', 'userType'],
+      limit: maxUsers,
+      order: [['createdAt', 'DESC']]
+    });
+
+    if (users.length === 0) {
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          conflicts: [],
+          conflictingStudents: [],
+          userConflictsMap: {}
+        }
+      });
+    }
+
+    // Log the request for monitoring
+    console.log(`Conflict check requested for batch ${batchId}, userType: ${userType}, users: ${users.length}`);
+
+    const userIds = users.map(u => u.id);
+
+    // Find all conflicts for these users
+    const conflicts = await BatchStudent.findAll({
+      where: {
+        userId: userIds,
+        status: 'active',
+        batchId: { [Op.ne]: currentBatch.id } // Exclude current batch
+      },
+      include: [
+        {
+          model: Batch,
+          as: 'batch',
+          attributes: ['id', 'batchId', 'batchName', 'status', 'userType'],
+          required: true
+        }
+      ]
+    });
+
+    // Format conflicts for frontend
+    const conflictingStudents = conflicts.map(conflict => {
+      const user = users.find(u => u.id === conflict.userId);
+      return {
+        studentId: String(conflict.userId),
+        studentName: user ? `${user.firstName} ${user.lastName}` : 'Unknown User',
+        studentEmail: user ? user.email : '',
+        studentStudentId: user ? user.studentId : '',
+        batchId: conflict.batch.batchId,
+        batchName: conflict.batch.batchName,
+        batchStatus: conflict.batch.status,
+        batchUserType: conflict.batch.userType
+      };
+    });
+
+    // Create a map of user conflicts for easy lookup
+    const userConflictsMap = {};
+    conflictingStudents.forEach(conflict => {
+      if (!userConflictsMap[conflict.studentId]) {
+        userConflictsMap[conflict.studentId] = [];
+      }
+      userConflictsMap[conflict.studentId].push(conflict);
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        conflicts: conflicts.map(c => ({ userId: c.userId, batchId: c.batchId })),
+        conflictingStudents: conflictingStudents,
+        userConflictsMap: userConflictsMap
+      }
+    });
+  } catch (err) {
+    console.error('Error in getAllStudentConflicts:', err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to get student conflicts',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };

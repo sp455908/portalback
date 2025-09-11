@@ -39,6 +39,7 @@ router.get('/:batchId/stats', batchController.getBatchStats);
 router.post('/:batchId/students', batchController.addStudentsToBatch);
 router.delete('/:batchId/students', batchController.removeStudentsFromBatch);
 router.get('/:batchId/students/check-conflicts', batchController.checkStudentsConflicts);
+router.get('/:batchId/students/all-conflicts', batchController.getAllStudentConflicts);
 
 // Test assignment in batches
 router.post('/:batchId/tests', batchController.assignTestsToBatch);

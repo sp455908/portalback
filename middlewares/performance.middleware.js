@@ -19,10 +19,13 @@ const performanceMonitor = (req, res, next) => {
   // Log on finish; do not modify headers here
   res.on('finish', () => {
     const duration = Date.now() - start;
-    if (duration > 5000) {
-      console.error(`🚨 VERY SLOW REQUEST: ${req.method} ${req.originalUrl} took ${duration}ms`);
-    } else if (duration > 1000) {
-      console.warn(`🐌 SLOW REQUEST: ${req.method} ${req.originalUrl} took ${duration}ms`);
+    // Only log in development environment
+    if (process.env.NODE_ENV === 'development') {
+      if (duration > 5000) {
+        console.error(`🚨 VERY SLOW REQUEST: ${req.method} ${req.originalUrl} took ${duration}ms`);
+      } else if (duration > 1000) {
+        console.warn(`🐌 SLOW REQUEST: ${req.method} ${req.originalUrl} took ${duration}ms`);
+      }
     }
   });
 
