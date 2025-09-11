@@ -80,6 +80,16 @@ const User = sequelize.define('User', {
     unique: true,
     allowNull: true
   },
+  corporateId: {
+    type: DataTypes.STRING,
+    unique: true,
+    allowNull: true
+  },
+  governmentId: {
+    type: DataTypes.STRING,
+    unique: true,
+    allowNull: true
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
@@ -98,11 +108,18 @@ const User = sequelize.define('User', {
         }
       }
       
-      // Generate student ID for new students using atomic counter
-      if (user.role === 'student' && !user.studentId) {
-        const year = new Date().getFullYear();
+      // Generate user ID based on userType using atomic counter
+      const year = new Date().getFullYear();
+      
+      if (user.userType === 'student' && !user.studentId) {
         const seq = await Counter.getNextSequence(`student:${year}`);
         user.studentId = `IIFTL-${year}-${String(seq).padStart(5, '0')}`;
+      } else if (user.userType === 'corporate' && !user.corporateId) {
+        const seq = await Counter.getNextSequence(`corporate:${year}`);
+        user.corporateId = `IIFTL-CORP-${year}-${String(seq).padStart(5, '0')}`;
+      } else if (user.userType === 'government' && !user.governmentId) {
+        const seq = await Counter.getNextSequence(`government:${year}`);
+        user.governmentId = `IIFTL-GOV-${year}-${String(seq).padStart(5, '0')}`;
       }
       
       // Hash password
@@ -135,6 +152,34 @@ const User = sequelize.define('User', {
 // Instance method to compare password
 User.prototype.comparePassword = function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Instance method to get the appropriate user ID based on userType
+User.prototype.getUserId = function() {
+  switch (this.userType) {
+    case 'student':
+      return this.studentId;
+    case 'corporate':
+      return this.corporateId;
+    case 'government':
+      return this.governmentId;
+    default:
+      return null;
+  }
+};
+
+// Static method to get user ID field name based on userType
+User.getUserIdField = function(userType) {
+  switch (userType) {
+    case 'student':
+      return 'studentId';
+    case 'corporate':
+      return 'corporateId';
+    case 'government':
+      return 'governmentId';
+    default:
+      return null;
+  }
 };
 
 module.exports = User;

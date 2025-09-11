@@ -147,7 +147,7 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Create new user (retry once on studentId collision)
+    // Create new user (retry once on ID collision)
     let newUser;
     try {
       newUser = await User.create({
@@ -164,8 +164,9 @@ exports.register = async (req, res, next) => {
         pincode: pincode ? encryptionService.encrypt(String(pincode)) : pincode
       });
     } catch (createErr) {
-      if (createErr.name === 'SequelizeUniqueConstraintError' && createErr?.fields?.studentId) {
-        // Retry create once in case two requests raced for the same sequence
+      // Retry create once in case two requests raced for the same sequence
+      if (createErr.name === 'SequelizeUniqueConstraintError' && 
+          (createErr?.fields?.studentId || createErr?.fields?.corporateId || createErr?.fields?.governmentId)) {
         newUser = await User.create({
           firstName,
           lastName,
