@@ -9,6 +9,7 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const errorHandler = require('./middlewares/error.middleware');
 const performanceMonitor = require('./middlewares/performance.middleware');
+const maintenanceGate = require('./middlewares/maintenance.middleware');
 const { sequelize } = require('./config/database');
 
 // Route imports
@@ -122,6 +123,9 @@ app.use(session({
 }));
 
 // CORS already applied above
+
+// Global maintenance gate BEFORE routes
+app.use(maintenanceGate);
 
 // API Routes
 app.use('/api/auth', authRoutes);
