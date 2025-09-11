@@ -1,4 +1,5 @@
 const { Settings, User } = require('../models');
+const { Op, QueryTypes } = require('sequelize');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
@@ -45,29 +46,20 @@ exports.updateSettings = catchAsync(async (req, res) => {
 
       // If maintenance mode toggled ON, deactivate all non-admin/owner sessions
       if (!previousMaintenance && nextMaintenance) {
-        const { sequelize, UserSession, User } = require('../models');
+        const { sequelize, UserSession } = require('../models');
         // Find non-admin/owner users and kill their active sessions
-        const [rows] = await sequelize.query(
+        const rows = await sequelize.query(
           `SELECT us.id AS "sessionIdPk" FROM "UserSessions" us
            INNER JOIN "Users" u ON u.id = us."userId"
-           WHERE us."isActive" = true AND u.role NOT IN ('admin','owner')`
+           WHERE us."isActive" = true AND u.role NOT IN ('admin','owner')`,
+          { type: QueryTypes.SELECT }
         );
         if (Array.isArray(rows) && rows.length) {
           await UserSession.update({ isActive: false }, {
             where: { id: rows.map(r => r.sessionIdPk) }
           });
-        } else {
-          // Fallback: bulk deactivate by join conditions
-          await UserSession.update({ isActive: false }, {
-            where: { isActive: true }
-          });
-          // Re-activate admin/owner sessions if needed
-          const adminOwnerIds = (await User.findAll({ where: { role: ['admin','owner'] }, attributes: ['id'] }))
-            .map(u => u.id);
-          if (adminOwnerIds.length) {
-            await UserSession.update({ isActive: true }, { where: { userId: adminOwnerIds } });
-          }
         }
+        // No fallback mass deactivation to avoid affecting admins triggering the change
       }
     }
     
