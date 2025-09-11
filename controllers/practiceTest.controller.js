@@ -1900,35 +1900,22 @@ exports.downloadAttemptPDF = async (req, res) => {
         }
       };
 
-      // Left-side test meta
-      const headerStartY = doc.y;
       doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`);
       doc.text(`Score: ${attempt.score}%`);
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`);
-
-      // Right-side legend aligned with the meta block
-      let legendBottomY = headerStartY;
+      // Place legend on the right side of header area
       try {
+        const legendStartY = doc.y - 36; // lift slightly into header block
         const legendWidth = 220;
-        const legendX = doc.page.width - doc.page.margins.right - legendWidth; // fixed width area on right
-        const legendY = headerStartY;
+        const legendX = doc.page.width - doc.page.margins.right - legendWidth;
         doc.save();
         doc.fontSize(9);
-        doc.fillColor('green').text('• Correct option', legendX, legendY, { width: legendWidth, align: 'right' });
-        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendY + 12, { width: legendWidth, align: 'right' });
+        doc.fillColor('green').text('• Correct option', legendX, legendStartY, { width: legendWidth, align: 'right' });
+        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendStartY + 12, { width: legendWidth, align: 'right' });
         doc.fillColor('black');
         doc.restore();
-        legendBottomY = legendY + 24; // approx height of two lines
-      } catch (_) {}
-
-      // Start questions as a new full-width section below both meta and legend
-      const metaBottomY = doc.y;
-      const nextStartY = Math.max(metaBottomY, legendBottomY) + 12;
-      if (nextStartY > doc.y) {
-        doc.y = nextStartY;
-      } else {
-        doc.moveDown();
-      }
+      } catch (_) { /* ignore legend placement errors */ }
+      doc.moveDown();
 
       for (let i = 0; i < attempt.answers.length; i++) {
         const ans = attempt.answers[i];
@@ -1956,8 +1943,9 @@ exports.downloadAttemptPDF = async (req, res) => {
           doc.fillColor('black');
         });
 
-        // Add concise verdict below options
+        // Show concise correctness line below options
         if (userIdx !== null && userIdx !== undefined) {
+          doc.moveDown(0.2);
           if (ans.isCorrect) {
             doc.fillColor('green').text('Your answer is correct');
           } else {
