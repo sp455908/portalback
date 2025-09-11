@@ -1900,9 +1900,10 @@ exports.downloadAttemptPDF = async (req, res) => {
         }
       };
 
-      doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`);
-      doc.text(`Score: ${attempt.score}%`);
-      doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`);
+      const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`, { width: contentWidth, align: 'left' });
+      doc.text(`Score: ${attempt.score}%`, { width: contentWidth, align: 'left' });
+      doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`, { width: contentWidth, align: 'left' });
 
       // Legend in the header (top-right)
       try {
@@ -1919,6 +1920,9 @@ exports.downloadAttemptPDF = async (req, res) => {
 
       doc.moveDown();
 
+      // Ensure text cursor starts at left margin for body content
+      doc.x = doc.page.margins.left;
+
       for (let i = 0; i < attempt.answers.length; i++) {
         const ans = attempt.answers[i];
         const qIdx = attempt.questionsAsked[i];
@@ -1927,7 +1931,7 @@ exports.downloadAttemptPDF = async (req, res) => {
         const correctIdx = q.correctAnswer;
 
         // Question text
-        doc.font('Helvetica-Bold').text(`${i + 1}. ${sanitizeText(q.question)}`, { lineGap: 2 });
+        doc.font('Helvetica-Bold').text(`${i + 1}. ${sanitizeText(q.question)}`, { width: contentWidth, align: 'left', lineGap: 2 });
         doc.font('Helvetica');
 
         // Options list with indicators
@@ -1941,7 +1945,12 @@ exports.downloadAttemptPDF = async (req, res) => {
           if (isCorrect) doc.fillColor('green');
           else if (isUser && !isCorrect) doc.fillColor('red');
 
-          doc.text(`${marker} ${label}. ${sanitizeText(opt)}`, { indent: 14, lineGap: 1.5 });
+          doc.text(`${marker} ${label}. ${sanitizeText(opt)}`, {
+            width: contentWidth - 14,
+            align: 'left',
+            indent: 14,
+            lineGap: 1.5
+          });
           doc.fillColor('black');
         });
 
@@ -1949,9 +1958,9 @@ exports.downloadAttemptPDF = async (req, res) => {
         if (userIdx !== null && userIdx !== undefined) {
           doc.moveDown(0.2);
           if (ans.isCorrect) {
-            doc.fillColor('green').text('Your answer is correct');
+            doc.fillColor('green').text('Your answer is correct', { width: contentWidth, align: 'left' });
           } else {
-            doc.fillColor('red').text('Your answer is wrong');
+            doc.fillColor('red').text('Your answer is wrong', { width: contentWidth, align: 'left' });
           }
           doc.fillColor('black');
         }
