@@ -1907,18 +1907,28 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`);
 
       // Right-side legend aligned with the meta block
+      let legendBottomY = headerStartY;
       try {
-        const legendX = doc.page.width - doc.page.margins.right - 220; // fixed width area on right
+        const legendWidth = 220;
+        const legendX = doc.page.width - doc.page.margins.right - legendWidth; // fixed width area on right
         const legendY = headerStartY;
         doc.save();
         doc.fontSize(9);
-        doc.fillColor('green').text('• Correct option', legendX, legendY, { width: 200, align: 'right' });
-        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendY + 12, { width: 200, align: 'right' });
+        doc.fillColor('green').text('• Correct option', legendX, legendY, { width: legendWidth, align: 'right' });
+        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendY + 12, { width: legendWidth, align: 'right' });
         doc.fillColor('black');
         doc.restore();
+        legendBottomY = legendY + 24; // approx height of two lines
       } catch (_) {}
 
-      doc.moveDown();
+      // Start questions as a new full-width section below both meta and legend
+      const metaBottomY = doc.y;
+      const nextStartY = Math.max(metaBottomY, legendBottomY) + 12;
+      if (nextStartY > doc.y) {
+        doc.y = nextStartY;
+      } else {
+        doc.moveDown();
+      }
 
       for (let i = 0; i < attempt.answers.length; i++) {
         const ans = attempt.answers[i];
