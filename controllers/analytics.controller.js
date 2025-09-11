@@ -1,6 +1,6 @@
 const { User, Batch, PracticeTest, TestAttempt, Course } = require('../models');
 const { sequelize } = require('../config/database');
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 
 // Helper to format safe number average
 function average(numbers) {
@@ -67,7 +67,7 @@ exports.getStudentsProgress = async (req, res) => {
         `SELECT DISTINCT bs."userId" AS "userId", bs."batchId" AS "batchId"
          FROM "BatchStudents" bs
          WHERE bs."userId" IN (:studentIds)`,
-        { replacements: { studentIds }, type: sequelize.QueryTypes.SELECT }
+        { replacements: { studentIds }, type: QueryTypes.SELECT }
       );
 
       const userIdToBatchIds = new Map();
@@ -84,7 +84,7 @@ exports.getStudentsProgress = async (req, res) => {
            FROM "BatchAssignedTests" bat
            INNER JOIN "PracticeTests" pt ON pt.id = bat."testId"
            WHERE bat."batchId" IN (:batchIds) AND (pt."isActive" = true)`,
-          { replacements: { batchIds: allBatchIds }, type: sequelize.QueryTypes.SELECT }
+          { replacements: { batchIds: allBatchIds }, type: QueryTypes.SELECT }
         );
       }
 
@@ -215,10 +215,11 @@ exports.getStudentsProgress = async (req, res) => {
 exports.getStudentProgressDetail = async (req, res) => {
   try {
     const { userId } = req.params;
-    const uid = userId; // Sequelize uses 'id' for primary key
-    if (!uid) {
+    const uidRaw = userId;
+    if (!uidRaw) {
       return res.status(400).json({ status: 'fail', message: 'Invalid userId' });
     }
+    const uid = /^\d+$/.test(String(uidRaw)) ? Number(uidRaw) : String(uidRaw);
 
     const user = await User.findByPk(uid, {
       attributes: ['id', 'firstName', 'lastName', 'email', 'studentId', 'isActive']
@@ -229,7 +230,7 @@ exports.getStudentProgressDetail = async (req, res) => {
     let batch = null;
     const batchRows = await sequelize.query(
       `SELECT b."batchName" AS "batchName"\n       FROM "BatchStudents" bs\n       INNER JOIN "Batches" b ON b.id = bs."batchId"\n       WHERE bs."userId" = :uid\n       ORDER BY bs."createdAt" DESC\n       LIMIT 1`,
-      { replacements: { uid }, type: sequelize.QueryTypes.SELECT }
+      { replacements: { uid }, type: QueryTypes.SELECT }
     );
     if (batchRows && batchRows.length > 0) {
       batch = { batchName: batchRows[0].batchName };
@@ -237,15 +238,18 @@ exports.getStudentProgressDetail = async (req, res) => {
 
     const attempts = await TestAttempt.findAll({
       where: { userId: uid },
-      attributes: ['practiceTestId', 'testTitle', 'score', 'status', 'completedAt', 'startedAt', 'attemptsCount', 'batchId'],
+      attributes: ['id', 'practiceTestId', 'testTitle', 'score', 'status', 'completedAt', 'startedAt', 'attemptsCount', 'batchId'],
       order: [['completedAt', 'DESC'], ['startedAt', 'DESC']]
     });
 
-    const testIds = Array.from(new Set(attempts.map(a => String(a.practiceTestId))));
-    const tests = testIds.length ? await PracticeTest.findAll({
+    const testIds = Array.from(new Set(attempts.map(a => a.practiceTestId)));
+    const normalizedIds = testIds
+      .map(t => Number(t))
+      .filter((n) => Number.isFinite(n));
+    const tests = normalizedIds.length ? await PracticeTest.findAll({
       where: {
         id: {
-          [Op.in]: testIds
+          [Op.in]: normalizedIds
         }
       },
       attributes: ['id', 'title', 'category', 'passingScore']
@@ -326,7 +330,7 @@ exports.getOverviewAnalytics = async (req, res) => {
     const attempts = await TestAttempt.findAll({
       where: {
         startedAt: {
-          [sequelize.Op.gte]: since
+          [Op.gte]: since
         }
       },
       attributes: [
@@ -352,8 +356,8 @@ exports.getOverviewAnalytics = async (req, res) => {
         where: {
           role: 'student',
           createdAt: {
-            [sequelize.Op.gte]: start,
-            [sequelize.Op.lt]: end
+            [Op.gte]: start,
+            [Op.lt]: end
           }
         }
       });
@@ -375,7 +379,7 @@ exports.getOverviewAnalytics = async (req, res) => {
     const recentAttempts = await TestAttempt.findAll({
       where: {
         completedAt: {
-          [sequelize.Op.gte]: since60
+          [Op.gte]: since60
         },
         status: 'completed'
       },

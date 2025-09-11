@@ -1,23 +1,48 @@
 const jwt = require('jsonwebtoken');
 const { User, UserSession, Owner } = require('../models');
 
+// Basic validators to reduce injection risk from untrusted inputs
+const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0;
+const isValidBearer = (h) => isNonEmptyString(h) && /^Bearer\s+[^\s]+$/i.test(h);
+const isHex = (v, len) => typeof v === 'string' && new RegExp(`^[a-f0-9]{${len}}$`, 'i').test(v);
+const isLikelyUuid = (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+const isPositiveInt = (v) => Number.isInteger(v) && v > 0;
+const coerceId = (id) => {
+  // Accept numeric PKs or UUIDs; return normalized string/numeric or null
+  if (typeof id === 'number' && isPositiveInt(id)) return id;
+  if (typeof id === 'string') {
+    const t = id.trim();
+    if (/^\d+$/.test(t)) {
+      const n = Number(t);
+      return isPositiveInt(n) ? n : null;
+    }
+    if (isLikelyUuid(t)) return t.toLowerCase();
+  }
+  return null;
+};
+const sanitizeToken = (t) => (typeof t === 'string' ? t.trim() : '');
+
 exports.protect = async (req, res, next) => {
   let token;
   let sessionId;
 
   // Prefer JWT from HTTP-only cookie (set by backend auth)
   if (req.cookies && typeof req.cookies.token === 'string') {
-    token = req.cookies.token;
+    token = sanitizeToken(req.cookies.token);
   }
 
   // Fallback to Authorization header for legacy clients/tools
-  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
+  if (!token && isValidBearer(req.headers.authorization)) {
+    token = sanitizeToken(req.headers.authorization.split(' ')[1]);
   }
 
   // Optional session ID header for session validation (legacy/parallel systems)
-  if (req.headers['x-session-id']) {
-    sessionId = req.headers['x-session-id'];
+  if (isNonEmptyString(req.headers['x-session-id'])) {
+    // Only accept reasonably safe sessionId formats: hex(64) or UUID
+    const raw = String(req.headers['x-session-id']).trim();
+    if (isHex(raw, 64) || isLikelyUuid(raw)) {
+      sessionId = raw;
+    }
   }
 
   if (!token) {
@@ -33,7 +58,11 @@ exports.protect = async (req, res, next) => {
     
     // Support Owner (superadmin) tokens
     if (decoded && decoded.type === 'owner') {
-      const owner = await Owner.findByPk(decoded.id);
+      const ownerId = coerceId(decoded.id);
+      if (ownerId == null) {
+        return res.status(401).json({ status: 'fail', message: 'Invalid token subject' });
+      }
+      const owner = await Owner.findByPk(ownerId);
       if (!owner || owner.isActive === false) {
         return res.status(401).json({ status: 'fail', message: 'Owner not found or inactive' });
       }
@@ -47,7 +76,11 @@ exports.protect = async (req, res, next) => {
     }
 
     // Find user using Sequelize (PostgreSQL)
-    const user = await User.findByPk(decoded.id);
+    const safeUserId = coerceId(decoded.id);
+    if (safeUserId == null) {
+      return res.status(401).json({ status: 'fail', message: 'Invalid token subject' });
+    }
+    const user = await User.findByPk(safeUserId);
     
     if (!user) {
       return res.status(401).json({ 
