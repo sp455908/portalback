@@ -1882,7 +1882,7 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.fontSize(12).font('Helvetica').text('Indian Institute of Foreign Trade & Logistics', { align: 'center' });
       doc.moveDown(1.5);
       doc.fontSize(16).font('Helvetica-Bold').text('Practice Test Result', { align: 'center' });
-      doc.moveDown(2);
+      doc.moveDown(4);
       // Helper to sanitize text (remove control chars and normalize spacing/quotes)
       const sanitizeText = (input) => {
         try {
