@@ -2052,7 +2052,15 @@ exports.downloadAttemptPDF = async (req, res) => {
           return sum + awarded;
         }, 0);
 
-        const outOf = Number(test.questionsPerTest || attempt.totalQuestions || askedIndices.length || 0);
+        const outOfQuestions = Number(attempt.totalQuestions || test.questionsPerTest || askedIndices.length || 0);
+
+        // Derive uniform marking scheme values for display
+        const marksValues = askedIndices.map(idx => getQuestionMarks(test.questions[idx]));
+        const negValues = askedIndices.map(idx => getQuestionNegative(test.questions[idx])).filter(v => v < 0);
+        const uniqueMarks = Array.from(new Set(marksValues.map(v => Number.isFinite(v) ? v : 1)));
+        const uniqueNegs = Array.from(new Set(negValues.map(v => Number.isFinite(v) ? v : -1)));
+        const uniformMarksPerCorrect = uniqueMarks.length === 1 ? uniqueMarks[0] : null;
+        const uniformNegativePerWrong = uniqueNegs.length === 1 ? uniqueNegs[0] : null;
 
         doc.addPage();
         drawBorder();
@@ -2074,9 +2082,11 @@ exports.downloadAttemptPDF = async (req, res) => {
           ['Score (%)', `${typeof attempt.score === 'number' ? attempt.score : 0}%`],
           ['Obtained Marks', `${obtainedMarks}`],
           ['Total Possible Marks', `${totalPossibleMarks}`],
-          ['Out of', `${outOf}`],
+          ['Out of (Marks)', `${totalPossibleMarks}`],
+          ['Out of (Questions)', `${outOfQuestions}`],
           ['Negative Marking', negativeMarkingEnabled ? 'Enabled' : '—'],
-          ['Per-question Marks', perQuestionMarksEnabled ? 'Enabled' : '—']
+          ['Marks per correct', perQuestionMarksEnabled ? (uniformMarksPerCorrect !== null ? String(uniformMarksPerCorrect) : 'mixed') : '1'],
+          ['Negative per wrong', negativeMarkingEnabled ? (uniformNegativePerWrong !== null ? String(uniformNegativePerWrong) : 'mixed') : '—']
         ];
 
         // Table header
