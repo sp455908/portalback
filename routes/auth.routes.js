@@ -6,11 +6,12 @@ const userController = require('../controllers/user.controller');
 const { User } = require('../models');
 const { Op, fn, col } = require('sequelize');
 const { decryptRequestBody } = require('../middlewares/decrypt.middleware');
+const { checkRegistrationEnabled } = require('../controllers/settings.controller');
 
-// Register a new user
-router.post('/user-auth/register', decryptRequestBody, authController.register);
+// Register a new user (respect platform setting)
+router.post('/user-auth/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
 // Alias for frontend compatibility
-router.post('/register', decryptRequestBody, authController.register);
+router.post('/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
 
 // Check if email exists
 router.get('/check-email', async (req, res) => {
