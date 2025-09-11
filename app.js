@@ -70,6 +70,10 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
+// Apply CORS middleware EARLY
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 // Apply middleware in correct order
 app.disable('x-powered-by');
 app.use(helmet({
@@ -117,11 +121,7 @@ app.use(session({
   }
 }));
 
-// Apply CORS middleware
-app.use(cors(corsOptions));
-
-// Handle CORS preflight requests
-app.options('*', cors(corsOptions));
+// CORS already applied above
 
 // API Routes
 app.use('/api/auth', authRoutes);

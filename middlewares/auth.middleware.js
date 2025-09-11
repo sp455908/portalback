@@ -139,6 +139,13 @@ exports.protect = async (req, res, next) => {
       if (settings?.maintenanceMode) {
         const role = user.role;
         if (role !== 'admin' && role !== 'owner') {
+          // Still return 503, but ensure CORS headers are present by echoing origin if available
+          const origin = req.headers.origin;
+          if (origin) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Vary', 'Origin');
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+          }
           return res.status(503).json({ status: 'fail', message: 'Platform is under maintenance' });
         }
       }
