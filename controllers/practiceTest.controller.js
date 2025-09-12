@@ -14,7 +14,7 @@ const PDFDocument = require('pdfkit');
 const XLSX = require('xlsx');
 const multer = require('multer');
 
-// Helper function to shuffle array (Fisher-Yates algorithm)
+
 const shuffleArray = (array) => {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -24,7 +24,7 @@ const shuffleArray = (array) => {
   return shuffled;
 };
 
-// Create a new practice test (Admin only)
+
 exports.createPracticeTest = async (req, res) => {
   try {
     const {
@@ -48,7 +48,7 @@ exports.createPracticeTest = async (req, res) => {
       });
     }
 
-    // Validate questions
+    
     if (!questions || questions.length < 10) {
       return res.status(400).json({
         status: 'fail',
@@ -56,7 +56,7 @@ exports.createPracticeTest = async (req, res) => {
       });
     }
 
-    // Validate each question
+    
     for (let i = 0; i < questions.length; i++) {
       const question = questions[i];
       if (!question.question || !question.options || question.options.length !== 4) {
@@ -80,7 +80,7 @@ exports.createPracticeTest = async (req, res) => {
       questions,
       totalQuestions: questions.length,
       questionsPerTest: questionsPerTest || 30,
-      duration: duration || 30, // Default to 30 minutes
+      duration: duration || 30, 
       passingScore: passingScore || 70,
       allowRepeat: allowRepeat || false,
       repeatAfterHours: repeatAfterHours || 24,
@@ -102,7 +102,7 @@ exports.createPracticeTest = async (req, res) => {
   }
 };
 
-// Get all practice tests (Admin)
+
 exports.getAllPracticeTests = async (req, res) => {
   try {
     const practiceTests = await PracticeTest.findAll({
@@ -126,7 +126,7 @@ exports.getAllPracticeTests = async (req, res) => {
   }
 };
 
-// Get practice test by ID (Admin)
+
 exports.getPracticeTestById = async (req, res) => {
   try {
     const { testId } = req.params;
@@ -158,10 +158,10 @@ exports.getPracticeTestById = async (req, res) => {
   }
 };
 
-// Get available practice tests for students and corporate users
+
 exports.getAvailablePracticeTests = async (req, res) => {
   try {
-    // Security: Remove detailed logging in production
+    
     if (process.env.NODE_ENV === 'development') {
       console.log('=== getAvailablePracticeTests START ===');
       console.log('Request user:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
@@ -174,7 +174,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
       });
     }
 
-    // Security: Validate user type
+    
     let userType = req.user.userType;
     if (!userType && req.user.role && req.user.role !== 'admin') {
       userType = req.user.role;
@@ -187,7 +187,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
       });
     }
 
-    // Security: Get user's batch assignments first
+    
     const userBatchIds = await sequelize.query(`
       SELECT DISTINCT "batchId" 
       FROM "BatchStudents" 
@@ -202,7 +202,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
     if (userBatchIds.length > 0) {
       const batchIds = userBatchIds.map(b => b.batchId);
       
-      // Security: Only get tests assigned to user's batches
+      
       const batchTests = await sequelize.query(`
         SELECT DISTINCT pt.id, pt.title, pt.description, pt.category, pt.totalQuestions, 
                pt.questionsPerTest, pt.duration, pt.passingScore, pt.repeatAfterHours, 
@@ -218,7 +218,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
         type: sequelize.QueryTypes.SELECT
       });
       
-      // Security: Convert to safe format without exposing questions
+      
       filteredTests = batchTests.map(test => ({
         id: test.id,
         title: test.title,
@@ -235,7 +235,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
         isBatchAssigned: true
       }));
     } else {
-      // Security: Users not in batches can only see public tests
+      
       const publicTests = await PracticeTest.findAll({
         where: { 
           isActive: true, 
@@ -252,7 +252,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
       }));
     }
 
-    // Security: Get user attempts for availability calculation
+    
     const userAttempts = await TestAttempt.findAll({ 
       where: {
         userId: req.user.id,
@@ -261,7 +261,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
       attributes: ['practiceTestId', 'completedAt']
     });
 
-    // Security: Add availability info without exposing sensitive data
+    
     const testsWithAvailability = filteredTests.map(test => {
       const userTestAttempts = userAttempts.filter(
         attempt => attempt.practiceTestId.toString() === test.id.toString()
@@ -300,7 +300,7 @@ exports.getAvailablePracticeTests = async (req, res) => {
   }
 };
 
-// Start a practice test (resume if in_progress, else create new)
+
 exports.startPracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
@@ -308,7 +308,7 @@ exports.startPracticeTest = async (req, res) => {
     console.log('User:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
     console.log('Test ID:', testId);
     
-    // Check if test exists and is active
+    
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest || !practiceTest.isActive) {
       return res.status(404).json({
@@ -317,7 +317,7 @@ exports.startPracticeTest = async (req, res) => {
       });
     }
     
-    // Check user type compatibility
+    
     let userType = req.user.userType;
     if (!userType && req.user.role && req.user.role !== 'admin') {
       userType = req.user.role;
@@ -337,10 +337,10 @@ exports.startPracticeTest = async (req, res) => {
       });
     }
     
-    // Security: Batch access validation is now handled by middleware
-    // This ensures consistent security checks across all endpoints
+    
+    
 
-    // 1. Check for in-progress attempt for this user and test
+    
     let testAttempt = await TestAttempt.findOne({
       where: {
         userId: req.user.id,
@@ -350,7 +350,7 @@ exports.startPracticeTest = async (req, res) => {
     });
 
     if (testAttempt) {
-      // Resume unfinished attempt
+      
       return res.status(200).json({
         status: 'success',
         data: {
@@ -370,7 +370,7 @@ exports.startPracticeTest = async (req, res) => {
       });
     }
 
-    // 2. Cooldown logic based on test configuration
+    
     const lastAttempt = await TestAttempt.findOne({
       where: {
         userId: req.user.id,
@@ -403,7 +403,7 @@ exports.startPracticeTest = async (req, res) => {
       }
     }
 
-    // 3. Create new attempt with cycling question selection
+    
     const totalAvailable = Array.isArray(practiceTest.questions) ? practiceTest.questions.length : 0;
     if (totalAvailable === 0) {
       return res.status(400).json({ status: 'fail', message: 'This test has no questions.' });
@@ -465,13 +465,13 @@ exports.startPracticeTest = async (req, res) => {
   console.log('=== startPracticeTest END ===');
 };
 
-// Submit practice test answers
+
 exports.submitPracticeTest = async (req, res) => {
   try {
     const { testAttemptId } = req.params;
     const { answers } = req.body;
 
-    // Get test attempt
+    
     const testAttempt = await TestAttempt.findByPk(testAttemptId);
     if (!testAttempt) {
       return res.status(404).json({
@@ -480,7 +480,7 @@ exports.submitPracticeTest = async (req, res) => {
       });
     }
 
-    // Verify user owns this attempt
+    
     if (testAttempt.userId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         status: 'fail',
@@ -488,7 +488,7 @@ exports.submitPracticeTest = async (req, res) => {
       });
     }
 
-    // Check if already completed
+    
     if (testAttempt.status === 'completed') {
       return res.status(400).json({
         status: 'fail',
@@ -496,7 +496,7 @@ exports.submitPracticeTest = async (req, res) => {
       });
     }
 
-    // Get practice test for correct answers
+    
     const practiceTest = await PracticeTest.findByPk(testAttempt.practiceTestId);
     if (!practiceTest) {
       return res.status(404).json({
@@ -505,7 +505,7 @@ exports.submitPracticeTest = async (req, res) => {
       });
     }
 
-    // Calculate results
+    
     let correctAnswers = 0;
     const detailedAnswers = [];
 
@@ -529,19 +529,19 @@ exports.submitPracticeTest = async (req, res) => {
       });
     }
 
-    // Always set totalQuestions to the number of questions actually asked in this attempt
+    
     testAttempt.totalQuestions = testAttempt.questionsAsked.length;
 
-    // Compute total possible marks and obtained marks considering negative marking
+    
     let totalPossible = 0;
     let obtained = 0;
-    let correctMarksSum = 0; // sum of marks for only correct answers
+    let correctMarksSum = 0; 
     for (let i = 0; i < testAttempt.questionsAsked.length; i++) {
       const qIdx = testAttempt.questionsAsked[i];
       const q = practiceTest.questions[qIdx] || {};
       const marks = Number(q.marks ?? 1);
       const negativeMarks = Number(q.negativeMarks ?? 0);
-      totalPossible += Math.max(0, marks); // total possible when all correct
+      totalPossible += Math.max(0, marks); 
       const ans = detailedAnswers[i];
       if (ans && typeof ans.marksAwarded === 'number') {
         obtained += ans.marksAwarded;
@@ -549,7 +549,7 @@ exports.submitPracticeTest = async (req, res) => {
           correctMarksSum += Math.max(0, marks);
         }
       } else {
-        // fallback maintain backwards safety
+        
         const isCorrect = ans ? ans.isCorrect : false;
         obtained += isCorrect ? marks : (negativeMarks ? -Math.abs(negativeMarks) : 0);
         if (isCorrect) {
@@ -558,12 +558,12 @@ exports.submitPracticeTest = async (req, res) => {
       }
     }
 
-    // Percentage score based on correct marks only (negatives affect obtained marks, not percentage)
+    
     const score = totalPossible > 0 ? Math.round((correctMarksSum / totalPossible) * 100) : 0;
     const passed = score >= practiceTest.passingScore;
     const timeTaken = Math.floor((new Date() - new Date(testAttempt.startedAt)) / 1000);
 
-    // Update test attempt
+    
     testAttempt.answers = detailedAnswers;
     testAttempt.score = score;
     testAttempt.correctAnswers = correctAnswers;
@@ -604,7 +604,7 @@ exports.submitPracticeTest = async (req, res) => {
   }
 };
 
-// Get user's test attempts
+
 exports.getUserTestAttempts = async (req, res) => {
   try {
     if (!req.user || !req.user.id) {
@@ -614,7 +614,7 @@ exports.getUserTestAttempts = async (req, res) => {
       });
     }
 
-    // Check if user has a valid role
+    
     const validRoles = ['student', 'corporate', 'government'];
     if (!req.user.role || !validRoles.includes(req.user.role)) {
       return res.status(403).json({
@@ -645,12 +645,12 @@ exports.getUserTestAttempts = async (req, res) => {
   }
 };
 
-// Admin: Reset user's test cooldown for a specific test
+
 exports.resetUserTestCooldown = async (req, res) => {
   try {
     const { userId, testId } = req.params;
 
-    // Check if admin
+    
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         status: 'fail',
@@ -658,12 +658,12 @@ exports.resetUserTestCooldown = async (req, res) => {
       });
     }
 
-    // If userId is "all", reset cooldown for all users
+    
     const query = userId === "all" 
       ? { practiceTestId: testId, status: 'completed' }
       : { userId, practiceTestId: testId, status: 'completed' };
 
-    // Delete all completed attempts for this test
+    
     const result = await TestAttempt.destroy({ where: query });
 
     res.status(200).json({
@@ -681,7 +681,7 @@ exports.resetUserTestCooldown = async (req, res) => {
   }
 };
 
-// Get test statistics (Admin)
+
 exports.getTestStatistics = async (req, res) => {
   try {
     const { testId } = req.params;
@@ -710,7 +710,7 @@ exports.getTestStatistics = async (req, res) => {
       questionUsage: {}
     };
 
-    // Track question usage
+    
     attempts.forEach(attempt => {
       if (attempt.questionsAsked && Array.isArray(attempt.questionsAsked)) {
         attempt.questionsAsked.forEach(qIndex => {
@@ -719,7 +719,7 @@ exports.getTestStatistics = async (req, res) => {
       }
     });
 
-    // Check if all questions have been used
+    
     const unusedQuestions = test.totalQuestions - Object.keys(stats.questionUsage).length;
     const allQuestionsUsed = unusedQuestions === 0;
 
@@ -744,12 +744,12 @@ exports.getTestStatistics = async (req, res) => {
   }
 };
 
-// Update practice test (Admin)
+
 exports.updatePracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
     const updates = req.body;
-    // If questions are being updated, validate them
+    
     if (updates.questions) {
       if (updates.questions.length < 10) {
         return res.status(400).json({
@@ -758,7 +758,7 @@ exports.updatePracticeTest = async (req, res) => {
         });
       }
 
-      // Validate each question
+      
       for (let i = 0; i < updates.questions.length; i++) {
         const question = updates.questions[i];
         if (!question.question || !question.options || question.options.length !== 4) {
@@ -775,11 +775,11 @@ exports.updatePracticeTest = async (req, res) => {
         }
       }
 
-      // Update totalQuestions to match the new questions array length
+      
       updates.totalQuestions = updates.questions.length;
     }
 
-    // If targetUserType is being updated, validate it
+    
     if (updates.targetUserType && !['student', 'corporate', 'government'].includes(updates.targetUserType)) {
       return res.status(400).json({
         status: 'fail',
@@ -820,8 +820,8 @@ exports.updatePracticeTest = async (req, res) => {
   }
 };
 
-// Delete practice test (Admin)
-// Note: We do NOT delete test attempts/history here. This is intentional to preserve student analytics/history even after the test is deleted.
+
+
 exports.deletePracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
@@ -854,12 +854,12 @@ exports.deletePracticeTest = async (req, res) => {
   }
 };
 
-// Reset question usage for a test (Admin)
+
 exports.resetQuestionUsage = async (req, res) => {
   try {
     const { testId } = req.params;
 
-    // Delete all attempts for this test
+    
     await TestAttempt.destroy({ where: { practiceTestId: testId } });
 
     res.status(200).json({
@@ -874,12 +874,12 @@ exports.resetQuestionUsage = async (req, res) => {
   }
 };
 
-// Import questions from JSON (Admin)
+
 exports.importQuestionsFromJSON = async (req, res) => {
   try {
     const { title, description, category, questionsPerTest, duration, passingScore, questionsData } = req.body;
 
-    // Validate required fields
+    
     if (!title || !category || !questionsData || !Array.isArray(questionsData)) {
       return res.status(400).json({
         status: 'fail',
@@ -887,18 +887,18 @@ exports.importQuestionsFromJSON = async (req, res) => {
       });
     }
 
-    // Transform the questions data to match our schema
+    
     const questions = questionsData.map((q, index) => {
-      // Handle different JSON formats
+      
       let questionText, options, correctAnswer;
       
       if (q.question && q.options && q.answer) {
-        // Format: { question: "...", options: { a: "...", b: "...", c: "...", d: "..." }, answer: "a" }
+        
         questionText = q.question;
         options = [q.options.a, q.options.b, q.options.c, q.options.d];
         correctAnswer = q.answer === 'a' ? 0 : q.answer === 'b' ? 1 : q.answer === 'c' ? 2 : 3;
       } else if (q.question && Array.isArray(q.options) && typeof q.correctAnswer === 'number') {
-        // Format: { question: "...", options: ["...", "...", "...", "..."], correctAnswer: 0 }
+        
         questionText = q.question;
         options = q.options;
         correctAnswer = q.correctAnswer;
@@ -918,7 +918,7 @@ exports.importQuestionsFromJSON = async (req, res) => {
       };
     });
 
-    // Validate questions
+    
     if (questions.length < 10) {
       return res.status(400).json({
         status: 'fail',
@@ -926,7 +926,7 @@ exports.importQuestionsFromJSON = async (req, res) => {
       });
     }
 
-    // Check if test with same title already exists
+    
     const existingTest = await PracticeTest.findOne({ title });
     if (existingTest) {
       return res.status(400).json({
@@ -935,7 +935,7 @@ exports.importQuestionsFromJSON = async (req, res) => {
       });
     }
 
-    // Create new practice test
+    
     const practiceTest = await PracticeTest.create({
       title,
       description: description || `Practice test for ${category}`,
@@ -976,7 +976,7 @@ exports.importQuestionsFromJSON = async (req, res) => {
   }
 };
 
-// Import questions from Excel file (Admin)
+
 exports.importQuestionsFromExcel = async (req, res) => {
   try {
     const { title, description, category, questionsPerTest, duration, passingScore, targetUserType } = req.body;
@@ -995,19 +995,19 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
-    // Read the Excel file
+    
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
-    // Convert to JSON
+    
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     
-    // Skip header row and process data
+    
     const questions = [];
     const headers = jsonData[0];
     
-    // Validate headers
+    
     const requiredHeaders = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer'];
     const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
     
@@ -1018,10 +1018,10 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
-    // Process each row (skip header)
+    
     for (let i = 1; i < jsonData.length; i++) {
       const row = jsonData[i];
-      if (row.length < 6) continue; // Skip empty rows
+      if (row.length < 6) continue; 
       
       const question = row[headers.indexOf('Question')];
       const optionA = row[headers.indexOf('Option A')];
@@ -1030,12 +1030,12 @@ exports.importQuestionsFromExcel = async (req, res) => {
       const optionD = row[headers.indexOf('Option D')];
       const correctAnswer = row[headers.indexOf('Correct Answer')];
       
-      // Validate required fields
+      
       if (!question || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
-        continue; // Skip invalid rows
+        continue; 
       }
       
-      // Validate correct answer format
+      
       let correctAnswerIndex;
       const answerStr = correctAnswer.toString().toLowerCase().trim();
       
@@ -1048,7 +1048,7 @@ exports.importQuestionsFromExcel = async (req, res) => {
       } else if (answerStr === 'd' || answerStr === '4') {
         correctAnswerIndex = 3;
       } else {
-        continue; // Skip invalid answer format
+        continue; 
       }
       
       questions.push({
@@ -1068,7 +1068,7 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
-    // Validate minimum questions
+    
     if (questions.length < 10) {
       return res.status(400).json({
         status: 'fail',
@@ -1076,7 +1076,7 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
-    // Check if test with same title already exists
+    
     const existingTest = await PracticeTest.findOne({ title });
     if (existingTest) {
       return res.status(400).json({
@@ -1085,7 +1085,7 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
-    // Validate targetUserType
+    
     if (!targetUserType || !['student', 'corporate', 'government'].includes(targetUserType)) {
       return res.status(400).json({
         status: 'fail',
@@ -1093,7 +1093,7 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
-    // Create new practice test
+    
     const practiceTest = await PracticeTest.create({
       title,
       description: description || `Practice test for ${category}`,
@@ -1136,7 +1136,7 @@ exports.importQuestionsFromExcel = async (req, res) => {
   }
 };
 
-// Parse Excel and return questions without saving (Admin)
+
 exports.parseExcelPreview = async (req, res) => {
   try {
     const { category } = req.body;
@@ -1148,12 +1148,12 @@ exports.parseExcelPreview = async (req, res) => {
       });
     }
 
-    // Read the Excel file
+    
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
 
-    // Convert to JSON
+    
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     if (!jsonData || jsonData.length === 0) {
       return res.status(400).json({ status: 'fail', message: 'Empty Excel sheet' });
@@ -1224,7 +1224,7 @@ exports.parseExcelPreview = async (req, res) => {
   }
 };
 
-// Update practice test with Excel data (Admin)
+
 exports.updateTestWithExcel = async (req, res) => {
   try {
     const { testId } = req.params;
@@ -1237,7 +1237,7 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
-    // Find the existing test
+    
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({
@@ -1246,19 +1246,19 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
-    // Read the Excel file
+    
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
-    // Convert to JSON
+    
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     
-    // Skip header row and process data
+    
     const questions = [];
     const headers = jsonData[0];
     
-    // Validate headers
+    
     const requiredHeaders = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer'];
     const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
     
@@ -1269,10 +1269,10 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
-    // Process each row (skip header)
+    
     for (let i = 1; i < jsonData.length; i++) {
       const row = jsonData[i];
-      if (row.length < 6) continue; // Skip empty rows
+      if (row.length < 6) continue; 
       
       const question = row[headers.indexOf('Question')];
       const optionA = row[headers.indexOf('Option A')];
@@ -1281,12 +1281,12 @@ exports.updateTestWithExcel = async (req, res) => {
       const optionD = row[headers.indexOf('Option D')];
       const correctAnswer = row[headers.indexOf('Correct Answer')];
       
-      // Validate required fields
+      
       if (!question || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
-        continue; // Skip invalid rows
+        continue; 
       }
       
-      // Validate correct answer format
+      
       let correctAnswerIndex;
       const answerStr = correctAnswer.toString().toLowerCase().trim();
       
@@ -1299,7 +1299,7 @@ exports.updateTestWithExcel = async (req, res) => {
       } else if (answerStr === 'd' || answerStr === '4') {
         correctAnswerIndex = 3;
       } else {
-        continue; // Skip invalid answer format
+        continue; 
       }
       
       questions.push({
@@ -1318,7 +1318,7 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
-    // Validate minimum questions
+    
     if (questions.length < 10) {
       return res.status(400).json({
         status: 'fail',
@@ -1326,7 +1326,7 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
-    // Update the test
+    
     practiceTest.questions = questions;
     practiceTest.totalQuestions = questions.length;
     if (questionsPerTest) practiceTest.questionsPerTest = questionsPerTest;
@@ -1361,13 +1361,13 @@ exports.updateTestWithExcel = async (req, res) => {
   }
 };
 
-// Update practice test with JSON data (Admin)
+
 exports.updateTestWithJSON = async (req, res) => {
   try {
     const { testId } = req.params;
     const { questionsData, questionsPerTest, duration, passingScore } = req.body;
 
-    // Find the existing test
+    
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({
@@ -1376,7 +1376,7 @@ exports.updateTestWithJSON = async (req, res) => {
       });
     }
 
-    // Transform the questions data
+    
     const questions = questionsData.map((q, index) => {
       let questionText, options, correctAnswer;
       
@@ -1404,7 +1404,7 @@ exports.updateTestWithJSON = async (req, res) => {
       };
     });
 
-    // Update the test
+    
     practiceTest.questions = questions;
     practiceTest.totalQuestions = questions.length;
     if (questionsPerTest) practiceTest.questionsPerTest = questionsPerTest;
@@ -1441,13 +1441,13 @@ exports.updateTestWithJSON = async (req, res) => {
 
  
 
-// Admin: Update test active status (archive/unarchive)
+
 exports.updateTestActiveStatus = async (req, res) => {
   try {
     const { testId } = req.params;
     const { isActive } = req.body;
 
-    // Check if admin
+    
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         status: 'fail',
@@ -1455,7 +1455,7 @@ exports.updateTestActiveStatus = async (req, res) => {
       });
     }
 
-    // Find and update the test active status
+    
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({
@@ -1479,13 +1479,13 @@ exports.updateTestActiveStatus = async (req, res) => {
   }
 };
 
-// Admin: Set user-specific cooldown for a test
+
 exports.setUserCooldown = async (req, res) => {
   try {
     const { userId, testId } = req.params;
     const { cooldownHours } = req.body;
 
-    // Check if admin
+    
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         status: 'fail',
@@ -1493,7 +1493,7 @@ exports.setUserCooldown = async (req, res) => {
       });
     }
 
-    // Check if user and test exist
+    
     const user = await User.findByPk(userId);
     const test = await PracticeTest.findByPk(testId);
     
@@ -1504,8 +1504,8 @@ exports.setUserCooldown = async (req, res) => {
       });
     }
 
-    // Create or update user-specific cooldown setting
-    // Cooldown functionality has been removed
+    
+    
 
     res.status(200).json({
       status: 'success',
@@ -1520,12 +1520,12 @@ exports.setUserCooldown = async (req, res) => {
   }
 };
 
-// Admin: Get users who have taken a specific test
+
 exports.getTestUsers = async (req, res) => {
   try {
     const { testId } = req.params;
 
-    // Check if admin
+    
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         status: 'fail',
@@ -1533,7 +1533,7 @@ exports.getTestUsers = async (req, res) => {
       });
     }
 
-    // Get all attempts for this test with user details
+    
     const attempts = await TestAttempt.findAll({
       where: { practiceTestId: testId },
       include: [{
@@ -1543,7 +1543,7 @@ exports.getTestUsers = async (req, res) => {
       }]
     });
 
-    // Group by user and get latest attempt
+    
     const userMap = new Map();
     attempts.forEach(attempt => {
       if (!userMap.has(attempt.userId.toString())) {
@@ -1582,13 +1582,13 @@ exports.getTestUsers = async (req, res) => {
   }
 };
 
-// Admin: Update test settings
+
 exports.updateTestSettings = async (req, res) => {
   try {
     const { testId } = req.params;
     const { allowRepeat, repeatAfterHours, enableCooldown, marksPerCorrect, enableNegative, negativeMarks } = req.body;
 
-    // Check if admin
+    
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         status: 'fail',
@@ -1596,7 +1596,7 @@ exports.updateTestSettings = async (req, res) => {
       });
     }
 
-    // Find and update test settings
+    
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({
@@ -1611,7 +1611,7 @@ exports.updateTestSettings = async (req, res) => {
       enableCooldown: enableCooldown !== undefined ? enableCooldown : true 
     });
 
-    // Optionally apply marking scheme to all questions if provided
+    
     const hasMarkingInputs = typeof marksPerCorrect !== 'undefined' || typeof enableNegative !== 'undefined' || typeof negativeMarks !== 'undefined';
     if (hasMarkingInputs) {
       try {
@@ -1632,7 +1632,7 @@ exports.updateTestSettings = async (req, res) => {
 
           if (typeof enableNegative !== 'undefined') {
             if (enableNegative) {
-              // Use provided negativeMarks if given; otherwise keep existing or default to -1
+              
               if (typeof normalizedNegativeMarks === 'number') {
                 next.negativeMarks = normalizedNegativeMarks;
               } else if (typeof next.negativeMarks !== 'number' || next.negativeMarks === 0) {
@@ -1642,7 +1642,7 @@ exports.updateTestSettings = async (req, res) => {
               next.negativeMarks = 0;
             }
           } else if (typeof normalizedNegativeMarks === 'number') {
-            // If only negativeMarks provided without enableNegative flag, treat nonzero as enabling
+            
             next.negativeMarks = normalizedNegativeMarks;
           }
 
@@ -1652,7 +1652,7 @@ exports.updateTestSettings = async (req, res) => {
         practiceTest.questions = updatedQuestions;
         await practiceTest.save();
       } catch (markingErr) {
-        // If marking update fails, return clear message but keep settings update
+        
         return res.status(200).json({
           status: 'success',
           message: 'Test settings updated. Failed to apply marking scheme to questions.',
@@ -1675,7 +1675,7 @@ exports.updateTestSettings = async (req, res) => {
   }
 }; 
 
-// Update a specific question in a practice test (Admin)
+
 exports.updateTestQuestion = async (req, res) => {
   try {
     const { testId, questionIndex } = req.params;
@@ -1691,14 +1691,14 @@ exports.updateTestQuestion = async (req, res) => {
     if (!practiceTest.questions[index]) {
       return res.status(404).json({ status: 'fail', message: 'Question not found' });
     }
-    // Validate update
+    
     if (!update.question || !update.options || update.options.length !== 4) {
       return res.status(400).json({ status: 'fail', message: 'Each question must have exactly 4 options.' });
     }
     if (update.correctAnswer < 0 || update.correctAnswer > 3) {
       return res.status(400).json({ status: 'fail', message: 'Correct answer index must be 0-3.' });
     }
-    // Update the question
+    
     practiceTest.questions[index] = {
       ...practiceTest.questions[index].toObject(),
       ...update
@@ -1710,7 +1710,7 @@ exports.updateTestQuestion = async (req, res) => {
   }
 }; 
 
-// Delete a test attempt by ID (for in-progress cleanup)
+
 exports.deleteAttempt = async (req, res) => {
   try {
     const { attemptId } = req.params;
@@ -1718,7 +1718,7 @@ exports.deleteAttempt = async (req, res) => {
     if (!attempt) {
       return res.status(404).json({ status: 'fail', message: 'Attempt not found' });
     }
-    // Only allow the user who owns the attempt to delete it
+    
     if (String(attempt.userId) !== String(req.user._id)) {
       return res.status(403).json({ status: 'fail', message: 'Not authorized' });
     }
@@ -1729,18 +1729,18 @@ exports.deleteAttempt = async (req, res) => {
   }
 }; 
 
-// Admin: Bulk update test settings (e.g., allowRepeat for all tests)
+
 exports.bulkUpdateTestSettings = async (req, res) => {
   try {
     const { allowRepeat, repeatAfterHours, enableCooldown } = req.body;
-    // Check if admin
+    
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         status: 'fail',
         message: 'Only admins can bulk update test settings'
       });
     }
-    // Update all tests
+    
     const update = {};
     if (typeof allowRepeat !== 'undefined') update.allowRepeat = allowRepeat;
     if (typeof repeatAfterHours !== 'undefined') update.repeatAfterHours = repeatAfterHours;
@@ -1775,19 +1775,19 @@ exports.downloadAttemptPDF = async (req, res) => {
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
     doc.pipe(res);
 
-    // Draw a border on each page
+    
     const drawBorder = () => {
       const margin = 15;
       doc.save();
       doc.lineWidth(2);
-      doc.strokeColor('#1a237e'); // Deep blue
+      doc.strokeColor('#1a237e'); 
       doc.rect(margin, margin, doc.page.width - 2 * margin, doc.page.height - 2 * margin).stroke();
       doc.restore();
     };
     drawBorder();
     doc.on('pageAdded', drawBorder);
 
-    // Add logo and full name at the top (use local logo file)
+    
     const fs = require('fs');
     const path = require('path');
     (async () => {
@@ -1797,7 +1797,7 @@ exports.downloadAttemptPDF = async (req, res) => {
           doc.image(logoPath, doc.page.width / 2 - 30, 30, { width: 60, height: 60 });
         }
       } catch (e) {
-        // If logo fails, skip silently
+        
       }
       doc.moveDown(4);
       doc.fontSize(20).font('Helvetica-Bold').text('IIFTL', { align: 'center' });
@@ -1805,16 +1805,16 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.moveDown(1.5);
       doc.fontSize(16).font('Helvetica-Bold').text('Practice Test Result', { align: 'center' });
       doc.moveDown(4);
-      // Helper to sanitize text (remove control chars and normalize spacing/quotes)
+      
       const sanitizeText = (input) => {
         try {
           const str = String(input ?? '')
-            .replace(/[\u0000-\u001F\u007F]/g, ' ') // remove control chars
-            .replace(/[\u2018\u2019\u201A\u201B]/g, "'") // smart single quotes to '
-            .replace(/[\u201C\u201D\u201E\u201F]/g, '"') // smart double quotes to "
-            .replace(/[\u2026]/g, '...') // ellipsis
-            .replace(/[\u2013\u2014]/g, '-') // dashes
-            .replace(/\s+/g, ' ') // normalize spaces
+            .replace(/[\u0000-\u001F\u007F]/g, ' ') 
+            .replace(/[\u2018\u2019\u201A\u201B]/g, "'") 
+            .replace(/[\u201C\u201D\u201E\u201F]/g, '"') 
+            .replace(/[\u2026]/g, '...') 
+            .replace(/[\u2013\u2014]/g, '-') 
+            .replace(/\s+/g, ' ') 
             .trim();
           return str;
         } catch (_) {
@@ -1828,11 +1828,11 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`, { width: contentWidth, align: 'left' });
       doc.moveDown(1.5);
 
-      // Legend in the header (top-right)
+      
       try {
         const legendWidth = 240;
         const legendX = doc.page.width - doc.page.margins.right - legendWidth;
-        const legendY = doc.y - 36; // place slightly above current y, aligned with header block
+        const legendY = doc.y - 36; 
         doc.save();
         doc.fontSize(9);
         doc.fillColor('green').text('• Correct option', legendX, legendY, { width: legendWidth, align: 'right' });
@@ -1843,7 +1843,7 @@ exports.downloadAttemptPDF = async (req, res) => {
 
       doc.moveDown();
 
-      // Ensure text cursor starts at left margin for body content
+      
       doc.x = doc.page.margins.left;
 
       for (let i = 0; i < attempt.answers.length; i++) {
@@ -1853,16 +1853,16 @@ exports.downloadAttemptPDF = async (req, res) => {
         const userIdx = typeof ans.selectedAnswer === 'number' ? ans.selectedAnswer : null;
         const correctIdx = q.correctAnswer;
 
-        // Question text
+        
         doc.font('Helvetica-Bold').text(`${i + 1}. ${sanitizeText(q.question)}`, { width: contentWidth, align: 'left', lineGap: 2 });
         doc.font('Helvetica');
 
-        // Options list with indicators
+        
         const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
         (q.options || []).forEach((opt, optIdx) => {
           const isCorrect = Number(correctIdx) === optIdx;
           const isUser = userIdx === optIdx;
-          const marker = '•'; // always show bullet dot
+          const marker = '•'; 
           const label = optionLabels[optIdx] || String.fromCharCode(65 + optIdx);
 
           if (isCorrect) doc.fillColor('green');
@@ -1877,7 +1877,7 @@ exports.downloadAttemptPDF = async (req, res) => {
           doc.fillColor('black');
         });
 
-        // Show concise correctness line below options
+        
         if (userIdx !== null && userIdx !== undefined) {
           doc.moveDown(0.2);
           if (ans.isCorrect) {
@@ -1891,7 +1891,7 @@ exports.downloadAttemptPDF = async (req, res) => {
         doc.moveDown(1);
       }
 
-      // Add a final page with a marks summary table
+      
       try {
         const getQuestionMarks = (q) => {
           try { return Number((q && q.marks) ?? 1); } catch (_) { return 1; }
@@ -1902,7 +1902,7 @@ exports.downloadAttemptPDF = async (req, res) => {
 
         const askedIndices = Array.isArray(attempt.questionsAsked) ? attempt.questionsAsked : [];
         const perQuestionMarksEnabled = askedIndices.some(idx => getQuestionMarks(test.questions[idx]) !== 1);
-        // Negative marking considered enabled if any question has negativeMarks < 0
+        
         const negativeMarkingEnabled = askedIndices.some(idx => getQuestionNegative(test.questions[idx]) < 0);
 
         const totalPossibleMarks = askedIndices.reduce((sum, idx) => {
@@ -1918,7 +1918,7 @@ exports.downloadAttemptPDF = async (req, res) => {
 
         const outOfQuestions = Number(attempt.totalQuestions || test.questionsPerTest || askedIndices.length || 0);
 
-        // Derive uniform marking scheme values for display
+        
         const marksValues = askedIndices.map(idx => getQuestionMarks(test.questions[idx]));
         const negValues = askedIndices.map(idx => getQuestionNegative(test.questions[idx])).filter(v => v < 0);
         const uniqueMarks = Array.from(new Set(marksValues.map(v => Number.isFinite(v) ? v : 1)));
@@ -1951,7 +1951,7 @@ exports.downloadAttemptPDF = async (req, res) => {
           ['Negative per wrong', negativeMarkingEnabled ? (uniformNegativePerWrong !== null ? String(uniformNegativePerWrong) : 'mixed') : '—']
         ];
 
-        // Table header
+        
         doc.save();
         doc.fontSize(11).font('Helvetica-Bold');
         doc.rect(startX, startY, col1Width, rowHeight).stroke();
@@ -1961,7 +1961,7 @@ exports.downloadAttemptPDF = async (req, res) => {
         doc.restore();
         startY += rowHeight;
 
-        // Table rows
+        
         doc.fontSize(11).font('Helvetica');
         rows.forEach(([label, value]) => {
           doc.rect(startX, startY, col1Width, rowHeight).stroke();
@@ -1979,4 +1979,3 @@ exports.downloadAttemptPDF = async (req, res) => {
   }
 }; 
 
-// Security: Debug endpoint removed - was exposing sensitive data 

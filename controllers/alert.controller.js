@@ -1,6 +1,6 @@
 const { Alert } = require('../models');
 
-// Create a new alert (admin only)
+
 exports.createAlert = async (req, res) => {
   try {
     const {
@@ -31,7 +31,7 @@ exports.createAlert = async (req, res) => {
   }
 };
 
-// Get all alerts (public)
+
 exports.getAllAlerts = async (req, res) => {
   try {
     const alerts = await Alert.findAll({
@@ -43,7 +43,7 @@ exports.getAllAlerts = async (req, res) => {
   }
 };
 
-// Get a single alert by ID (public)
+
 exports.getAlertById = async (req, res) => {
   try {
     const alert = await Alert.findByPk(req.params.id);
@@ -54,7 +54,7 @@ exports.getAlertById = async (req, res) => {
   }
 };
 
-// Update an alert (admin only)
+
 exports.updateAlert = async (req, res) => {
   try {
     const allowedFields = [
@@ -75,7 +75,7 @@ exports.updateAlert = async (req, res) => {
       }
     }
 
-    // Coerce isActive to boolean if present
+    
     if (Object.prototype.hasOwnProperty.call(updates, 'isActive')) {
       updates.isActive = Boolean(updates.isActive);
     }
@@ -90,13 +90,13 @@ exports.updateAlert = async (req, res) => {
   }
 };
 
-// Toggle alert active status (admin only)
+
 exports.toggleAlertStatus = async (req, res) => {
   try {
     const alert = await Alert.findByPk(req.params.id);
     if (!alert) return res.status(404).json({ message: 'Alert not found' });
 
-    // If isActive provided, set explicitly; otherwise toggle
+    
     const hasIsActive = Object.prototype.hasOwnProperty.call(req.body, 'isActive');
     const nextIsActive = hasIsActive ? Boolean(req.body.isActive) : !alert.isActive;
 
@@ -107,7 +107,7 @@ exports.toggleAlertStatus = async (req, res) => {
   }
 };
 
-// Delete an alert (admin only)
+
 exports.deleteAlert = async (req, res) => {
   try {
     const alert = await Alert.findByPk(req.params.id);

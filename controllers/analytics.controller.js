@@ -2,22 +2,22 @@ const { User, Batch, PracticeTest, TestAttempt, Course } = require('../models');
 const { sequelize } = require('../config/database');
 const { Op, QueryTypes } = require('sequelize');
 
-// Helper to format safe number average
+
 function average(numbers) {
   if (!numbers || numbers.length === 0) return 0;
   const sum = numbers.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
   return Math.round((sum / numbers.length) * 100) / 100;
 }
 
-// GET /api/analytics/students-progress
-// Admin-only: Returns overview and per-student progress summary with optional filters
+
+
 exports.getStudentsProgress = async (req, res) => {
   try {
     const { search = '', batchId, testId, page = 1, limit = 20 } = req.query;
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
-    // 1) Load students (filterable)
+    
     const userQuery = { role: 'student' };
     if (search) {
       userQuery[Op.or] = [
@@ -39,7 +39,7 @@ exports.getStudentsProgress = async (req, res) => {
 
     const studentIds = students.map(s => s.id);
 
-    // 2) Fetch per-student attempts (optional filter by testId)
+    
     const attemptWhere = { userId: studentIds };
     if (testId) attemptWhere.practiceTestId = testId;
     const attempts = studentIds.length
@@ -50,7 +50,7 @@ exports.getStudentsProgress = async (req, res) => {
         })
       : [];
 
-    // Group attempts by user
+    
     const userIdToAttempts = new Map();
     attempts.forEach(a => {
       const key = String(a.userId);
@@ -58,11 +58,11 @@ exports.getStudentsProgress = async (req, res) => {
       userIdToAttempts.get(key).push(a);
     });
 
-    // 3) Fetch batch assignments -> number of assigned tests per user
-    // Derive user's batches then tests assigned to those batches
+    
+    
     let batchAssignedTests = [];
     if (studentIds.length) {
-      // get batchIds for all students
+      
       const userBatchRows = await sequelize.query(
         `SELECT DISTINCT bs."userId" AS "userId", bs."batchId" AS "batchId"
          FROM "BatchStudents" bs
@@ -88,7 +88,7 @@ exports.getStudentsProgress = async (req, res) => {
         );
       }
 
-      // Map: user -> assigned testIds (via their batches)
+      
       var userIdToAssignedTestIds = new Map();
       students.forEach(s => {
         const uid = String(s.id);
@@ -97,24 +97,24 @@ exports.getStudentsProgress = async (req, res) => {
         userIdToAssignedTestIds.set(uid, Array.from(new Set(assigned)));
       });
 
-      // 4) Compute per-student aggregates
+      
       const summaries = students.map(s => {
         const uid = String(s.id);
         const userAttempts = userIdToAttempts.get(uid) || [];
         const completedAttempts = userAttempts.filter(a => a.status === 'completed');
 
-        // Average score over completed attempts
+        
         const averageScore = completedAttempts.length
           ? Math.round(
               completedAttempts.reduce((acc, a) => acc + (Number(a.score) || 0), 0) / completedAttempts.length
             )
           : 0;
 
-        // Last active time
+        
         const lastAttempt = userAttempts.length ? userAttempts[0] : null;
         const lastActive = lastAttempt ? (lastAttempt.completedAt || lastAttempt.startedAt) : null;
 
-        // Assignments based on batch assigned tests
+        
         const assignedTestIds = userIdToAssignedTestIds.get(uid) || [];
         const totalAssigned = assignedTestIds.length;
         const completedDistinct = new Set(
@@ -123,22 +123,22 @@ exports.getStudentsProgress = async (req, res) => {
             .map(a => String(a.practiceTestId))
         ).size;
 
-        // Progress percent: if there are assignments, completed/total * 100; otherwise use avg score as proxy
+        
         const progressPercent = totalAssigned > 0
           ? Math.round((completedDistinct / totalAssigned) * 100)
           : averageScore;
 
-        // Course categories: union of categories from assigned tests and attempted tests
+        
         const assignedCategories = new Set(
           batchAssignedTests
             .filter(x => (userIdToAssignedTestIds.get(uid) || []).includes(x.testId))
             .map(x => x.category)
             .filter(Boolean)
         );
-        // If we want to include attempted categories too, we need their tests; fallback to assigned
+        
         const courseCategories = Array.from(assignedCategories);
 
-        // Primary course: pick first category if available
+        
         const primaryCourse = courseCategories.length ? courseCategories[0] : 'Unassigned';
 
         return {
@@ -157,7 +157,7 @@ exports.getStudentsProgress = async (req, res) => {
         };
       });
 
-      // Summary metrics
+      
       const totalCourses = await Course.count();
       const avgProgress = summaries.length
         ? Math.round(summaries.reduce((acc, s) => acc + (Number(s.progressPercent) || 0), 0) / summaries.length)
@@ -189,7 +189,7 @@ exports.getStudentsProgress = async (req, res) => {
       });
     }
 
-    // If no students, return empty
+    
     const totalCourses = await Course.count();
     return res.status(200).json({
       status: 'success',
@@ -210,8 +210,8 @@ exports.getStudentsProgress = async (req, res) => {
   }
 };
 
-// GET /api/analytics/student/:userId/progress
-// Admin-only: Detailed per-student progress with per-test breakdown and attempts
+
+
 exports.getStudentProgressDetail = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -226,7 +226,7 @@ exports.getStudentProgressDetail = async (req, res) => {
     });
     if (!user) return res.status(404).json({ status: 'fail', message: 'User not found' });
 
-    // Get one batch the user belongs to (if any)
+    
     let batch = null;
     const batchRows = await sequelize.query(
       `SELECT b."batchName" AS "batchName"\n       FROM "BatchStudents" bs\n       INNER JOIN "Batches" b ON b.id = bs."batchId"\n       WHERE bs."userId" = :uid\n       ORDER BY bs."createdAt" DESC\n       LIMIT 1`,
@@ -256,7 +256,7 @@ exports.getStudentProgressDetail = async (req, res) => {
     }) : [];
     const testMap = new Map(tests.map(t => [String(t.id), t]));
 
-    // Group attempts by test
+    
     const byTest = new Map();
     attempts.forEach(a => {
       const tid = String(a.practiceTestId);
@@ -268,9 +268,9 @@ exports.getStudentProgressDetail = async (req, res) => {
       const t = testMap.get(tid);
       const completed = arr.filter(a => a.status === 'completed');
       const bestScore = completed.length ? Math.max(...completed.map(a => a.score || 0)) : 0;
-      const latest = arr[0] || null; // sorted desc
-      // assignedAt from batch assignment if available
-      let assignedAt = null; // Not tracked currently without BatchAssignedTests join
+      const latest = arr[0] || null; 
+      
+      let assignedAt = null; 
       return {
         testId: tid,
         title: t?.title || arr[0]?.testTitle || 'Test',
@@ -313,8 +313,8 @@ exports.getStudentProgressDetail = async (req, res) => {
   }
 };
 
-// GET /api/analytics/overview
-// Admin-only: High-level metrics for Analytics page
+
+
 exports.getOverviewAnalytics = async (req, res) => {
   try {
     const [totalStudents, activePracticeTests, totalCourses, totalBatches] = await Promise.all([
@@ -324,7 +324,7 @@ exports.getOverviewAnalytics = async (req, res) => {
       Batch.count({})
     ]);
 
-    // Completion rate across completed attempts vs total attempts for last 90 days
+    
     const since = new Date();
     since.setDate(since.getDate() - 90);
     const attempts = await TestAttempt.findAll({
@@ -342,7 +342,7 @@ exports.getOverviewAnalytics = async (req, res) => {
     const totals = attempts[0] || { total: 0, completed: 0 };
     const completionRate = totals.total > 0 ? Math.round((totals.completed / totals.total) * 100) : 0;
 
-    // Monthly enrollments (approx): number of new students per month for last 6 months
+    
     const months = [];
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
@@ -364,7 +364,7 @@ exports.getOverviewAnalytics = async (req, res) => {
       return { month: start.toLocaleString('en-US', { month: 'short' }), enrollments: count };
     }));
 
-    // Course distribution by category of active practice tests
+    
     const activeTests = await PracticeTest.findAll({ where: { isActive: true } });
     const byCategory = new Map();
     activeTests.forEach(t => {
@@ -373,7 +373,7 @@ exports.getOverviewAnalytics = async (req, res) => {
     });
     const courseDistribution = Array.from(byCategory.entries()).map(([name, value]) => ({ name, value }));
 
-    // Exam results: summarize pass/fail by test category for last 60 days
+    
     const since60 = new Date();
     since60.setDate(since60.getDate() - 60);
     const recentAttempts = await TestAttempt.findAll({
@@ -418,13 +418,13 @@ exports.getOverviewAnalytics = async (req, res) => {
   }
 };
 
-// GET /api/analytics/dashboard
-// Student dashboard analytics
+
+
 exports.getStudentDashboard = async (req, res) => {
   try {
-    const userId = req.user.id; // Sequelize uses 'id' for primary key
+    const userId = req.user.id; 
     
-    // Get user's batch information
+    
     const userBatch = await Batch.findOne({
       where: {
         id: userId,
@@ -433,7 +433,7 @@ exports.getStudentDashboard = async (req, res) => {
       attributes: ['batchName', 'batchId', 'assignedTests']
     });
 
-    // Get user's test attempts
+    
     const testAttempts = await TestAttempt.findAll({ 
       where: { 
         userId: userId,
@@ -447,16 +447,16 @@ exports.getStudentDashboard = async (req, res) => {
       }]
     });
 
-    // Calculate statistics
+    
     const totalTests = testAttempts.length;
     const passedTests = testAttempts.filter(attempt => attempt.passed).length;
     const successRate = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
     
-    // Calculate average score
+    
     const totalScore = testAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
     const averageScore = totalTests > 0 ? Math.round(totalScore / totalTests) : 0;
 
-    // Get recent activity
+    
     const recentAttempts = testAttempts
       .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
       .slice(0, 5)

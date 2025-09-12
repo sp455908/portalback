@@ -1,18 +1,18 @@
 const { Enrollment, Course, User } = require('../models');
 
-// Enroll a user in a course
+
 exports.createEnrollment = async (req, res) => {
   try {
     const { courseId } = req.body;
     const userId = req.user.id;
 
-    // Check if already enrolled
+    
     const existing = await Enrollment.findOne({ where: { userId, courseId } });
     if (existing) {
       return res.status(400).json({ message: "Already enrolled in this course" });
     }
 
-    // Optionally, check if course exists and is active
+    
     const course = await Course.findByPk(courseId);
     if (!course || !course.isActive) {
       return res.status(404).json({ message: "Course not found or inactive" });
@@ -25,7 +25,7 @@ exports.createEnrollment = async (req, res) => {
   }
 };
 
-// Get all enrollments (admin only)
+
 exports.getAllEnrollments = async (req, res) => {
   try {
     const enrollments = await Enrollment.findAll({
@@ -48,7 +48,7 @@ exports.getAllEnrollments = async (req, res) => {
   }
 };
 
-// Get current user's enrollments
+
 exports.getMyEnrollments = async (req, res) => {
   try {
     const enrollments = await Enrollment.findAll({
@@ -65,7 +65,7 @@ exports.getMyEnrollments = async (req, res) => {
   }
 };
 
-// Update enrollment (admin only)
+
 exports.updateEnrollment = async (req, res) => {
   try {
     const updates = { ...req.body };
@@ -79,7 +79,7 @@ exports.updateEnrollment = async (req, res) => {
   }
 };
 
-// Delete enrollment (admin/instructor)
+
 exports.deleteEnrollment = async (req, res) => {
   try {
     const enrollment = await Enrollment.findByPk(req.params.id);

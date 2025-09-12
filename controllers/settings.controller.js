@@ -3,7 +3,7 @@ const { Op, QueryTypes } = require('sequelize');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-// Add error handling for missing dependencies
+
 if (!Settings) {
   console.error('Settings model not found');
 }
@@ -33,10 +33,10 @@ exports.updateSettings = catchAsync(async (req, res) => {
     let settings = await Settings.findOne();
     
     if (!settings) {
-      // Create default settings if none exist
+      
       settings = await Settings.create(req.body);
     } else {
-      // Update existing settings
+      
       const previousMaintenance = Boolean(settings.maintenanceMode);
       const nextMaintenance = req.body.hasOwnProperty('maintenanceMode')
         ? Boolean(req.body.maintenanceMode)
@@ -44,10 +44,10 @@ exports.updateSettings = catchAsync(async (req, res) => {
 
       await settings.update(req.body);
 
-      // If maintenance mode toggled ON, deactivate all non-admin/owner sessions
+      
       if (!previousMaintenance && nextMaintenance) {
         const { sequelize, UserSession } = require('../models');
-        // Find non-admin/owner users and kill their active sessions
+        
         const rows = await sequelize.query(
           `SELECT us.id AS "sessionIdPk" FROM "UserSessions" us
            INNER JOIN "Users" u ON u.id = us."userId"
@@ -59,7 +59,7 @@ exports.updateSettings = catchAsync(async (req, res) => {
             where: { id: rows.map(r => r.sessionIdPk) }
           });
         }
-        // No fallback mass deactivation to avoid affecting admins triggering the change
+        
       }
     }
     
@@ -79,14 +79,14 @@ exports.updateSettings = catchAsync(async (req, res) => {
   }
 });
 
-// ✅ OPTIMIZED: Get maintenance status with caching and fast response
+
 let maintenanceStatusCache = null;
 let maintenanceStatusCacheTime = 0;
-const MAINTENANCE_CACHE_DURATION = 30000; // 30 seconds cache
+const MAINTENANCE_CACHE_DURATION = 30000; 
 
 exports.getMaintenanceStatus = async (req, res) => {
   try {
-    // Check cache first
+    
     if (maintenanceStatusCache && (Date.now() - maintenanceStatusCacheTime) < MAINTENANCE_CACHE_DURATION) {
       return res.status(200).json({
         status: 'success',
@@ -94,7 +94,7 @@ exports.getMaintenanceStatus = async (req, res) => {
       });
     }
 
-    // Set a timeout for the database query
+    
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Database query timeout')), 1000)
     );
@@ -112,7 +112,7 @@ exports.getMaintenanceStatus = async (req, res) => {
       registrationEnabled: settings?.registrationEnabled || true
     };
 
-    // Update cache
+    
     maintenanceStatusCache = statusData;
     maintenanceStatusCacheTime = Date.now();
     
@@ -123,7 +123,7 @@ exports.getMaintenanceStatus = async (req, res) => {
   } catch (err) {
     console.error('Error fetching maintenance status:', err);
     
-    // Return cached data if available, otherwise default
+    
     if (maintenanceStatusCache) {
       return res.status(200).json({
         status: 'success',
@@ -135,8 +135,8 @@ exports.getMaintenanceStatus = async (req, res) => {
       status: 'success',
       data: {
         maintenanceMode: false,
-        maintenanceMessage: '',
-        maintenanceEndTime: null,
+        maintenanceMessage: '', // Default empty since column doesn't exist
+        maintenanceEndTime: null, // Default null since column doesn't exist
         registrationEnabled: true
       }
     });
@@ -156,7 +156,7 @@ exports.checkRegistrationEnabled = catchAsync(async (req, res, next) => {
 exports.checkMaintenanceMode = catchAsync(async (req, res, next) => {
   const settings = await Settings.findOne();
   if (settings && settings.maintenanceMode) {
-    // Allow only admin/owner to pass; block others
+    
     const role = req.user?.role;
     if (role === 'admin' || role === 'owner') {
       return next();
@@ -171,7 +171,7 @@ exports.resetSettings = catchAsync(async (req, res) => {
     let settings = await Settings.findOne();
     
     if (!settings) {
-      // Create default settings
+      
       settings = await Settings.create({
         siteName: "IIFTL Portal",
         siteDescription: "Indian Institute of Foreign Trade & Logistics",
@@ -186,7 +186,7 @@ exports.resetSettings = catchAsync(async (req, res) => {
         maxFileSize: 10
       });
     } else {
-      // Reset to default values
+      
       await settings.update({
         siteName: "IIFTL Portal",
         siteDescription: "Indian Institute of Foreign Trade & Logistics",
@@ -218,7 +218,7 @@ exports.resetSettings = catchAsync(async (req, res) => {
   }
 }); 
 
-// Get single admin status
+
 exports.getSingleAdminStatus = async (req, res) => {
   try {
     const adminCount = await User.count({ where: { role: 'admin' } });

@@ -1,7 +1,7 @@
 const { Batch, User, PracticeTest, BatchStudent } = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
-// Helper: resolve batch by numeric primary key or by string batchId code
+
 const findBatchByParam = async (batchIdParam, include = undefined) => {
   if (!batchIdParam) return null;
   if (batchIdParam === 'undefined' || batchIdParam === 'null') return null;
@@ -14,7 +14,7 @@ const findBatchByParam = async (batchIdParam, include = undefined) => {
   return await Batch.findOne({ where: { [Op.or]: orConditions }, include });
 };
 
-// Create a new batch
+
 exports.createBatch = async (req, res) => {
   try {
     console.log('Create batch request:', {
@@ -25,7 +25,7 @@ exports.createBatch = async (req, res) => {
 
     const { batchName, description, maxStudents, tags, startDate, endDate, userType } = req.body;
 
-    // Validate required fields
+    
     if (!batchName) {
       return res.status(400).json({
         status: 'fail',
@@ -33,7 +33,7 @@ exports.createBatch = async (req, res) => {
       });
     }
 
-    // Validate userType if provided, but make it optional for backward compatibility
+    
     if (userType && !['student', 'corporate', 'government'].includes(userType)) {
       return res.status(400).json({
         status: 'fail',
@@ -41,7 +41,7 @@ exports.createBatch = async (req, res) => {
       });
     }
 
-    // Check if batch name already exists
+    
     const existingBatch = await Batch.findOne({ where: { batchName } });
     if (existingBatch) {
       return res.status(400).json({
@@ -50,7 +50,7 @@ exports.createBatch = async (req, res) => {
       });
     }
 
-    // Generate batch ID manually to ensure it's created
+    
     const year = new Date().getFullYear();
     let batchId;
     try {
@@ -63,7 +63,7 @@ exports.createBatch = async (req, res) => {
       });
       batchId = `BATCH-${year}-${String(count + 1).padStart(4, '0')}`;
     } catch (error) {
-      // Fallback to timestamp if counting fails
+      
       batchId = `BATCH-${year}-${Date.now()}`;
     }
 
@@ -75,16 +75,16 @@ exports.createBatch = async (req, res) => {
       status: 'active',
       maxStudents: maxStudents || 50,
       allowTestRetakes: req.body.settings?.allowTestRetakes || false,
-      requireCompletion: req.body.settings?.requireCompletion !== false, // default true
+      requireCompletion: req.body.settings?.requireCompletion !== false, 
       autoAssignTests: req.body.settings?.autoAssignTests || false,
-      emailNotifications: req.body.settings?.notificationSettings?.emailNotifications !== false, // default true
-      testReminders: req.body.settings?.notificationSettings?.testReminders !== false, // default true
-      dueDateAlerts: req.body.settings?.notificationSettings?.dueDateAlerts !== false, // default true
+      emailNotifications: req.body.settings?.notificationSettings?.emailNotifications !== false, 
+      testReminders: req.body.settings?.notificationSettings?.testReminders !== false, 
+      dueDateAlerts: req.body.settings?.notificationSettings?.dueDateAlerts !== false, 
       startDate: startDate ? new Date(startDate) : new Date(),
       endDate: endDate ? new Date(endDate) : null
     };
 
-    // Add userType if the column exists, otherwise skip it
+    
     if (userType) {
       batchData.userType = userType;
     }
@@ -93,7 +93,7 @@ exports.createBatch = async (req, res) => {
 
     const batch = await Batch.create(batchData);
 
-    // Populate the admin info for the response
+    
     const populatedBatch = await Batch.findByPk(batch.id, {
       include: [{
         model: User,
@@ -102,7 +102,7 @@ exports.createBatch = async (req, res) => {
       }]
     });
 
-    // Add userType to response if it doesn't exist in the database
+    
     const responseBatch = {
       ...populatedBatch.toJSON(),
       userType: populatedBatch.userType || userType || 'student'
@@ -125,7 +125,7 @@ exports.createBatch = async (req, res) => {
   }
 };
 
-// Get all batches (admin only)
+
 exports.getAllBatches = async (req, res) => {
   try {
     console.log('Getting all batches with query:', req.query);
@@ -134,12 +134,12 @@ exports.getAllBatches = async (req, res) => {
     
     let whereClause = {};
     
-    // Filter by status
+    
     if (status && status !== 'all') {
       whereClause.status = status;
     }
     
-    // Search functionality
+    
     if (search) {
       whereClause[sequelize.Op.or] = [
         { batchName: { [sequelize.Op.iLike]: `%${search}%` } },
@@ -153,7 +153,7 @@ exports.getAllBatches = async (req, res) => {
     console.log('Batch query where clause:', whereClause);
     console.log('Pagination:', { offset, limit });
     
-    // Try to get batches with userType, fallback to basic query if column doesn't exist
+    
     let batches, count;
     try {
       const result = await Batch.findAndCountAll({
@@ -185,7 +185,7 @@ exports.getAllBatches = async (req, res) => {
       batches = result.rows;
       count = result.count;
       
-      // Add default userType for batches that don't have it yet
+      
       batches = batches.map(batch => ({
         ...batch.toJSON(),
         userType: batch.userType || 'student'
@@ -195,7 +195,7 @@ exports.getAllBatches = async (req, res) => {
       if (error.message.includes('userType') || error.message.includes('column') || error.message.includes('does not exist')) {
         console.log('userType column not found, using fallback query...');
         
-        // Fallback query without userType
+        
         const result = await Batch.findAndCountAll({
           where: whereClause,
           include: [
@@ -225,7 +225,7 @@ exports.getAllBatches = async (req, res) => {
         batches = result.rows;
         count = result.count;
         
-        // Add default userType for all batches
+        
         batches = batches.map(batch => ({
           ...batch.toJSON(),
           userType: 'student'
@@ -260,7 +260,7 @@ exports.getAllBatches = async (req, res) => {
   }
 };
 
-// Get single batch by ID
+
 exports.getBatchById = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -307,7 +307,7 @@ exports.getBatchById = async (req, res) => {
   }
 };
 
-// Update batch
+
 exports.updateBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -323,7 +323,7 @@ exports.updateBatch = async (req, res) => {
       });
     }
 
-    // Check if batch name is being updated and if it already exists
+    
     if (updates.batchName && updates.batchName !== batch.batchName) {
       const existingBatch = await Batch.findOne({ 
         where: {
@@ -339,7 +339,7 @@ exports.updateBatch = async (req, res) => {
       }
     }
 
-    // Validate userType if being updated
+    
     if (updates.userType && !['student', 'corporate', 'government'].includes(updates.userType)) {
       return res.status(400).json({
         status: 'fail',
@@ -347,7 +347,7 @@ exports.updateBatch = async (req, res) => {
       });
     }
 
-    // Handle settings updates separately
+    
     let settingsUpdates = {};
     if (updates.settings) {
       settingsUpdates = {
@@ -361,17 +361,17 @@ exports.updateBatch = async (req, res) => {
       };
     }
 
-    // Remove settings from main updates to avoid conflicts
+    
     const { settings, ...mainUpdates } = updates;
     
-    // Combine main updates with settings
+    
     const allUpdates = { ...mainUpdates, ...settingsUpdates };
     
     console.log('Applying updates:', allUpdates);
 
     const updatedBatch = await batch.update(allUpdates);
 
-    // Fetch the updated batch with associations
+    
     const populatedBatch = await findBatchByParam(batchId, [
       {
         model: User,
@@ -405,7 +405,7 @@ exports.updateBatch = async (req, res) => {
   }
 };
 
-// Delete batch
+
 exports.deleteBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -433,7 +433,7 @@ exports.deleteBatch = async (req, res) => {
   }
 };
 
-// Add students to batch
+
 exports.addStudentsToBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -454,7 +454,7 @@ exports.addStudentsToBatch = async (req, res) => {
       });
     }
 
-    // Coerce to numeric user IDs (Sequelize FK uses integers)
+    
     const numericUserIds = studentIds
       .map(id => Number(id))
       .filter(n => !isNaN(n));
@@ -463,7 +463,7 @@ exports.addStudentsToBatch = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'Invalid student IDs' });
     }
 
-    // Add students to batch (many-to-many)
+    
     await batch.addStudents(numericUserIds);
 
     const updatedBatch = await findBatchByParam(batchId, [
@@ -490,7 +490,7 @@ exports.addStudentsToBatch = async (req, res) => {
   }
 };
 
-// Check if given students are already in other active batches
+
 exports.checkStudentsConflicts = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -498,7 +498,7 @@ exports.checkStudentsConflicts = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'Invalid batchId' });
     }
 
-    // Accept userIds via query (?userIds=1,2,3) or JSON body { userIds: [] }
+    
     let userIds = [];
     if (req.query.userIds) {
       userIds = String(req.query.userIds)
@@ -513,18 +513,18 @@ exports.checkStudentsConflicts = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'userIds are required' });
     }
 
-    // Get current batch to exclude it from conflicts
+    
     const currentBatch = await findBatchByParam(batchId);
     if (!currentBatch) {
       return res.status(404).json({ status: 'fail', message: 'Batch not found' });
     }
 
-    // Find conflicts with detailed batch information
+    
     const conflicts = await BatchStudent.findAll({
       where: {
         userId: userIds,
         status: 'active',
-        batchId: { [Op.ne]: currentBatch.id } // Exclude current batch
+        batchId: { [Op.ne]: currentBatch.id } 
       },
       include: [
         {
@@ -542,7 +542,7 @@ exports.checkStudentsConflicts = async (req, res) => {
       ]
     });
 
-    // Format conflicts for frontend
+    
     const conflictingStudents = conflicts.map(conflict => ({
       studentId: String(conflict.userId),
       studentName: `${conflict.user.firstName} ${conflict.user.lastName}`,
@@ -571,7 +571,7 @@ exports.checkStudentsConflicts = async (req, res) => {
   }
 };
 
-// Remove students from batch
+
 exports.removeStudentsFromBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -584,7 +584,7 @@ exports.removeStudentsFromBatch = async (req, res) => {
       });
     }
 
-    // Resolve batch by PK or human-readable code
+    
     const batch = await findBatchByParam(batchId);
     if (!batch) {
       return res.status(404).json({
@@ -593,7 +593,7 @@ exports.removeStudentsFromBatch = async (req, res) => {
       });
     }
 
-    // Coerce to numeric user IDs for FK
+    
     const numericUserIds = studentIds
       .map(id => Number(id))
       .filter(n => !isNaN(n));
@@ -602,10 +602,10 @@ exports.removeStudentsFromBatch = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'Invalid student IDs' });
     }
 
-    // Remove students from batch
+    
     await batch.removeStudents(numericUserIds);
 
-    // Return refreshed batch with students
+    
     const refreshed = await findBatchByParam(batchId, [
       {
         model: User,
@@ -631,7 +631,7 @@ exports.removeStudentsFromBatch = async (req, res) => {
   }
 };
 
-// Assign tests to batch
+
 exports.assignTestsToBatch = async (req, res) => {
   try {
     console.log('assignTestsToBatch called with:', { batchId: req.params.batchId, testAssignments: req.body.testAssignments });
@@ -654,13 +654,13 @@ exports.assignTestsToBatch = async (req, res) => {
       });
     }
 
-    // Validate test assignments
+    
     const testIds = testAssignments.map(assignment => Number(assignment.testId)).filter(n => !isNaN(n));
     if (!testIds.length) {
       return res.status(400).json({ status: 'fail', message: 'Invalid test IDs' });
     }
     
-    // Get batch details to check userType
+    
     const batchDetails = await findBatchByParam(batchId);
     console.log('Batch details:', batchDetails ? { id: batchDetails.id, batchId: batchDetails.batchId, userType: batchDetails.userType } : null);
     if (!batchDetails) {
@@ -680,7 +680,7 @@ exports.assignTestsToBatch = async (req, res) => {
       });
     }
     
-    // Validate that all tests match the batch's userType
+    
     console.log('Validating userType match - batch userType:', batchDetails.userType);
     const mismatchedTests = tests.filter(test => test.targetUserType !== batchDetails.userType);
     console.log('Mismatched tests:', mismatchedTests.map(t => ({ title: t.title, targetUserType: t.targetUserType })));
@@ -692,7 +692,7 @@ exports.assignTestsToBatch = async (req, res) => {
       });
     }
 
-    // Add assignments to batch with through attributes
+    
     console.log('Starting test assignments...');
     await Promise.all(testAssignments.map(async assignment => {
       const testId = Number(assignment.testId);
@@ -736,7 +736,7 @@ exports.assignTestsToBatch = async (req, res) => {
   }
 };
 
-// Remove tests from batch
+
 exports.removeTestsFromBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -789,7 +789,7 @@ exports.removeTestsFromBatch = async (req, res) => {
   }
 };
 
-// Get batch statistics
+
 exports.getBatchStats = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -816,7 +816,7 @@ exports.getBatchStats = async (req, res) => {
       });
     }
 
-    // Calculate statistics
+    
     const stats = {
       totalStudents: batch.students.length,
       activeStudents: batch.students.filter(student => student.isActive).length,
@@ -843,11 +843,11 @@ exports.getBatchStats = async (req, res) => {
   }
 };
 
-// Get batches for a specific student
+
 exports.getStudentBatches = async (req, res) => {
   try {
     const { studentId } = req.params;
-    // Prefer authenticated user id if available to prevent IDOR
+    
     let numericStudentId = null;
     if (req.user && req.user.id) {
       numericStudentId = Number(req.user.id);
@@ -890,7 +890,7 @@ exports.getStudentBatches = async (req, res) => {
 
     console.log('Found batches for student:', batches.length);
 
-    // Compute dynamic students count per batch (active students)
+    
     const batchIds = batches.map(b => b.id);
     let countsByBatchId = {};
     if (batchIds.length > 0) {
@@ -910,7 +910,7 @@ exports.getStudentBatches = async (req, res) => {
       }
     }
 
-    // Attach computed fields and ensure userType default
+    
     const enrichedBatches = batches.map(b => {
       const json = b.toJSON();
       return {
@@ -936,7 +936,7 @@ exports.getStudentBatches = async (req, res) => {
   }
 };
 
-// Update batch settings
+
 exports.updateBatchSettings = async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -950,7 +950,7 @@ exports.updateBatchSettings = async (req, res) => {
       });
     }
 
-    // Update settings
+    
     const updatedBatch = await batch.update({ settings });
 
     res.status(200).json({
@@ -969,7 +969,7 @@ exports.updateBatchSettings = async (req, res) => {
   }
 }; 
 
-// Get batch statistics for dashboard
+
 exports.getDashboardStats = async (req, res) => {
   try {
     console.log('Getting batch statistics for dashboard');
@@ -978,14 +978,14 @@ exports.getDashboardStats = async (req, res) => {
     let totalAssignedTestsCount = 0;
     
     try {
-      // Get actual statistics from database
+      
       totalStudents = await BatchStudent.count({
         where: { status: 'active' }
       });
       console.log('Total active students:', totalStudents);
     } catch (studentError) {
       console.error('Error counting students:', studentError);
-      // Fallback to 0 if there's an error
+      
       totalStudents = 0;
     }
     
@@ -1000,7 +1000,7 @@ exports.getDashboardStats = async (req, res) => {
       console.log('Total assigned tests:', totalAssignedTestsCount);
     } catch (testError) {
       console.error('Error counting assigned tests:', testError);
-      // Fallback to 0 if there's an error
+      
       totalAssignedTestsCount = 0;
     }
     
@@ -1017,7 +1017,7 @@ exports.getDashboardStats = async (req, res) => {
     console.error('Error in getDashboardStats:', err);
     console.error('Error stack:', err.stack);
     
-    // Return default values if there's a critical error
+    
     res.status(200).json({
       status: 'success',
       data: {
@@ -1028,18 +1028,18 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-// Get all student conflicts for a batch (optimized for frontend)
+
 exports.getAllStudentConflicts = async (req, res) => {
   try {
     const { batchId } = req.params;
     const { userType } = req.query;
 
-    // Input validation
+    
     if (!batchId || batchId === 'undefined' || batchId === 'null') {
       return res.status(400).json({ status: 'fail', message: 'Invalid batchId' });
     }
 
-    // Validate userType if provided
+    
     if (userType && !['student', 'corporate', 'government'].includes(userType)) {
       return res.status(400).json({ 
         status: 'fail', 
@@ -1047,15 +1047,15 @@ exports.getAllStudentConflicts = async (req, res) => {
       });
     }
 
-    // Get current batch to exclude it from conflicts
+    
     const currentBatch = await findBatchByParam(batchId);
     if (!currentBatch) {
       return res.status(404).json({ status: 'fail', message: 'Batch not found' });
     }
 
-    // Security check: Ensure user has access to this batch
+    
     if (req.user && req.user.role === 'admin') {
-      // Admin can access any batch
+      
     } else if (req.user && req.user.role !== 'admin') {
       return res.status(403).json({ 
         status: 'fail', 
@@ -1063,13 +1063,13 @@ exports.getAllStudentConflicts = async (req, res) => {
       });
     }
 
-    // Get all users of the specified type with pagination to prevent large queries
+    
     let whereClause = { isActive: true };
     if (userType && ['student', 'corporate', 'government'].includes(userType)) {
       whereClause.userType = userType;
     }
 
-    // Limit the number of users to prevent performance issues
+    
     const maxUsers = 1000;
     const users = await User.findAll({
       where: whereClause,
@@ -1089,17 +1089,17 @@ exports.getAllStudentConflicts = async (req, res) => {
       });
     }
 
-    // Log the request for monitoring
+    
     console.log(`Conflict check requested for batch ${batchId}, userType: ${userType}, users: ${users.length}`);
 
     const userIds = users.map(u => u.id);
 
-    // Find all conflicts for these users
+    
     const conflicts = await BatchStudent.findAll({
       where: {
         userId: userIds,
         status: 'active',
-        batchId: { [Op.ne]: currentBatch.id } // Exclude current batch
+        batchId: { [Op.ne]: currentBatch.id } 
       },
       include: [
         {
@@ -1111,7 +1111,7 @@ exports.getAllStudentConflicts = async (req, res) => {
       ]
     });
 
-    // Format conflicts for frontend
+    
     const conflictingStudents = conflicts.map(conflict => {
       const user = users.find(u => u.id === conflict.userId);
       return {
@@ -1126,13 +1126,13 @@ exports.getAllStudentConflicts = async (req, res) => {
       };
     });
 
-    // Create a map of user conflicts for easy lookup using user.id as key
+    
     const userConflictsMap = {};
     conflictingStudents.forEach(conflict => {
-      // Find the user to get their actual id
+      
       const user = users.find(u => u.id === Number(conflict.studentId));
       if (user) {
-        const userKey = String(user.id); // Use user.id as the key
+        const userKey = String(user.id); 
         if (!userConflictsMap[userKey]) {
           userConflictsMap[userKey] = [];
         }
@@ -1158,12 +1158,12 @@ exports.getAllStudentConflicts = async (req, res) => {
   }
 };
 
-// Health check for batches
+
 exports.batchHealthCheck = async (req, res) => {
   try {
     console.log('Batch health check requested');
     
-    // Simple query to test if Batch model is working
+    
     const batchCount = await Batch.count();
     
     console.log('Batch count:', batchCount);

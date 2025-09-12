@@ -1,6 +1,6 @@
 const { Application, User, Course } = require('../models');
 
-// Create a new application (admission form)
+
 exports.createApplication = async (req, res) => {
   try {
     const encryptionService = require('../utils/encryption');
@@ -29,7 +29,7 @@ exports.createApplication = async (req, res) => {
       agreeMarketing
     } = req.body;
 
-    // Optionally, associate with logged-in user
+    
     const userId = req.user ? req.user.id : null;
 
     const application = await Application.create({
@@ -66,13 +66,13 @@ exports.createApplication = async (req, res) => {
   }
 };
 
-// Get all applications (admin only)
+
 exports.getAllApplications = async (req, res) => {
   try {
     const applications = await Application.findAll({
       order: [['submittedAt', 'DESC']]
     });
-    // Decrypt sensitive fields before sending
+    
     const encryptionService = require('../utils/encryption');
     const decrypted = applications.map((app) => {
       const json = app.toJSON();
@@ -90,13 +90,13 @@ exports.getAllApplications = async (req, res) => {
   }
 };
 
-// Get application by ID (admin or owner)
+
 exports.getApplicationById = async (req, res) => {
   try {
     const application = await Application.findByPk(req.params.id);
     if (!application) return res.status(404).json({ message: "Application not found" });
 
-    // Only admin or owner can view
+    
     if (
       req.user.role !== "admin" &&
       (!application.userId || application.userId.toString() !== req.user.id.toString())
@@ -119,7 +119,7 @@ exports.getApplicationById = async (req, res) => {
   }
 };
 
-// Update application status (admin only)
+
 exports.updateApplicationStatus = async (req, res) => {
   try {
     const { status, notes } = req.body;
@@ -133,7 +133,7 @@ exports.updateApplicationStatus = async (req, res) => {
   }
 };
 
-// Delete application (admin only)
+
 exports.deleteApplication = async (req, res) => {
   try {
     const application = await Application.findByPk(req.params.id);
@@ -146,7 +146,7 @@ exports.deleteApplication = async (req, res) => {
   }
 };
 
-// Get applications for current user
+
 exports.getMyApplications = async (req, res) => {
   try {
     const applications = await Application.findAll({

@@ -1,13 +1,13 @@
 const { User, LoginAttempt } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { Op } = require('sequelize'); // Added Op for the new updateUser function
+const { Op } = require('sequelize'); 
 
-// Helper to sign JWT
+
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
 
-// Get all users (admin only)
+
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.findAll({
@@ -15,16 +15,16 @@ exports.getAllUsers = async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    // Import encryption service
+    
     const encryptionService = require('../utils/encryption');
 
-    // Get blocking status for each user and decrypt phone numbers
+    
     const usersWithBlockStatus = await Promise.all(
       users.map(async (user) => {
         const blockStatus = await LoginAttempt.isUserBlocked(user.id);
         const userJson = user.toJSON();
         
-        // Safely decrypt phone number with error handling
+        
         let decryptedPhone = userJson.phone;
         if (userJson.phone && userJson.phone.trim() !== '') {
           decryptedPhone = encryptionService.safeDecrypt(String(userJson.phone));
@@ -57,7 +57,7 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// Get single user by ID (admin or self)
+
 exports.getUserById = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
@@ -70,7 +70,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // Import encryption service and decrypt phone number
+    
     const encryptionService = require('../utils/encryption');
     const userJson = user.toJSON();
     const decryptedUser = {
@@ -92,13 +92,13 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// Update user (admin or self)
+
 exports.updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
     const updates = { ...req.body };
 
-    // Check if user exists
+    
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
@@ -107,12 +107,12 @@ exports.updateUser = async (req, res) => {
       });
     }
 
-    // Check single admin rule when updating role to admin
+    
     if (updates.role === 'admin' && user.role !== 'admin') {
       const adminCount = await User.count({ 
         where: { 
           role: 'admin',
-          id: { [Op.ne]: userId } // Exclude current user
+          id: { [Op.ne]: userId } 
         } 
       });
       if (adminCount > 0) {
@@ -123,15 +123,15 @@ exports.updateUser = async (req, res) => {
       }
     }
 
-    // Hash password if it's being updated
+    
     if (updates.password) {
       updates.password = await bcrypt.hash(updates.password, 12);
     }
 
-    // Update user
+    
     await user.update(updates);
 
-    // Get updated user without password
+    
     const updatedUser = await User.findByPk(userId, {
       attributes: { exclude: ['password'] }
     });
@@ -144,7 +144,7 @@ exports.updateUser = async (req, res) => {
   } catch (err) {
     console.error('Error updating user:', err);
     
-    // Handle single admin rule violation
+    
     if (err.message === 'Only one admin user is allowed in the system') {
       return res.status(400).json({
         status: 'fail',
@@ -152,7 +152,7 @@ exports.updateUser = async (req, res) => {
       });
     }
 
-    // Handle validation errors
+    
     if (err.name === 'SequelizeValidationError') {
       return res.status(400).json({
         status: 'fail',
@@ -172,12 +172,12 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// Delete user (admin or self)
+
 exports.deleteUser = async (req, res) => {
   try {
     const userId = req.params.id;
     
-    // Check if user exists
+    
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ 
@@ -186,7 +186,7 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    // Prevent deletion of the last admin user
+    
     if (user.role === 'admin') {
       const adminCount = await User.count({ where: { role: 'admin' } });
       if (adminCount <= 1) {
@@ -197,7 +197,7 @@ exports.deleteUser = async (req, res) => {
       }
     }
 
-    // Prevent self-deletion
+    
     if (parseInt(userId) === req.user.id) {
       return res.status(400).json({
         status: 'fail',
@@ -205,7 +205,7 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    // Check if user is an instructor of any courses
+    
     const { Course } = require('../models');
     const instructorCourses = await Course.count({ where: { instructorId: userId } });
     if (instructorCourses > 0) {
@@ -215,7 +215,7 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    // Import models for cascade deletion
+    
     const { 
       Enrollment, 
       Application, 
@@ -226,7 +226,7 @@ exports.deleteUser = async (req, res) => {
       BatchStudent 
     } = require('../models');
 
-    // Delete related records first
+    
     await Promise.all([
       Enrollment.destroy({ where: { userId: userId } }),
       Application.destroy({ where: { userId: userId } }),
@@ -237,7 +237,7 @@ exports.deleteUser = async (req, res) => {
       BatchStudent.destroy({ where: { userId: userId } })
     ]);
 
-    // Now delete the user
+    
     await user.destroy();
 
     res.status(200).json({ 
@@ -247,7 +247,7 @@ exports.deleteUser = async (req, res) => {
   } catch (err) {
     console.error('Error deleting user:', err);
     
-    // Handle specific database errors
+    
     if (err.name === 'SequelizeForeignKeyConstraintError') {
       return res.status(400).json({
         status: 'fail',
@@ -263,7 +263,7 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
-// Get current logged-in user profile
+
 exports.getProfile = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
@@ -276,7 +276,7 @@ exports.getProfile = async (req, res) => {
       });
     }
 
-    // Import encryption service and decrypt phone number
+    
     const encryptionService = require('../utils/encryption');
     const userJson = user.toJSON();
     const decryptedUser = {
@@ -298,11 +298,11 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-// Update current logged-in user profile
+
 exports.updateProfile = async (req, res) => {
   try {
     const updates = { ...req.body };
-    // If password is being updated, hash it
+    
     if (updates.password) {
       updates.password = await bcrypt.hash(updates.password, 12);
     }
@@ -318,7 +318,7 @@ exports.updateProfile = async (req, res) => {
       attributes: { exclude: ['password'] }
     });
 
-    // Decrypt phone for response consistency
+    
     let userForResponse = updatedUser && typeof updatedUser.toJSON === 'function' ? updatedUser.toJSON() : updatedUser;
     try {
       const encryptionService = require('../utils/encryption');
@@ -352,7 +352,7 @@ exports.getUserStats = async (req, res) => {
     const activeUsers = await User.count({ where: { isActive: true } });
     const inactiveUsers = await User.count({ where: { isActive: false } });
 
-    // Calculate percentages
+    
     const activePercentage = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
     const inactivePercentage = totalUsers > 0 ? Math.round((inactiveUsers / totalUsers) * 100) : 0;
     const studentPercentage = totalUsers > 0 ? Math.round((students / totalUsers) * 100) : 0;
@@ -390,10 +390,10 @@ exports.getUserStats = async (req, res) => {
   }
 };
 
-// Get user certificates (placeholder - implement based on your certificate model)
+
 exports.getUserCertificates = async (req, res) => {
   try {
-    // TODO: Implement certificate logic when certificate model is available
+    
     res.status(200).json({
       status: 'success',
       data: []
@@ -403,10 +403,10 @@ exports.getUserCertificates = async (req, res) => {
   }
 };
 
-// Get enrolled courses (placeholder - implement based on your enrollment model)
+
 exports.getEnrolledCourses = async (req, res) => {
   try {
-    // TODO: Implement enrollment logic when enrollment model is available
+    
     res.status(200).json({
       status: 'success',
       data: []
@@ -416,10 +416,10 @@ exports.getEnrolledCourses = async (req, res) => {
   }
 };
 
-// Get user achievements (placeholder - implement based on your achievement model)
+
 exports.getUserAchievements = async (req, res) => {
   try {
-    // TODO: Implement achievement logic when achievement model is available
+    
     res.status(200).json({
       status: 'success',
       data: []
@@ -429,10 +429,10 @@ exports.getUserAchievements = async (req, res) => {
   }
 };
 
-// Get user activity (placeholder - implement based on your activity model)
+
 exports.getUserActivity = async (req, res) => {
   try {
-    // TODO: Implement activity logic when activity model is available
+    
     res.status(200).json({
       status: 'success',
       data: []
@@ -442,11 +442,11 @@ exports.getUserActivity = async (req, res) => {
   }
 };
 
-// Update user profile (alias for updateUser)
+
 exports.updateUserProfile = async (req, res) => {
   try {
     const updates = { ...req.body };
-    // If password is being updated, hash it
+    
     if (updates.password) {
       updates.password = await bcrypt.hash(updates.password, 12);
     }
@@ -465,7 +465,7 @@ exports.updateUserProfile = async (req, res) => {
 
 
 
-// Get user by student ID (for students)
+
 exports.getUserByStudentId = async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -492,20 +492,20 @@ exports.getUserByStudentId = async (req, res) => {
   }
 };
 
-// Get all blocked users (admin only)
+
 exports.getBlockedUsers = async (req, res) => {
   try {
     const blockedUsers = await LoginAttempt.findAll({
       where: {
         isBlocked: true,
         [Op.or]: [
-          // Temporary blocks (with expiration)
+          
           {
             blockedUntil: {
               [Op.gt]: new Date()
             }
           },
-          // Permanent blocks (no expiration)
+          
           {
             blockedUntil: null
           }
@@ -521,7 +521,7 @@ exports.getBlockedUsers = async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    // Group by user and get the latest block info
+    
     const userMap = new Map();
     blockedUsers.forEach(attempt => {
       if (!userMap.has(attempt.userId.toString())) {
@@ -559,12 +559,12 @@ exports.getBlockedUsers = async (req, res) => {
   }
 };
 
-// Unblock a user (admin only)
+
 exports.unblockUser = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Check if user exists
+    
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
@@ -573,7 +573,7 @@ exports.unblockUser = async (req, res) => {
       });
     }
 
-    // Check if user is actually blocked
+    
     const blockedAttempt = await LoginAttempt.isUserBlocked(userId);
     if (!blockedAttempt) {
       return res.status(400).json({
@@ -582,10 +582,10 @@ exports.unblockUser = async (req, res) => {
       });
     }
 
-    // Unblock the user
+    
     await LoginAttempt.unblockUser(userId, req.user.id);
 
-    // Set user as active when unblocked
+    
     await user.update({ isActive: true });
 
     res.status(200).json({
@@ -610,13 +610,13 @@ exports.unblockUser = async (req, res) => {
   }
 };
 
-// Block a user manually (admin only) - no time limit
+
 exports.blockUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const { reason, blockDuration } = req.body;
 
-    // Check if user exists
+    
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
@@ -625,7 +625,7 @@ exports.blockUser = async (req, res) => {
       });
     }
 
-    // Check if user is already blocked
+    
     const alreadyBlocked = await LoginAttempt.isUserBlocked(userId);
     if (alreadyBlocked) {
       return res.status(400).json({
@@ -634,7 +634,7 @@ exports.blockUser = async (req, res) => {
       });
     }
 
-    // Check if trying to block admin user
+    
     if (user.role === 'admin') {
       return res.status(400).json({
         status: 'fail',
@@ -642,7 +642,7 @@ exports.blockUser = async (req, res) => {
       });
     }
 
-    // Check if trying to block yourself
+    
     if (userId === req.user.id) {
       return res.status(400).json({
         status: 'fail',
@@ -650,13 +650,13 @@ exports.blockUser = async (req, res) => {
       });
     }
 
-    // Create block record
+    
     let blockedUntil = null;
     if (blockDuration) {
-      // If blockDuration is provided, calculate expiration
+      
       blockedUntil = new Date(Date.now() + blockDuration * 60 * 1000);
     }
-    // If blockDuration is null/undefined, user is blocked indefinitely
+    
 
     blockedUntil = await LoginAttempt.manuallyBlockUser(
       userId, 
@@ -665,7 +665,7 @@ exports.blockUser = async (req, res) => {
       blockDuration
     );
 
-    // Update user status to inactive
+    
     await user.update({ isActive: false });
 
     res.status(200).json({
@@ -692,13 +692,13 @@ exports.blockUser = async (req, res) => {
   }
 };
 
-// Get user login attempts (admin only)
+
 exports.getUserLoginAttempts = async (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 50 } = req.query;
 
-    // Check if user exists
+    
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
@@ -707,7 +707,7 @@ exports.getUserLoginAttempts = async (req, res) => {
       });
     }
 
-    // Get recent login attempts
+    
     const attempts = await LoginAttempt.findAll({
       where: { userId },
       order: [['attemptTime', 'DESC']],

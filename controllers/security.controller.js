@@ -1,7 +1,7 @@
 const { SecurityViolation, TestAttempt, PracticeTest, User } = require('../models');
 const { sequelize } = require('../config/database');
 
-// Report a security violation (tab switch, window switch, etc.)
+
 exports.reportViolation = async (req, res) => {
   try {
     const { testAttemptId } = req.params;
@@ -10,7 +10,7 @@ exports.reportViolation = async (req, res) => {
       additionalInfo 
     } = req.body;
 
-    // Validate violation type
+    
     const validTypes = ['tab_switch', 'window_switch', 'copy_paste', 'right_click', 'developer_tools'];
     if (!validTypes.includes(violationType)) {
       return res.status(400).json({
@@ -19,7 +19,7 @@ exports.reportViolation = async (req, res) => {
       });
     }
 
-    // Get test attempt details
+    
     const testAttempt = await TestAttempt.findByPk(testAttemptId);
     if (!testAttempt || testAttempt.status !== 'in_progress') {
       return res.status(404).json({
@@ -28,7 +28,7 @@ exports.reportViolation = async (req, res) => {
       });
     }
 
-    // Verify user owns this attempt
+    
     if (testAttempt.userId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         status: 'fail',
@@ -36,7 +36,7 @@ exports.reportViolation = async (req, res) => {
       });
     }
 
-    // Count existing violations for this user and test attempt
+    
     const existingViolations = await SecurityViolation.findAll({
       where: {
         userId: req.user.id,
@@ -47,7 +47,7 @@ exports.reportViolation = async (req, res) => {
 
     const violationCount = existingViolations.length + 1;
 
-    // Create violation record
+    
     const violation = await SecurityViolation.create({
       userId: req.user.id,
       testAttemptId,
@@ -62,18 +62,18 @@ exports.reportViolation = async (req, res) => {
     let shouldBlock = false;
     let blockedUntil = null;
 
-    // Check if this is the 3rd violation for tab/window switching
+    
     if (['tab_switch', 'window_switch'].includes(violationType) && violationCount >= 3) {
       shouldBlock = true;
-      blockedUntil = new Date(Date.now() + (24 * 60 * 60 * 1000)); // 24 hours from now
+      blockedUntil = new Date(Date.now() + (24 * 60 * 60 * 1000)); 
       
-      // Update violation to mark as blocked
+      
       violation.isBlocked = true;
       violation.blockedUntil = blockedUntil;
       violation.blockDurationHours = 24;
       await violation.save();
 
-      // Mark test attempt as abandoned due to security violation
+      
       await testAttempt.update({
         status: 'abandoned',
         completedAt: new Date()
@@ -113,14 +113,14 @@ exports.reportViolation = async (req, res) => {
   }
 };
 
-// Check if user is currently blocked
+
 exports.checkUserBlockStatus = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Check for any active blocks
-    // Note: getRemainingBlockTime method needs to be implemented in the model
-    const blockInfo = null; // TODO: Implement this method
+    
+    
+    const blockInfo = null; 
     
     if (blockInfo) {
       return res.status(200).json({
@@ -152,7 +152,7 @@ exports.checkUserBlockStatus = async (req, res) => {
   }
 };
 
-// Get user's violation history
+
 exports.getUserViolationHistory = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -188,7 +188,7 @@ exports.getUserViolationHistory = async (req, res) => {
   }
 };
 
-// Admin: Get all security violations
+
 exports.getAllViolations = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -251,7 +251,7 @@ exports.getAllViolations = async (req, res) => {
   }
 };
 
-// Admin: Unblock a user
+
 exports.unblockUser = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -263,11 +263,11 @@ exports.unblockUser = async (req, res) => {
 
     const { userId } = req.params;
     
-    // Update all active blocks for this user
+    
     await SecurityViolation.update(
       {
         isBlocked: false,
-        blockedUntil: new Date() // Set to current time to expire
+        blockedUntil: new Date() 
       },
       {
         where: {

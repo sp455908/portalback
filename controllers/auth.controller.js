@@ -1,5 +1,5 @@
 const { User, LoginAttempt, UserSession, Settings } = require('../models');
-// D:\IIFTL Backend\controllers\auth.controller.js
+
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { promisify } = require('util');
@@ -12,64 +12,64 @@ const {
   SESSION_TIMEOUT_MINUTES 
 } = require('../middlewares/sessionManagement.middleware');
 
-// Development logger (no-op in production)
+
 const devLog = (...args) => {
   if (process.env.NODE_ENV !== 'production') {
-    // eslint-disable-next-line no-console
+    
     console.log(...args);
   }
 };
 
-// Promisify jwt.verify
+
 const verifyToken = promisify(jwt.verify);
 
-// Helper to sign JWT
+
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d' // Default to 7 days if not set
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d' 
   });
 };
 
-// Helper to sign refresh token
+
 const signRefreshToken = (id) => {
   return jwt.sign({ id, type: 'refresh' }, process.env.JWT_SECRET, {
-    expiresIn: '30d' // Refresh token valid for 30 days
+    expiresIn: '30d' 
   });
 };
 
-// Create and send token with refresh token
+
 const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}) => {
   const accessToken = signToken(user.id);
   const refreshToken = signRefreshToken(user.id);
   
-  // Remove password from output
+  
   user.password = undefined;
 
-  // Create session if request object is provided
+  
   let session = null;
   if (req) {
     try {
       session = await createSession(user, req);
-      // Update session with tokens
+      
       await session.update({
         accessToken,
         refreshToken
       });
     } catch (error) {
-      // Error creating session - continue without session
-      // Continue without session if creation fails
+      
+      
     }
   }
 
-  // Set refresh token as HTTP-only cookie
+  
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    maxAge: 30 * 24 * 60 * 60 * 1000 
   });
 
-  // Decrypt sensitive fields for response (e.g., phone)
+  
   let userForResponse = user && typeof user.toJSON === 'function' ? user.toJSON() : user;
   try {
     const encryptionService = require('../utils/encryption');
@@ -80,7 +80,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
       };
     }
   } catch (_) {
-    // ignore decryption issues in login response
+    
   }
 
   res.status(statusCode).json({
@@ -89,7 +89,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     refreshToken: refreshToken,
     sessionId: session ? session.sessionId : null,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-    sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, // in seconds
+    sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, 
     meta: extraMeta,
     data: {
       user: userForResponse
@@ -97,7 +97,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
   });
 };
 
-// Register a new user
+
 exports.register = async (req, res, next) => {
   try {
     const { firstName, lastName, email, password, role, userType, phone, address, city, state, pincode } = req.body;
@@ -111,7 +111,7 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Validate userType
+    
     const validUserTypes = ['student', 'corporate', 'government'];
     if (!validUserTypes.includes(userType)) {
       return res.status(400).json({
@@ -120,18 +120,18 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // OPTIMIZED: Single query to check both admin count and existing user
+    
     const [adminCount, existingUser] = await Promise.all([
       role === 'admin' ? User.count({ where: { role: 'admin' } }) : Promise.resolve(0),
       User.findOne({ where: { email: normalizedEmail } })
     ]);
 
-    // Cache admin count for future use
+    
     if (role === 'admin') {
-      adminCountCache.set('admin_count', adminCount, 5 * 60 * 1000); // 5 minutes
+      adminCountCache.set('admin_count', adminCount, 5 * 60 * 1000); 
     }
 
-    // Check single admin rule
+    
     if (role === 'admin' && adminCount > 0) {
       return res.status(400).json({
         status: 'fail',
@@ -139,7 +139,7 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Check if user already exists
+    
     if (existingUser) {
       return res.status(400).json({
         status: 'fail',
@@ -147,7 +147,7 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Create new user (retry once on ID collision)
+    
     let newUser;
     try {
       newUser = await User.create({
@@ -164,7 +164,7 @@ exports.register = async (req, res, next) => {
         pincode: pincode ? encryptionService.encrypt(String(pincode)) : pincode
       });
     } catch (createErr) {
-      // Retry create once in case two requests raced for the same sequence
+      
       if (createErr.name === 'SequelizeUniqueConstraintError' && 
           (createErr?.fields?.studentId || createErr?.fields?.corporateId || createErr?.fields?.governmentId)) {
         newUser = await User.create({
@@ -185,13 +185,13 @@ exports.register = async (req, res, next) => {
       }
     }
 
-    // Log user in, send JWT
+    
     await createSendToken(newUser, 201, res, req);
 
   } catch (err) {
-    // Registration error
     
-    // Handle validation errors
+    
+    
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(val => val.message);
       return res.status(400).json({
@@ -200,7 +200,7 @@ exports.register = async (req, res, next) => {
       });
     }
     
-    // Handle Sequelize validation errors
+    
     if (err.name === 'SequelizeValidationError') {
       const messages = err.errors.map(val => val.message);
       return res.status(400).json({
@@ -209,7 +209,7 @@ exports.register = async (req, res, next) => {
       });
     }
     
-    // Handle unique constraint violations
+    
     if (err.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({
         status: 'fail',
@@ -217,7 +217,7 @@ exports.register = async (req, res, next) => {
       });
     }
     
-    // Handle single admin rule violation
+    
     if (err.message === 'Only one admin user is allowed in the system') {
       return res.status(400).json({
         status: 'fail',
@@ -233,7 +233,7 @@ exports.register = async (req, res, next) => {
   }
 };
 
-// Login user
+
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -247,14 +247,14 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 0) Maintenance mode gate for logins (allow only admin/owner)
+    
     const currentSettings = await Settings.findOne();
     
-    // 1) Check if user exists && password is correct
+    
     const user = await User.findOne({ where: { email } });
 
     if (currentSettings?.maintenanceMode) {
-      // During maintenance, only admin can login
+      
       if (!user || (user.role !== 'admin')) {
         return res.status(503).json({
           status: 'fail',
@@ -263,18 +263,18 @@ exports.login = async (req, res, next) => {
       }
     }
     
-    // Cache user data for future use
+    
     if (user) {
       userCache.set(`user_${user.id}`, {
         id: user.id,
         email: user.email,
         role: user.role,
         isActive: user.isActive
-      }, 2 * 60 * 1000); // 2 minutes
+      }, 2 * 60 * 1000); 
     }
     
     if (!user || !(await user.comparePassword(password))) {
-      // Record failed login attempt and check blocking
+      
       if (user) {
         devLog(`🔐 Failed login attempt for user: ${user.email} (ID: ${user.id})`);
         
@@ -288,14 +288,14 @@ exports.login = async (req, res, next) => {
 
         devLog(`📊 Login result:`, loginResult);
 
-        // Check if user should be blocked (5 failed attempts in 60 minutes)
+        
         if (loginResult.shouldBlock && user.role !== 'admin') {
           devLog(`🚫 Blocking user ${user.email} after ${loginResult.failedCount} failed attempts`);
           
-          // Block the user permanently (no time limit)
+          
           const blockedUntil = await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
           
-          // Set user as inactive when blocked
+          
           await user.update({ isActive: false });
           
           devLog(`✅ User ${user.email} blocked successfully and marked as inactive`);
@@ -310,7 +310,7 @@ exports.login = async (req, res, next) => {
             contactAdmin: true
           });
         } else {
-          // For admin, explicitly log no blocking
+          
           if (user.role === 'admin') {
             devLog(`🛡️ Admin ${user.email} failed attempt count ${loginResult.failedCount || 0} – block skipped by policy`);
           } else {
@@ -319,7 +319,7 @@ exports.login = async (req, res, next) => {
         }
       }
 
-      // Also include current failed attempts count to assist frontend UI
+      
       const failedAttemptsCount = user ? await LoginAttempt.getFailedAttemptsCount(user.id) : await LoginAttempt.getFailedAttemptsCountByEmail(email);
       return res.status(401).json({
         status: 'fail',
@@ -330,12 +330,12 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 2) Get all blocking status in single query (60-minute window)
+    
     const loginStatus = await LoginAttempt.getLoginStatus(user.id, email);
     
-    // Check if user or email is currently blocked (Admins are never blocked)
+    
     if ((loginStatus.isUserBlocked || loginStatus.isEmailBlocked) && user.role !== 'admin') {
-      // Record this failed attempt
+      
       await LoginAttempt.create({
         userId: user.id,
         email,
@@ -371,9 +371,9 @@ exports.login = async (req, res, next) => {
       }
     }
 
-    // 3) Check if user is active
+    
     if (!user.isActive) {
-      // Record failed login attempt
+      
       await LoginAttempt.create({
         userId: user.id,
         email,
@@ -389,14 +389,14 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 4) Check other active sessions (strict single-session)
+    
     let otherActiveSessions = [];
     try {
       const existingSessions = await UserSession.findUserActiveSessions(user.id);
-      // Treat any active, non-expired session as a conflict. Do not auto-deactivate here.
+      
       const validSessions = existingSessions.filter(s => s.isActive && !s.isExpired());
       otherActiveSessions = validSessions;
-      // Strict single-session enforcement for all users: block new login if any active session exists
+      
       if (validSessions.length > 0) {
         devLog(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
         const statusInfo = await LoginAttempt.getLoginStatus(user.id, email);
@@ -419,12 +419,12 @@ exports.login = async (req, res, next) => {
       }
     } catch (sessionError) {
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
-        // Active session lookup/cleanup failed (continuing)
+        
+        
       }
     }
 
-    // 5) Record successful login attempt
+    
     await LoginAttempt.create({
       userId: user.id,
       email,
@@ -434,9 +434,9 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    // 6) No auto-deactivation on login; user must logout to free the session
+    
 
-    // 7) If everything ok, send token to client with session conflict meta (for alert)
+    
     const conflict = otherActiveSessions.length > 0 && user.role !== 'admin';
     await createSendToken(user, 200, res, req, conflict ? {
       sessionConflict: true,
@@ -450,8 +450,8 @@ exports.login = async (req, res, next) => {
 
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      // Login error
+      
+      
     }
     res.status(500).json({
       status: 'error',
@@ -461,7 +461,7 @@ exports.login = async (req, res, next) => {
   }
 };
 
-// Get current authenticated user
+
 exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findByPk(req.user.id);
@@ -473,7 +473,7 @@ exports.getMe = async (req, res, next) => {
       });
     }
 
-    // Import encryption service and decrypt phone number
+    
     const encryptionService = require('../utils/encryption');
     const userJson = user.toJSON();
     const decryptedUser = {
@@ -495,7 +495,7 @@ exports.getMe = async (req, res, next) => {
   }
 };
 
-// Refresh access token using refresh token
+
 exports.refreshToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.cookies;
@@ -507,7 +507,7 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
-    // Verify refresh token
+    
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
     
     if (decoded.type !== 'refresh') {
@@ -517,7 +517,7 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
-    // Check if user still exists
+    
     const user = await User.findByPk(decoded.id);
     if (!user || !user.isActive) {
       return res.status(401).json({
@@ -526,7 +526,7 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
-    // Maintenance gate for refresh: allow only admin/owner to remain active
+    
     const currentSettings = await Settings.findOne();
     if (currentSettings?.maintenanceMode && user.role !== 'admin') {
       return res.status(503).json({
@@ -535,10 +535,10 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
-    // Generate new access token
+    
     const newAccessToken = signToken(user.id);
     
-    // Remove password from output
+    
     user.password = undefined;
 
     res.status(200).json({
@@ -572,7 +572,7 @@ exports.refreshToken = async (req, res, next) => {
   }
 };
 
-// Logout user (invalidate refresh token)
+
 exports.logout = async (req, res, next) => {
   try {
     const sessionId = req.headers['x-session-id'];
@@ -580,9 +580,9 @@ exports.logout = async (req, res, next) => {
       ? req.headers.authorization.split(' ')[1]
       : null;
     
-    // Deactivate session if sessionId is provided
+    
     if (sessionId) {
-      // Prefer direct update to ensure DB is flipped even if helper fails
+      
       try {
         await UserSession.update(
           { isActive: false },
@@ -591,14 +591,14 @@ exports.logout = async (req, res, next) => {
       } catch (_) {}
       await deactivateSession(sessionId);
     } else if (req.user?.id && authHeader) {
-      // Fallback: deactivate by access token bound to this session
+      
       await UserSession.update(
         { isActive: false },
         { where: { userId: req.user.id, accessToken: authHeader, isActive: true } }
       );
     }
     
-    // Clear refresh token cookie
+    
     res.clearCookie('refreshToken');
     
     res.status(200).json({
@@ -606,7 +606,7 @@ exports.logout = async (req, res, next) => {
       message: 'Logged out successfully'
     });
   } catch (err) {
-    // Logout error
+    
     res.status(500).json({
       status: 'error',
       message: 'Logout failed'
@@ -614,7 +614,7 @@ exports.logout = async (req, res, next) => {
   }
 };
 
-// Validate session endpoint
+
 exports.validateSession = async (req, res, next) => {
   try {
     const sessionId = req.headers['x-session-id'];
@@ -639,7 +639,7 @@ exports.validateSession = async (req, res, next) => {
       });
     }
     
-    // Check if session is idle or expired
+    
     if (session.isIdle(30) || session.isExpired()) {
       await deactivateSession(sessionId);
       return res.status(401).json({
@@ -649,7 +649,7 @@ exports.validateSession = async (req, res, next) => {
       });
     }
     
-    // Update last activity
+    
     await session.updateActivity();
     
     res.status(200).json({
@@ -665,7 +665,7 @@ exports.validateSession = async (req, res, next) => {
       }
     });
   } catch (err) {
-    // Session validation error
+    
     res.status(500).json({
       status: 'error',
       message: 'Session validation failed'
@@ -673,7 +673,7 @@ exports.validateSession = async (req, res, next) => {
   }
 };
 
-// Update session activity endpoint
+
 exports.updateSessionActivity = async (req, res, next) => {
   try {
     const { sessionId, lastActivity } = req.body;
@@ -697,7 +697,7 @@ exports.updateSessionActivity = async (req, res, next) => {
       });
     }
     
-    // Update last activity timestamp
+    
     await session.updateActivity();
     
     res.status(200).json({
@@ -708,7 +708,7 @@ exports.updateSessionActivity = async (req, res, next) => {
       }
     });
   } catch (err) {
-    // Update session activity error
+    
     res.status(500).json({
       status: 'error',
       message: 'Failed to update session activity'
@@ -716,11 +716,11 @@ exports.updateSessionActivity = async (req, res, next) => {
   }
 };
 
-// Protect middleware (already in auth.middleware.js)
-// This is just for reference of what it does
+
+
 exports.protect = async (req, res, next) => {
   try {
-    // 1) Getting token and check if it's there
+    
     let token;
     if (
       req.headers.authorization &&
@@ -736,10 +736,10 @@ exports.protect = async (req, res, next) => {
       });
     }
 
-    // 2) Verification token
+    
     const decoded = await verifyToken(token, process.env.JWT_SECRET);
 
-    // 3) Check if user still exists
+    
     const currentUser = await User.findByPk(decoded.id);
     if (!currentUser) {
       return res.status(401).json({
@@ -748,7 +748,7 @@ exports.protect = async (req, res, next) => {
       });
     }
 
-    // 4) Check if user changed password after the token was issued
+    
     if (currentUser.changedPasswordAfter(decoded.iat)) {
       return res.status(401).json({
         status: 'fail',
@@ -756,7 +756,7 @@ exports.protect = async (req, res, next) => {
       });
     }
 
-    // GRANT ACCESS TO PROTECTED ROUTE
+    
     req.user = currentUser;
     next();
   } catch (err) {
@@ -767,7 +767,7 @@ exports.protect = async (req, res, next) => {
   }
 };
 
-// Get active sessions for current user
+
 exports.getActiveSessions = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -775,7 +775,7 @@ exports.getActiveSessions = async (req, res, next) => {
     
     const activeSessions = await UserSession.findUserActiveSessions(userId);
     
-    // Filter out current session
+    
     const otherSessions = currentSessionId 
       ? activeSessions.filter(session => session.sessionId !== currentSessionId)
       : activeSessions;
@@ -797,7 +797,7 @@ exports.getActiveSessions = async (req, res, next) => {
       }
     });
   } catch (err) {
-    // Get active sessions error
+    
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch active sessions'
@@ -805,7 +805,7 @@ exports.getActiveSessions = async (req, res, next) => {
   }
 };
 
-// Force logout from all other sessions
+
 exports.logoutAllOtherSessions = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -818,7 +818,7 @@ exports.logoutAllOtherSessions = async (req, res, next) => {
       });
     }
     
-    // Deactivate all other sessions for this user
+    
     const result = await UserSession.deactivateUserSessions(userId, currentSessionId);
     
     devLog(`🔐 Force logged out ${result[0]} other sessions for user ${req.user.email}`);
@@ -839,10 +839,10 @@ exports.logoutAllOtherSessions = async (req, res, next) => {
   }
 };
 
-// Temporary admin creation endpoint for initial setup (Render deployment)
+
 exports.createInitialAdmin = async (req, res, next) => {
   try {
-    // Check if admin user already exists
+    
     const adminCount = await User.count({ where: { role: 'admin' } });
     
     if (adminCount > 0) {
@@ -852,7 +852,7 @@ exports.createInitialAdmin = async (req, res, next) => {
       });
     }
 
-    // Check if this is a development environment or if a special setup key is provided
+    
     const isDevelopment = process.env.NODE_ENV === 'development';
     const setupKey = req.headers['x-setup-key'];
     const validSetupKey = process.env.SETUP_KEY || 'iiftl-setup-2024';
@@ -864,7 +864,7 @@ exports.createInitialAdmin = async (req, res, next) => {
       });
     }
 
-    // Create the admin user
+    
     const hashedPassword = await bcrypt.hash('sunVexpress#0912', 12);
     const adminUser = await User.create({
       firstName: 'IIFTL',

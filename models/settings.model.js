@@ -30,6 +30,16 @@ const Settings = sequelize.define('Settings', {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
+  maintenanceMessage: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    defaultValue: ''
+  },
+  maintenanceEndTime: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null
+  },
   registrationEnabled: {
     type: DataTypes.BOOLEAN,
     defaultValue: true

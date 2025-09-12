@@ -1,10 +1,10 @@
 const crypto = require('crypto');
 
-// Store captcha states in memory (prefer Redis in production)
+
 const captchaStore = new Map();
 const ipAttempts = new Map();
 
-// Generate a random string for captcha
+
 const generateCaptchaText = (length = 6) => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let result = '';
@@ -17,7 +17,7 @@ const generateCaptchaText = (length = 6) => {
 const hashAnswer = (text) =>
   crypto.createHash('sha256').update(String(text).toUpperCase()).digest('hex');
 
-// Very simple SVG rendering of the captcha text (no plaintext API exposure)
+
 const renderSvg = (text) => {
   const width = 150;
   const height = 50;
@@ -25,9 +25,9 @@ const renderSvg = (text) => {
   const chars = text.split('');
   const charSpacing = Math.floor((width - 20) / chars.length);
   const items = [];
-  // Background
+  
   items.push(`<rect width="100%" height="100%" fill="#f3f4f6"/>`);
-  // Noise lines
+  
   for (let i = 0; i < noiseLines; i++) {
     const x1 = Math.random() * width;
     const y1 = Math.random() * height;
@@ -36,7 +36,7 @@ const renderSvg = (text) => {
     const color = `#${Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0')}`;
     items.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1" opacity="0.4"/>`);
   }
-  // Characters with random jitter/rotation
+  
   chars.forEach((c, idx) => {
     const x = 10 + idx * charSpacing + Math.random() * 4;
     const y = 30 + Math.random() * 10;
@@ -46,19 +46,19 @@ const renderSvg = (text) => {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${items.join('')}</svg>`;
 };
 
-// Generate captcha image as SVG by id
+
 exports.generateCaptcha = async (req, res) => {
   try {
     const { captchaId } = req.params;
     
-    // Get the stored captcha data
+    
     const captchaData = captchaStore.get(captchaId);
     
     if (!captchaData) {
       return res.status(404).json({ status: 'error', message: 'Captcha not found or expired' });
     }
 
-    // Check if captcha is expired (5 minutes)
+    
     if (Date.now() - captchaData.timestamp > 5 * 60 * 1000) {
       captchaStore.delete(captchaId);
       return res.status(404).json({ status: 'error', message: 'Captcha expired' });
@@ -69,7 +69,7 @@ exports.generateCaptcha = async (req, res) => {
     res.status(200).send(svg);
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
+      
       console.error('Error getting captcha data:', error);
     }
     res.status(500).json({
@@ -79,7 +79,7 @@ exports.generateCaptcha = async (req, res) => {
   }
 };
 
-// Verify captcha
+
 exports.verifyCaptcha = async (req, res) => {
   try {
     const { captchaId, answer } = req.body;
@@ -100,7 +100,7 @@ exports.verifyCaptcha = async (req, res) => {
       });
     }
 
-    // Check if captcha is expired (5 minutes)
+    
     if (Date.now() - captchaData.timestamp > 5 * 60 * 1000) {
       captchaStore.delete(captchaId);
       return res.status(400).json({
@@ -109,17 +109,17 @@ exports.verifyCaptcha = async (req, res) => {
       });
     }
 
-    // Basic per-IP rate limit for wrong attempts
+    
     const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     const attempts = ipAttempts.get(ip) || { count: 0, ts: Date.now() };
-    if (Date.now() - attempts.ts > 15 * 60 * 1000) { // reset window 15m
+    if (Date.now() - attempts.ts > 15 * 60 * 1000) { 
       attempts.count = 0; attempts.ts = Date.now();
     }
 
-    // Verify by hash (case-insensitive)
+    
     const isValid = hashAnswer(answer) === captchaData.hash;
     
-    // Remove the captcha after verification
+    
     captchaStore.delete(captchaId);
 
     if (isValid) {
@@ -140,7 +140,7 @@ exports.verifyCaptcha = async (req, res) => {
     }
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
+      
       console.error('Error verifying captcha:', error);
     }
     res.status(500).json({
@@ -150,10 +150,10 @@ exports.verifyCaptcha = async (req, res) => {
   }
 };
 
-// ✅ OPTIMIZED: Get captcha ID with faster generation
+
 exports.getCaptchaId = async (req, res) => {
   try {
-    // Set response timeout
+    
     res.setTimeout(2000, () => {
       if (!res.headersSent) {
         res.status(500).json({
@@ -167,16 +167,16 @@ exports.getCaptchaId = async (req, res) => {
     const captchaText = generateCaptchaText(6);
     const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     
-    // Store only hash and metadata; keep plaintext only for SVG rendering in memory (optional)
+    
     captchaStore.set(captchaId, {
       hash: hashAnswer(captchaText),
       timestamp: Date.now(),
       ip,
-      // Keeping plaintext short-lived for image rendering convenience
+      
       plainText: captchaText
     });
 
-    // Remove plaintext after 30 seconds to minimize exposure in memory
+    
     setTimeout(() => {
       const entry = captchaStore.get(captchaId);
       if (entry) {
@@ -193,7 +193,7 @@ exports.getCaptchaId = async (req, res) => {
     });
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
+      
       console.error('Error getting captcha ID:', error);
     }
     res.status(500).json({

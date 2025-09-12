@@ -1,11 +1,11 @@
 const { Course, User, sequelize } = require('../models');
 
-// Create a new course (admin only)
+
 exports.createCourse = async (req, res) => {
   try {
     const { title, description, duration, modules, fee, isActive, targetUserType } = req.body;
     
-    // Basic validation
+    
     if (!title || !description || !duration || !modules || !fee) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
@@ -16,9 +16,9 @@ exports.createCourse = async (req, res) => {
       duration,
       modules,
       fee,
-      // Default to true unless explicitly false
+      
       isActive: (isActive === false || isActive === 'false' || isActive === 0 || isActive === '0') ? false : true,
-      targetUserType: targetUserType || 'student' // Default to student if not provided
+      targetUserType: targetUserType || 'student' 
     });
 
     res.status(201).json({
@@ -41,11 +41,11 @@ exports.createCourse = async (req, res) => {
   }
 };
 
-// Get all courses
+
 exports.getAllCourses = async (req, res) => {
   try {
     const where = {};
-    // Optional filter: ?isActive=true|false (supports 1/0 and 'true'/'false')
+    
     if (typeof req.query.isActive !== 'undefined') {
       const q = req.query.isActive;
       const active = !(q === 'false' || q === '0' || q === 0 || q === false);
@@ -60,7 +60,7 @@ exports.getAllCourses = async (req, res) => {
         attributes: ['firstName', 'lastName', 'email']
       }]
     });
-    // Prevent caching on intermediaries/browsers to reflect admin toggles immediately
+    
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
@@ -73,7 +73,7 @@ exports.getAllCourses = async (req, res) => {
   }
 };
 
-// Get a single course by ID
+
 exports.getCourseById = async (req, res) => {
   try {
     const course = await Course.findByPk(req.params.id, {
@@ -90,11 +90,11 @@ exports.getCourseById = async (req, res) => {
   }
 };
 
-// Update a course (admin only)
+
 exports.updateCourse = async (req, res) => {
   try {
     const updates = { ...req.body };
-    // Normalize isActive if provided (accepts true/false, 'true'/'false', 1/0)
+    
     if (Object.prototype.hasOwnProperty.call(updates, 'isActive')) {
       const v = updates.isActive;
       updates.isActive = !(v === false || v === 'false' || v === 0 || v === '0');
@@ -102,7 +102,7 @@ exports.updateCourse = async (req, res) => {
     console.log('Updating course with data:', updates);
     console.log('Course ID to update:', req.params.id);
     
-    // First, let's check if the course exists
+    
     const existingCourse = await Course.findByPk(req.params.id);
     if (!existingCourse) {
       console.log('Course not found with ID:', req.params.id);
@@ -125,11 +125,11 @@ exports.updateCourse = async (req, res) => {
     
     console.log('Found course with instructor:', course.toJSON());
     
-    // Update the course with new data
+    
     const updateResult = await course.update(updates);
     console.log('Course update result:', updateResult.toJSON());
     
-    // Fetch the updated course with instructor info to ensure associations are loaded
+    
     const updatedCourse = await Course.findByPk(req.params.id, {
       include: [{
         model: User,
@@ -149,7 +149,7 @@ exports.updateCourse = async (req, res) => {
     console.log('Retrieved updated course:', updatedCourse.toJSON());
     console.log('Instructor data:', updatedCourse.instructor);
     
-    // Return the updated course data
+    
     const responseData = {
       id: updatedCourse.id,
       title: updatedCourse.title,
@@ -165,7 +165,7 @@ exports.updateCourse = async (req, res) => {
       rating: updatedCourse.rating || 0
     };
     
-    // Validate that all required fields are present
+    
     if (!responseData.id || !responseData.title || !responseData.description) {
       console.error('Missing required fields in response:', responseData);
       return res.status(500).json({ 
@@ -186,7 +186,7 @@ exports.updateCourse = async (req, res) => {
   }
 };
 
-// Delete a course (admin only)
+
 exports.deleteCourse = async (req, res) => {
   try {
     const course = await Course.findByPk(req.params.id);

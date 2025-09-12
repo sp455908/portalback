@@ -1,4 +1,4 @@
-// Health check controller for debugging server issues
+
 
 exports.healthCheck = async (req, res) => {
   try {
@@ -29,7 +29,7 @@ exports.detailedHealthCheck = async (req, res) => {
   try {
     const { sequelize } = require('../config/database');
     
-    // Test database connection
+    
     let dbStatus = 'unknown';
     try {
       await sequelize.authenticate();

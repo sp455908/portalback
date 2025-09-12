@@ -1,6 +1,6 @@
 const { Exam, Course, User } = require('../models');
 
-// Create a new exam (admin only)
+
 exports.createExam = async (req, res) => {
   try {
     const {
@@ -49,7 +49,7 @@ exports.createExam = async (req, res) => {
   }
 };
 
-// Get all exams
+
 exports.getAllExams = async (req, res) => {
   try {
     const exams = await Exam.findAll({
@@ -72,7 +72,7 @@ exports.getAllExams = async (req, res) => {
   }
 };
 
-// Get a single exam by ID
+
 exports.getExamById = async (req, res) => {
   try {
     const exam = await Exam.findByPk(req.params.id, {
@@ -96,7 +96,7 @@ exports.getExamById = async (req, res) => {
   }
 };
 
-// Update an exam (admin only)
+
 exports.updateExam = async (req, res) => {
   try {
     const updates = { ...req.body };
@@ -110,7 +110,7 @@ exports.updateExam = async (req, res) => {
   }
 };
 
-// Delete an exam (admin only)
+
 exports.deleteExam = async (req, res) => {
   try {
     const exam = await Exam.findByPk(req.params.id);

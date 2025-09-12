@@ -1,6 +1,6 @@
 const { Material, Course } = require('../models');
 
-// Create a new material (admin only)
+
 exports.createMaterial = async (req, res) => {
   try {
     const { title, description, type, fileUrl, courseId, isActive } = req.body;
@@ -20,7 +20,7 @@ exports.createMaterial = async (req, res) => {
   }
 };
 
-// Get all materials (optionally filter by course)
+
 exports.getAllMaterials = async (req, res) => {
   try {
     const { courseId } = req.query;
@@ -46,7 +46,7 @@ exports.getAllMaterials = async (req, res) => {
   }
 };
 
-// Get a single material by ID
+
 exports.getMaterialById = async (req, res) => {
   try {
     const material = await Material.findByPk(req.params.id, {
@@ -63,7 +63,7 @@ exports.getMaterialById = async (req, res) => {
   }
 };
 
-// Update a material (admin only)
+
 exports.updateMaterial = async (req, res) => {
   try {
     const updates = { ...req.body };
@@ -77,7 +77,7 @@ exports.updateMaterial = async (req, res) => {
   }
 };
 
-// Delete a material (admin only)
+
 exports.deleteMaterial = async (req, res) => {
   try {
     const material = await Material.findByPk(req.params.id);
