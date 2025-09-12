@@ -183,7 +183,12 @@ exports.protectWithQueryToken = async (req, res, next) => {
   let token;
   let sessionId;
 
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+  // Prefer JWT from HTTP-only cookie to support same-site new tab downloads
+  if (req.cookies && typeof req.cookies.token === 'string') {
+    token = sanitizeToken(req.cookies.token);
+  }
+
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
 
