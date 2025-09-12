@@ -142,8 +142,12 @@ router.post('/admins/:id/kill-sessions', async (req, res) => {
       return res.status(404).json({ status: 'fail', message: 'Admin not found' });
     }
     const sessions = await UserSession.findUserActiveSessions(admin.id);
-    await Promise.all(sessions.map(s => s.update({ isActive: false })));
-    res.status(200).json({ status: 'success', message: 'Admin sessions terminated', data: { count: sessions.length } });
+    // Deactivate by sessionId to ensure DB indexes are used
+    const deactivated = await UserSession.update(
+      { isActive: false },
+      { where: { userId: admin.id, isActive: true } }
+    );
+    res.status(200).json({ status: 'success', message: 'Admin sessions terminated', data: { count: deactivated?.[0] ?? sessions.length } });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to kill sessions' });
   }

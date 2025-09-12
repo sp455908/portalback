@@ -132,6 +132,28 @@ exports.protect = async (req, res, next) => {
       // Update session activity
       await session.updateActivity();
     }
+
+    // If no explicit sessionId header, validate against accessToken if tracked
+    if (!sessionId && isValidBearer(req.headers.authorization)) {
+      try {
+        const matchingSessions = await UserSession.findAll({ where: { userId: user.id, accessToken: token } });
+        if (matchingSessions && matchingSessions.length > 0) {
+          const anyActive = matchingSessions.some(s => s.isActive && new Date(s.expiresAt) > new Date());
+          if (!anyActive) {
+            return res.status(401).json({
+              status: 'fail',
+              message: 'Session has been terminated. Please login again.',
+              code: 'SESSION_TERMINATED'
+            });
+          }
+          // Optionally update lastActivity on the most recent session
+          const latest = matchingSessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))[0];
+          if (latest) await latest.updateActivity();
+        }
+      } catch (_) {
+        // non-fatal
+      }
+    }
     
     // Maintenance mode check: block all non-admin/owner access
     try {
