@@ -201,13 +201,22 @@ exports.getAvailablePracticeTests = async (req, res) => {
       
       
       const batchTests = await sequelize.query(`
-        SELECT DISTINCT pt.id, pt.title, pt.description, pt.category, pt.totalQuestions, 
-               pt.questionsPerTest, pt.duration, pt.passingScore, pt.repeatAfterHours, 
-               pt.enableCooldown, pt.targetUserType, pt.showInPublic
+        SELECT DISTINCT pt.id,
+               pt.title,
+               pt.description,
+               pt.category,
+               pt."totalQuestions",
+               pt."questionsPerTest",
+               pt.duration,
+               pt."passingScore",
+               pt."repeatAfterHours",
+               pt."enableCooldown",
+               pt."targetUserType",
+               pt."showInPublic"
         FROM "PracticeTests" pt
         INNER JOIN "BatchAssignedTests" bat ON pt.id = bat."testId"
-        WHERE bat."batchId" IN (:batchIds) 
-          AND pt."isActive" = true 
+        WHERE bat."batchId" IN (:batchIds)
+          AND pt."isActive" = true
           AND bat."isActive" = true
           AND pt."targetUserType" = :userType
       `, {

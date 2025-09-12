@@ -33,6 +33,9 @@ const healthRoutes = require('./routes/health.routes');
 
 const app = express();
 
+// Running behind Render's proxy; trust X-Forwarded-* headers for correct IPs/rate limiting
+app.set('trust proxy', 1);
+
 // Enhanced CORS configuration for Vercel deployment
 const allowedOrigins = [
   'https://iiftl-portal.vercel.app',
