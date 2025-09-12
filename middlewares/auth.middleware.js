@@ -153,6 +153,18 @@ exports.protect = async (req, res, next) => {
 
     // Attach user to request
     req.user = user;
+
+    // If token came from Authorization header, also set an httpOnly cookie to support new-tab downloads
+    try {
+      if (!req.cookies?.token && isValidBearer(req.headers.authorization)) {
+        res.cookie('token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'none',
+          maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+      }
+    } catch (_) {}
     next();
   } catch (err) {
     
