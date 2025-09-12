@@ -62,6 +62,14 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
   }
 
   
+  // Set access token cookie for browser requests (supports new-tab file downloads)
+  res.cookie('token', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // match access token expiry (7d default)
+  });
+
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
