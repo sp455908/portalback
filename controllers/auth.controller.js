@@ -1,4 +1,4 @@
-const { User, LoginAttempt, UserSession, Settings } = require('../models');
+const { User, LoginAttempt, UserSession, Settings, Owner } = require('../models');
 
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -34,6 +34,13 @@ const signToken = (id) => {
 const signRefreshToken = (id) => {
   return jwt.sign({ id, type: 'refresh' }, process.env.JWT_SECRET, {
     expiresIn: '30d' 
+  });
+};
+
+// Sign access token for Owner (superadmin)
+const signOwnerToken = (id) => {
+  return jwt.sign({ id, type: 'owner' }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
 };
 
@@ -260,6 +267,68 @@ exports.login = async (req, res, next) => {
     
     
     const user = await User.findOne({ where: { email } });
+
+    // Special case: Allow Owner (superadmin) login by email when not found in Users
+    if (!user) {
+      const owner = await Owner.findOne({ where: { email } });
+      if (owner) {
+        // Validate password
+        const isMatch = await owner.comparePassword(password);
+        if (!isMatch) {
+          return res.status(401).json({
+            status: 'fail',
+            message: 'Incorrect email or password',
+            code: 'INVALID_CREDENTIALS',
+            shouldCountFailedAttempt: false,
+            failedAttemptsCount: 0
+          });
+        }
+        if (owner.isActive === false) {
+          return res.status(403).json({
+            status: 'fail',
+            message: 'Your account has been disabled. Please contact an administrator.'
+          });
+        }
+
+        // Issue Owner tokens and cookies (no UserSession tracking)
+        const accessToken = signOwnerToken(owner.id);
+        const ownerRefreshToken = signRefreshToken(owner.id);
+
+        // Set cookies
+        res.cookie('token', accessToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'none',
+          maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+        res.cookie('refreshToken', ownerRefreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'none',
+          maxAge: 30 * 24 * 60 * 60 * 1000
+        });
+
+        return res.status(200).json({
+          status: 'success',
+          token: accessToken,
+          refreshToken: ownerRefreshToken,
+          sessionId: null,
+          expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+          sessionTimeout: SESSION_TIMEOUT_MINUTES * 60,
+          data: {
+            user: {
+              id: owner.id,
+              email: owner.email,
+              role: 'owner',
+              isOwner: true,
+              firstName: 'IIFTL',
+              lastName: 'SuperAdmin',
+              isActive: owner.isActive
+            }
+          }
+        });
+      }
+    }
 
     if (currentSettings?.maintenanceMode) {
       
@@ -525,8 +594,36 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
+    // If this refresh token belongs to an Owner (superadmin), mint an owner access token
+    // We can reuse the same token payload but treat owner as a special principal
+    let owner = null;
+    let user = null;
+    owner = await Owner.findByPk(decoded.id);
+    if (owner && owner.isActive !== false) {
+      const newOwnerAccess = signOwnerToken(owner.id);
+      res.cookie('token', newOwnerAccess, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'none',
+        maxAge: 7 * 24 * 60 * 60 * 1000
+      });
+      return res.status(200).json({
+        status: 'success',
+        token: newOwnerAccess,
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+        data: {
+          user: {
+            id: owner.id,
+            email: owner.email,
+            role: 'owner',
+            isOwner: true
+          }
+        }
+      });
+    }
     
-    const user = await User.findByPk(decoded.id);
+    // Otherwise, treat as regular user refresh
+    user = await User.findByPk(decoded.id);
     if (!user || !user.isActive) {
       return res.status(401).json({
         status: 'fail',
