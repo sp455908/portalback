@@ -23,6 +23,8 @@ module.exports = async function maintenanceGate(req, res, next) {
       '/api/auth/refresh-token',
       '/api/auth/verify-token',
       '/api/settings', // protected by admin in routes
+      '/api/courses', // public content
+      '/api/settings/maintenance-status', // public maintenance status
     ];
     if (allowlistPaths.some(p => path.startsWith(p))) {
       return next();
@@ -49,6 +51,14 @@ module.exports = async function maintenanceGate(req, res, next) {
         if (user && user.role === 'admin') {
           return next();
         }
+        // Non-admin with valid token during maintenance - block
+        const origin = req.headers.origin;
+        if (origin) {
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Vary', 'Origin');
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
+        return res.status(503).json({ status: 'fail', message: 'Platform is under maintenance' });
       } catch (_) {
         // fall through to block
       }
