@@ -1818,22 +1818,13 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.fontSize(12).font('Helvetica').text(`Test: ${sanitizeText(test.title)}`, { width: contentWidth, align: 'left' });
       doc.text(`Score: ${attempt.score}%`, { width: contentWidth, align: 'left' });
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`, { width: contentWidth, align: 'left' });
+      doc.moveDown(1);
+      
+      // Legend text below Date
+      doc.fontSize(10).font('Helvetica').text('• Correct option', { width: contentWidth, align: 'left' });
+      doc.text('• Your selected option (if incorrect)', { width: contentWidth, align: 'left' });
       doc.moveDown(1.5);
 
-      
-      try {
-        const legendWidth = 240;
-        const legendX = doc.page.width - doc.page.margins.right - legendWidth;
-        const legendY = doc.y - 36; 
-        doc.save();
-        doc.fontSize(9);
-        doc.fillColor('green').text('• Correct option', legendX, legendY, { width: legendWidth, align: 'right' });
-        doc.fillColor('red').text('• Your selected option (if incorrect)', legendX, legendY + 12, { width: legendWidth, align: 'right' });
-        doc.fillColor('black');
-        doc.restore();
-      } catch (_) { /* ignore legend placement errors */ }
-
-      doc.moveDown();
 
       
       doc.x = doc.page.margins.left;
