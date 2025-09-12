@@ -1,5 +1,6 @@
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { sanitizeValue } = require('../utils/sanitize');
 
 // Optional security middlewares – fall back to no-ops if not installed
 let mongoSanitize;
@@ -168,4 +169,52 @@ const securityMiddleware = {
   }
 };
 
-module.exports = securityMiddleware; 
+function sanitizeRequest(req, res, next) {
+  try {
+    if (req.body) req.body = sanitizeValue(req.body);
+    if (req.query) req.query = sanitizeValue(req.query);
+    if (req.params) req.params = sanitizeValue(req.params);
+  } catch (e) {
+    // best-effort; continue
+  }
+  next();
+}
+
+function parseAllowedOrigins() {
+  const env = (process.env.ALLOWED_ORIGINS || '').trim();
+  if (!env) return ['https://iiftl-portal.vercel.app'];
+  return env.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function verifyOriginForDownloads(req, res, next) {
+  try {
+    const allowed = new Set(parseAllowedOrigins());
+    const origin = req.headers.origin || '';
+    const referer = req.headers.referer || '';
+
+    const isAllowedOrigin = origin && allowed.has(origin);
+    const isAllowedReferer = referer && Array.from(allowed).some(o => referer.startsWith(o));
+
+    if (isAllowedOrigin || isAllowedReferer) {
+      return next();
+    }
+
+    // If no origin/referer (e.g., direct curl), allow only when authenticated
+    if (!origin && !referer && req.headers.authorization) {
+      return next();
+    }
+
+    return res.status(403).json({
+      status: 'fail',
+      message: 'Forbidden: invalid request origin'
+    });
+  } catch (err) {
+    return res.status(400).json({ status: 'fail', message: 'Invalid request' });
+  }
+}
+
+module.exports = {
+  securityMiddleware,
+  sanitizeRequest,
+  verifyOriginForDownloads
+}; 

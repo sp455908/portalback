@@ -31,6 +31,7 @@ const captchaRoutes = require('./routes/captcha.routes');
 const ownerRoutes = require('./routes/owner.routes');
 const healthRoutes = require('./routes/health.routes');
 const realtimeRoutes = require('./routes/realtime.routes');
+const { sanitizeRequest } = require('./middlewares/security.middleware');
 
 const app = express();
 
@@ -40,9 +41,6 @@ app.set('trust proxy', 1);
 // Enhanced CORS configuration for Vercel deployment
 const allowedOrigins = [
   'https://iiftl-portal.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:8080'
 ];
 
 const corsOptions = {
@@ -112,6 +110,7 @@ app.use(performanceMonitor); // Performance monitoring
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(cookieParser()); // Parse cookies
+app.use(sanitizeRequest); // Sanitize inputs to mitigate XSS
 
 // Session configuration with PostgreSQL store
 app.use(session({
