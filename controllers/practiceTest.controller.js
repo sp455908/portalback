@@ -5,7 +5,6 @@ try {
   TestAttempt = models.TestAttempt;
   User = models.User;
   sequelize = models.sequelize;
-  console.log('Models imported successfully');
 } catch (error) {
   console.error('Error importing models:', error);
   throw error;
@@ -163,8 +162,6 @@ exports.getAvailablePracticeTests = async (req, res) => {
   try {
     
     if (process.env.NODE_ENV === 'development') {
-      console.log('=== getAvailablePracticeTests START ===');
-      console.log('Request user:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
     }
     
     if (!req.user) {
@@ -281,8 +278,6 @@ exports.getAvailablePracticeTests = async (req, res) => {
     });
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('Final response - testsWithAvailability count:', testsWithAvailability.length);
-      console.log('=== getAvailablePracticeTests END ===');
     }
 
     res.status(200).json({
@@ -304,9 +299,6 @@ exports.getAvailablePracticeTests = async (req, res) => {
 exports.startPracticeTest = async (req, res) => {
   try {
     const { testId } = req.params;
-    console.log('=== startPracticeTest START ===');
-    console.log('User:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
-    console.log('Test ID:', testId);
     
     
     const practiceTest = await PracticeTest.findByPk(testId);
