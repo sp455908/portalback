@@ -1,4 +1,4 @@
-// D:\IIFTL Backend\app.js
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -13,7 +13,7 @@ const maintenanceGate = require('./middlewares/maintenance.middleware');
 const { securityLogging } = require('./middlewares/securityLogging.middleware');
 const { sequelize } = require('./config/database');
 
-// Route imports
+
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const courseRoutes = require('./routes/course.routes');
@@ -35,17 +35,17 @@ const { sanitizeRequest } = require('./middlewares/security.middleware');
 
 const app = express();
 
-// Running behind Render's proxy; trust X-Forwarded-* headers for correct IPs/rate limiting
+
 app.set('trust proxy', 1);
 
-// Enhanced CORS configuration for Vercel deployment
+
 const allowedOrigins = [
   'https://iiftl-portal.vercel.app',
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
@@ -74,16 +74,16 @@ const corsOptions = {
     'If-None-Match'
   ],
   exposedHeaders: ['set-cookie', 'Authorization'],
-  maxAge: 86400, // 24 hours
+  maxAge: 86400, 
   preflightContinue: false,
   optionsSuccessStatus: 204
 };
 
-// Apply CORS middleware EARLY
+
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Apply middleware in correct order
+
 app.disable('x-powered-by');
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -103,21 +103,21 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   frameguard: { action: 'deny' },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
-})); // Security headers first
-app.use(morgan('dev')); // Logging
-app.use(securityLogging); // Security logging
-app.use(performanceMonitor); // Performance monitoring
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-app.use(cookieParser()); // Parse cookies
-app.use(sanitizeRequest); // Sanitize inputs to mitigate XSS
+})); 
+app.use(morgan('dev')); 
+app.use(securityLogging); 
+app.use(performanceMonitor); 
+app.use(express.json()); 
+app.use(express.urlencoded({ extended: true })); 
+app.use(cookieParser()); 
+app.use(sanitizeRequest); 
 
-// Session configuration with PostgreSQL store
+
 app.use(session({
   store: new pgSession({
     conObject: {
       connectionString: process.env.DATABASE_URL,
-      // Force SSL for Render Postgres regardless of NODE_ENV
+      
       ssl: { rejectUnauthorized: false },
     },
     tableName: 'sessions'
@@ -128,16 +128,16 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000 
   }
 }));
 
-// CORS already applied above
 
-// Global maintenance gate BEFORE routes
+
+
 app.use(maintenanceGate);
 
-// API Routes
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/courses', courseRoutes);
@@ -156,7 +156,7 @@ app.use('/api/owner', ownerRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/realtime', realtimeRoutes);
 
-// Basic health check endpoint (fallback)
+
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'success',
@@ -166,7 +166,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Error handling middleware (should be last)
+
 app.use(errorHandler);
 
 module.exports = app;
