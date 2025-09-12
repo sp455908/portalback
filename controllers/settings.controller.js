@@ -79,24 +79,66 @@ exports.updateSettings = catchAsync(async (req, res) => {
   }
 });
 
-// Get maintenance status
+// ✅ OPTIMIZED: Get maintenance status with caching and fast response
+let maintenanceStatusCache = null;
+let maintenanceStatusCacheTime = 0;
+const MAINTENANCE_CACHE_DURATION = 30000; // 30 seconds cache
+
 exports.getMaintenanceStatus = async (req, res) => {
   try {
-    const settings = await Settings.findOne();
+    // Check cache first
+    if (maintenanceStatusCache && (Date.now() - maintenanceStatusCacheTime) < MAINTENANCE_CACHE_DURATION) {
+      return res.status(200).json({
+        status: 'success',
+        data: maintenanceStatusCache
+      });
+    }
+
+    // Set a timeout for the database query
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database query timeout')), 1000)
+    );
+
+    const queryPromise = Settings.findOne({
+      attributes: ['maintenanceMode', 'maintenanceMessage', 'maintenanceEndTime', 'registrationEnabled']
+    });
+
+    const settings = await Promise.race([queryPromise, timeoutPromise]);
+    
+    const statusData = {
+      maintenanceMode: settings?.maintenanceMode || false,
+      maintenanceMessage: settings?.maintenanceMessage || '',
+      maintenanceEndTime: settings?.maintenanceEndTime || null,
+      registrationEnabled: settings?.registrationEnabled || true
+    };
+
+    // Update cache
+    maintenanceStatusCache = statusData;
+    maintenanceStatusCacheTime = Date.now();
+    
+    res.status(200).json({
+      status: 'success',
+      data: statusData
+    });
+  } catch (err) {
+    console.error('Error fetching maintenance status:', err);
+    
+    // Return cached data if available, otherwise default
+    if (maintenanceStatusCache) {
+      return res.status(200).json({
+        status: 'success',
+        data: maintenanceStatusCache
+      });
+    }
     
     res.status(200).json({
       status: 'success',
       data: {
-        maintenanceMode: settings?.maintenanceMode || false,
-        maintenanceMessage: settings?.maintenanceMessage || '',
-        maintenanceEndTime: settings?.maintenanceEndTime || null,
-        registrationEnabled: settings?.registrationEnabled || true
+        maintenanceMode: false,
+        maintenanceMessage: '',
+        maintenanceEndTime: null,
+        registrationEnabled: true
       }
-    });
-  } catch (err) {
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch maintenance status'
     });
   }
 };

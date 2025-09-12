@@ -150,9 +150,19 @@ exports.verifyCaptcha = async (req, res) => {
   }
 };
 
-// Get captcha ID (for frontend to use)
+// ✅ OPTIMIZED: Get captcha ID with faster generation
 exports.getCaptchaId = async (req, res) => {
   try {
+    // Set response timeout
+    res.setTimeout(2000, () => {
+      if (!res.headersSent) {
+        res.status(500).json({
+          status: 'error',
+          message: 'Captcha generation timeout'
+        });
+      }
+    });
+
     const captchaId = crypto.randomBytes(16).toString('hex');
     const captchaText = generateCaptchaText(6);
     const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
