@@ -129,6 +129,33 @@ const securityMiddleware = {
     }
 
     next();
+  },
+
+  // Lightweight origin/referer guard for file downloads (mitigates CSRF/link-leaks)
+  verifyOriginForDownloads: (req, res, next) => {
+    try {
+      // Allow direct top-level navigations without Origin/Referer (browser may omit)
+      const origin = req.headers.origin || '';
+      const referer = req.headers.referer || '';
+
+      // Whitelist allowed frontends; allow same-origin backend as well
+      const allowed = new Set([
+        'https://iiftl-portal.vercel.app',
+        process.env.FRONTEND_ORIGIN || '',
+      ].filter(Boolean));
+
+      const isAllowedOrigin = origin ? allowed.has(origin) : true;
+      const isAllowedReferer = referer ? Array.from(allowed).some(a => referer.startsWith(a)) : true;
+
+      if (!isAllowedOrigin || !isAllowedReferer) {
+        return res.status(403).json({ status: 'fail', message: 'Forbidden by origin policy' });
+      }
+
+      return next();
+    } catch (_) {
+      // Fail closed
+      return res.status(403).json({ status: 'fail', message: 'Forbidden' });
+    }
   }
 };
 

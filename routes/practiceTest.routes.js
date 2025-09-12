@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const practiceTestController = require('../controllers/practiceTest.controller');
 const { protect, protectWithQueryToken } = require('../middlewares/auth.middleware');
+const { verifyOriginForDownloads } = require('../middlewares/security.middleware');
 const authorize = require('../middlewares/role.middleware');
 const { validateBatchAccess } = require('../middlewares/batchAccess.middleware');
 const { practiceTestRateLimit, testSubmissionRateLimit } = require('../middlewares/rateLimit.middleware');
@@ -61,7 +62,7 @@ router.post('/:testId/start', practiceTestRateLimit, protect, authorize('student
 router.post('/attempt/:testAttemptId/submit', testSubmissionRateLimit, protect, authorize('student', 'corporate', 'government'), practiceTestController.submitPracticeTest);
 router.get('/attempts', protect, authorize('student', 'corporate', 'government'), practiceTestController.getUserTestAttempts);
 router.delete('/attempt/:attemptId', protect, practiceTestController.deleteAttempt);
-// Allow either Bearer header or token query for PDF download to support new-tab downloads
-router.get('/attempt/:testAttemptId/pdf', protectWithQueryToken, authorize('student', 'corporate', 'government', 'admin'), practiceTestController.downloadAttemptPDF);
+// PDF download: require cookie-based auth and verify origin
+router.get('/attempt/:testAttemptId/pdf', protect, verifyOriginForDownloads, authorize('student', 'corporate', 'government', 'admin'), practiceTestController.downloadAttemptPDF);
 
 module.exports = router; 

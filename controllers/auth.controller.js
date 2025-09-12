@@ -545,10 +545,16 @@ exports.refreshToken = async (req, res, next) => {
 
     
     const newAccessToken = signToken(user.id);
-    
-    
-    user.password = undefined;
 
+    // Also set/refresh access token cookie for browser-based auth (supports new-tab downloads)
+    res.cookie('token', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    // user.password removed above
     res.status(200).json({
       status: 'success',
       token: newAccessToken,
