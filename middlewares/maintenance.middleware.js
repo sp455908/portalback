@@ -37,7 +37,7 @@ module.exports = async function maintenanceGate(req, res, next) {
       return res.status(503).json({ status: 'fail', message: 'Platform is under maintenance. Registration is temporarily disabled.' });
     }
 
-    // If token present, verify and allow only admin role during maintenance
+    // If token present, verify and allow only admin or owner during maintenance
     let token = null;
     if (req.cookies && typeof req.cookies.token === 'string') {
       token = String(req.cookies.token);
@@ -49,11 +49,16 @@ module.exports = async function maintenanceGate(req, res, next) {
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        // Allow owner tokens
+        if (decoded && decoded.type === 'owner') {
+          return next();
+        }
+        // Allow admin users
         const user = await User.findByPk(decoded.id);
         if (user && user.role === 'admin') {
           return next();
         }
-        // Non-admin with valid token during maintenance - block
+        // Non-admin/owner with valid token during maintenance - block
         const origin = req.headers.origin;
         if (origin) {
           res.setHeader('Access-Control-Allow-Origin', origin);

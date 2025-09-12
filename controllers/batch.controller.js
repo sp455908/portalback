@@ -1054,9 +1054,9 @@ exports.getAllStudentConflicts = async (req, res) => {
     }
 
     
-    if (req.user && req.user.role === 'admin') {
+    if (req.user && (req.user.role === 'admin' || req.user.isOwner)) {
       
-    } else if (req.user && req.user.role !== 'admin') {
+    } else if (req.user && req.user.role !== 'admin' && !req.user.isOwner) {
       return res.status(403).json({ 
         status: 'fail', 
         message: 'Access denied. Admin privileges required.' 

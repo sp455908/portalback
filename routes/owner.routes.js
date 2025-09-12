@@ -36,6 +36,19 @@ router.use(protect, (req, res, next) => {
   next();
 });
 
+// List all admin users (owner-only)
+router.get('/admins', async (req, res) => {
+  try {
+    const admins = await User.findAll({
+      where: { role: 'admin' },
+      attributes: ['id', 'firstName', 'lastName', 'email', 'isActive', 'createdAt', 'updatedAt']
+    });
+    return res.status(200).json({ status: 'success', data: { admins } });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch admins' });
+  }
+});
+
 // Create an admin user
 router.post('/admins', async (req, res) => {
   try {
@@ -93,6 +106,30 @@ router.post('/admins/:id/reset-password', async (req, res) => {
     res.status(200).json({ status: 'success', message: 'Password updated' });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to reset password' });
+  }
+});
+
+// Change admin password with current password verification
+router.post('/admins/:id/change-password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ status: 'fail', message: 'Current and new password are required' });
+    }
+    const admin = await User.findByPk(id);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(404).json({ status: 'fail', message: 'Admin not found' });
+    }
+    const ok = await admin.comparePassword(currentPassword);
+    if (!ok) {
+      return res.status(400).json({ status: 'fail', message: 'Current password is incorrect' });
+    }
+    admin.password = newPassword;
+    await admin.save();
+    return res.status(200).json({ status: 'success', message: 'Password changed successfully' });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: 'Failed to change password' });
   }
 });
 
