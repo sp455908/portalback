@@ -29,6 +29,7 @@ const analyticsRoutes = require('./routes/analytics.routes');
 const securityRoutes = require('./routes/security.routes');
 const captchaRoutes = require('./routes/captcha.routes');
 const ownerRoutes = require('./routes/owner.routes');
+const healthRoutes = require('./routes/health.routes');
 
 const app = express();
 
@@ -64,7 +65,11 @@ const corsOptions = {
     'x-csrf-token',
     'x-session-id',
     'Access-Control-Request-Method',
-    'Access-Control-Request-Headers'
+    'Access-Control-Request-Headers',
+    'Cache-Control',
+    'Pragma',
+    'If-Modified-Since',
+    'If-None-Match'
   ],
   exposedHeaders: ['set-cookie', 'Authorization'],
   maxAge: 86400, // 24 hours
@@ -145,9 +150,10 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/captcha', captchaRoutes);
 app.use('/api/owner', ownerRoutes);
+app.use('/api/health', healthRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
+// Basic health check endpoint (fallback)
+app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'success',
     message: 'API is running',
