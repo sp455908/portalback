@@ -209,6 +209,13 @@ exports.protectWithQueryToken = async (req, res, next) => {
     token = req.query.token;
   }
 
+  // Last resort: allow refreshToken cookie to authenticate safe idempotent GETs (e.g., file downloads)
+  let usedRefreshToken = false;
+  if (!token && req.cookies && typeof req.cookies.refreshToken === 'string' && req.method === 'GET') {
+    token = req.cookies.refreshToken;
+    usedRefreshToken = true;
+  }
+
   if (req.headers['x-session-id']) {
     sessionId = req.headers['x-session-id'];
   }
@@ -222,7 +229,11 @@ exports.protectWithQueryToken = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findByPk(decoded.id);
+    if (usedRefreshToken && decoded.type !== 'refresh') {
+      return res.status(401).json({ status: 'fail', message: 'Invalid token' });
+    }
+    const userId = decoded.id;
+    const user = await User.findByPk(userId);
     if (!user) {
       return res.status(401).json({ status: 'fail', message: 'User not found' });
     }
@@ -243,6 +254,18 @@ exports.protectWithQueryToken = async (req, res, next) => {
     }
 
     req.user = user;
+    // If we authenticated via refresh token, optionally mint a short-lived cookie for convenience
+    if (usedRefreshToken) {
+      try {
+        const short = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '15m' });
+        res.cookie('token', short, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'none',
+          maxAge: 15 * 60 * 1000
+        });
+      } catch (_) {}
+    }
     next();
   } catch (err) {
     console.error('Auth (query token) error:', err);
