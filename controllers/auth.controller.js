@@ -66,14 +66,14 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
   res.cookie('token', accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'none',
     maxAge: 7 * 24 * 60 * 60 * 1000 // match access token expiry (7d default)
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'none',
     maxAge: 30 * 24 * 60 * 60 * 1000 
   });
 
@@ -550,7 +550,7 @@ exports.refreshToken = async (req, res, next) => {
     res.cookie('token', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'none',
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
