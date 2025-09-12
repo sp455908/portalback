@@ -108,6 +108,16 @@ exports.updateUser = async (req, res) => {
     }
 
     
+    // Hardened: Never allow elevating to admin via this endpoint
+    if (updates.role && updates.role !== user.role) {
+      if (updates.role === 'admin' || updates.role === 'owner') {
+        return res.status(403).json({
+          status: 'fail',
+          message: 'Role elevation to admin/owner is not allowed via API'
+        });
+      }
+    }
+
     if (updates.role === 'admin' && user.role !== 'admin') {
       const adminCount = await User.count({ 
         where: { 

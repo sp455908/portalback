@@ -126,6 +126,15 @@ exports.register = async (req, res, next) => {
       });
     }
 
+    // Hardened: Disallow creating admin/superadmin via public registration
+    const publicAllowedRoles = ['student', 'corporate', 'government'];
+    if (!publicAllowedRoles.includes(role)) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'Registration for this role is not allowed'
+      });
+    }
+
     
     const validUserTypes = ['student', 'corporate', 'government'];
     if (!validUserTypes.includes(userType)) {
@@ -135,24 +144,10 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    
-    const [adminCount, existingUser] = await Promise.all([
-      role === 'admin' ? User.count({ where: { role: 'admin' } }) : Promise.resolve(0),
+    // Skip admin counting since public register cannot create admin users
+    const [existingUser] = await Promise.all([
       User.findOne({ where: { email: normalizedEmail } })
     ]);
-
-    
-    if (role === 'admin') {
-      adminCountCache.set('admin_count', adminCount, 5 * 60 * 1000); 
-    }
-
-    
-    if (role === 'admin' && adminCount > 0) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Only one admin user is allowed in the system. Admin user already exists.'
-      });
-    }
 
     
     if (existingUser) {
@@ -170,7 +165,7 @@ exports.register = async (req, res, next) => {
         lastName,
         email: normalizedEmail,
         password,
-        role,
+        role, // role already validated to be in publicAllowedRoles
         userType,
         phone: phone ? encryptionService.encrypt(String(phone)) : phone,
         address: address ? encryptionService.encrypt(String(address)) : address,
@@ -541,6 +536,24 @@ exports.login = async (req, res, next) => {
 
 exports.getMe = async (req, res, next) => {
   try {
+    // Support owner tokens: middleware sets req.user with isOwner
+    if (req.user && req.user.isOwner === true) {
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          user: {
+            id: req.user.id,
+            email: req.user.email,
+            role: 'owner',
+            isOwner: true,
+            firstName: 'IIFTL',
+            lastName: 'SuperAdmin',
+            isActive: true
+          }
+        }
+      });
+    }
+
     const user = await User.findByPk(req.user.id);
     
     if (!user) {

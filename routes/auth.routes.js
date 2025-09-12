@@ -8,7 +8,7 @@ const { Op, fn, col } = require('sequelize');
 const { decryptRequestBody } = require('../middlewares/decrypt.middleware');
 const { checkRegistrationEnabled } = require('../controllers/settings.controller');
 
-// Register a new user (respect platform setting)
+// Register a new user (respect platform setting). Only allows non-admin roles (enforced in controller)
 router.post('/user-auth/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
 // Alias for frontend compatibility
 router.post('/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
