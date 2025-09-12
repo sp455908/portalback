@@ -4,15 +4,40 @@ const { protect } = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/role.middleware');
 const { User, UserSession, Owner } = require('../models');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+
+// Rate limiters
+const ownerAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'fail', message: 'Too many authentication attempts. Please try again later.' }
+});
+
+const ownerMutationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'fail', message: 'Too many requests. Please slow down.' }
+});
+
+// Basic validators
+const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0;
+const normalizeEmail = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v);
+const isValidEmail = (v) => typeof v === 'string' && /^(?=[^@]{1,64}@)[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
+const isStrongPassword = (v) => typeof v === 'string' && v.length >= 10 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /\d/.test(v) && /[^A-Za-z0-9]/.test(v);
+const sanitizeName = (v) => (typeof v === 'string' ? v.replace(/[\r\n\t<>]/g, '').trim() : v);
 
 // Owner auth (email/password) → issues OWNER JWT
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', ownerAuthLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) {
+    if (!isValidEmail(email) || !isNonEmptyString(password)) {
       return res.status(400).json({ status: 'fail', message: 'Email and password required' });
     }
-    const owner = await Owner.findOne({ where: { email: String(email).toLowerCase().trim(), isActive: true } });
+    const owner = await Owner.findOne({ where: { email: normalizeEmail(email), isActive: true } });
     if (!owner) {
       return res.status(401).json({ status: 'fail', message: 'Invalid credentials' });
     }
@@ -50,20 +75,21 @@ router.get('/admins', async (req, res) => {
 });
 
 // Create an admin user
-router.post('/admins', async (req, res) => {
+router.post('/admins', ownerMutationLimiter, async (req, res) => {
   try {
-    const { firstName, lastName, email, password } = req.body;
-    if (!firstName || !lastName || !email || !password) {
+    const { firstName, lastName, email, password } = req.body || {};
+    if (!isNonEmptyString(firstName) || !isNonEmptyString(lastName) || !isValidEmail(email) || !isStrongPassword(password)) {
       return res.status(400).json({ status: 'fail', message: 'Missing required fields' });
     }
-    const existing = await User.findOne({ where: { email: String(email).toLowerCase().trim() } });
+    const normalizedEmail = normalizeEmail(email);
+    const existing = await User.findOne({ where: { email: normalizedEmail } });
     if (existing) {
       return res.status(409).json({ status: 'fail', message: 'Email already in use' });
     }
     const admin = await User.create({
-      firstName,
-      lastName,
-      email,
+      firstName: sanitizeName(firstName),
+      lastName: sanitizeName(lastName),
+      email: normalizedEmail,
       password,
       role: 'admin',
       userType: 'student' // userType is required by model; admin userType is not used for access
@@ -90,11 +116,11 @@ router.delete('/admins/:id', async (req, res) => {
 });
 
 // Reset admin password
-router.post('/admins/:id/reset-password', async (req, res) => {
+router.post('/admins/:id/reset-password', ownerMutationLimiter, async (req, res) => {
   try {
     const { id } = req.params;
-    const { newPassword } = req.body;
-    if (!newPassword) {
+    const { newPassword } = req.body || {};
+    if (!isStrongPassword(newPassword)) {
       return res.status(400).json({ status: 'fail', message: 'New password is required' });
     }
     const admin = await User.findByPk(id);
@@ -110,11 +136,11 @@ router.post('/admins/:id/reset-password', async (req, res) => {
 });
 
 // Change admin password with current password verification
-router.post('/admins/:id/change-password', async (req, res) => {
+router.post('/admins/:id/change-password', ownerMutationLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body || {};
-    if (!currentPassword || !newPassword) {
+    if (!isNonEmptyString(currentPassword) || !isStrongPassword(newPassword)) {
       return res.status(400).json({ status: 'fail', message: 'Current and new password are required' });
     }
     const admin = await User.findByPk(id);
@@ -134,7 +160,7 @@ router.post('/admins/:id/change-password', async (req, res) => {
 });
 
 // Kill all active sessions for an admin
-router.post('/admins/:id/kill-sessions', async (req, res) => {
+router.post('/admins/:id/kill-sessions', ownerMutationLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const admin = await User.findByPk(id);

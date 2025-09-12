@@ -30,6 +30,7 @@ const securityRoutes = require('./routes/security.routes');
 const captchaRoutes = require('./routes/captcha.routes');
 const ownerRoutes = require('./routes/owner.routes');
 const healthRoutes = require('./routes/health.routes');
+const realtimeRoutes = require('./routes/realtime.routes');
 
 const app = express();
 
@@ -154,6 +155,7 @@ app.use('/api/security', securityRoutes);
 app.use('/api/captcha', captchaRoutes);
 app.use('/api/owner', ownerRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/realtime', realtimeRoutes);
 
 // Basic health check endpoint (fallback)
 app.get('/health', (req, res) => {

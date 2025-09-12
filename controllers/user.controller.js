@@ -2,6 +2,7 @@ const { User, LoginAttempt } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize'); 
+const eventBus = require('../utils/eventBus');
 
 
 const signToken = (id) =>
@@ -108,7 +109,6 @@ exports.updateUser = async (req, res) => {
     }
 
     
-    // Hardened: Never allow elevating to admin via this endpoint
     if (updates.role && updates.role !== user.role) {
       if (updates.role === 'admin' || updates.role === 'owner') {
         return res.status(403).json({
@@ -145,6 +145,9 @@ exports.updateUser = async (req, res) => {
     const updatedUser = await User.findByPk(userId, {
       attributes: { exclude: ['password'] }
     });
+
+    // emit live event (no PII)
+    eventBus.emit('user_updated', { userId: Number(userId), action: 'updated' });
 
     res.status(200).json({
       status: 'success',
@@ -249,6 +252,9 @@ exports.deleteUser = async (req, res) => {
 
     
     await user.destroy();
+
+    // emit live event
+    eventBus.emit('user_updated', { userId: Number(userId), action: 'deleted' });
 
     res.status(200).json({ 
       status: 'success',
@@ -598,6 +604,9 @@ exports.unblockUser = async (req, res) => {
     
     await user.update({ isActive: true });
 
+    // emit live event
+    eventBus.emit('user_updated', { userId: Number(userId), action: 'unblocked' });
+
     res.status(200).json({
       status: 'success',
       message: 'User unblocked successfully and marked as active',
@@ -677,6 +686,9 @@ exports.blockUser = async (req, res) => {
 
     
     await user.update({ isActive: false });
+
+    // emit live event
+    eventBus.emit('user_updated', { userId: Number(userId), action: 'blocked' });
 
     res.status(200).json({
       status: 'success',
