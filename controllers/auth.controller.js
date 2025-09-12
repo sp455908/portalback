@@ -258,7 +258,7 @@ exports.login = async (req, res, next) => {
       if (!user || (user.role !== 'admin')) {
         return res.status(503).json({
           status: 'fail',
-          message: 'Platform is under maintenance. Only admin access is allowed.'
+          message: 'Platform is under maintenance.'
         });
       }
     }

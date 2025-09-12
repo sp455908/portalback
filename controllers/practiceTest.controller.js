@@ -161,206 +161,130 @@ exports.getPracticeTestById = async (req, res) => {
 // Get available practice tests for students and corporate users
 exports.getAvailablePracticeTests = async (req, res) => {
   try {
-    console.log('=== getAvailablePracticeTests START ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request user:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
+    // Security: Remove detailed logging in production
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== getAvailablePracticeTests START ===');
+      console.log('Request user:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
+    }
     
-    console.log('About to query practice tests...');
-    const practiceTests = await PracticeTest.findAll({
-      where: { isActive: true },
-      attributes: ['id', 'title', 'description', 'category', 'totalQuestions', 'questionsPerTest', 'duration', 'passingScore', 'repeatAfterHours', 'enableCooldown', 'questions', 'targetUserType', 'showInPublic'],
-      order: [['createdAt', 'DESC']]
-    });
-    console.log('Practice tests query completed');
-    
-    // Also check for all practice tests (including inactive ones) for debugging
-    console.log('About to query all practice tests...');
-    const allPracticeTests = await PracticeTest.findAll({
-      attributes: ['id', 'title', 'isActive', 'targetUserType']
-    });
-    console.log('All practice tests query completed');
-    console.log('All practice tests (including inactive):', allPracticeTests.map(t => ({ id: t.id, title: t.title, isActive: t.isActive, targetUserType: t.targetUserType })));
-    
-    console.log('Found practice tests:', practiceTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-    console.log('Total practice tests found:', practiceTests.length);
-
-    let filteredTests = practiceTests;
-    let batchAssignedTests = [];
-    
-    if (req.user) {
-      // Handle both userType and role fields
-      let userType = req.user.userType;
-      if (!userType && req.user.role && req.user.role !== 'admin') {
-        userType = req.user.role; // Use role if userType is not available
-      }
-      
-      console.log('User type for filtering:', userType);
-      console.log('User object:', { id: req.user.id, role: req.user.role, userType: req.user.userType });
-      
-      // Get tests assigned to user's batches using a more direct approach
-      console.log('About to query user batches and assigned tests...');
-      try {
-        // First get the user's batch IDs
-        const userBatchIds = await sequelize.query(`
-          SELECT DISTINCT "batchId" 
-          FROM "BatchStudents" 
-          WHERE "userId" = :userId
-        `, {
-          replacements: { userId: req.user.id },
-          type: sequelize.QueryTypes.SELECT
-        });
-        
-        console.log('User batch IDs:', userBatchIds);
-        
-        if (userBatchIds.length > 0) {
-          const batchIds = userBatchIds.map(b => b.batchId);
-          
-          // Get tests assigned to these batches
-          const batchTests = await sequelize.query(`
-            SELECT DISTINCT pt.* 
-            FROM "PracticeTests" pt
-            INNER JOIN "BatchAssignedTests" bat ON pt.id = bat."testId"
-            WHERE bat."batchId" IN (:batchIds) AND pt."isActive" = true
-          `, {
-            replacements: { batchIds: batchIds },
-            type: sequelize.QueryTypes.SELECT
-          });
-          
-          console.log('Batch assigned tests found:', batchTests.length);
-          console.log('Batch assigned tests:', batchTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-          
-          // Convert to the format expected by the rest of the function
-          batchAssignedTests = batchTests.map(test => ({
-            id: test.id,
-            title: test.title,
-            description: test.description,
-            category: test.category,
-            totalQuestions: test.totalQuestions,
-            questionsPerTest: test.questionsPerTest,
-            duration: test.duration,
-            passingScore: test.passingScore,
-            repeatAfterHours: test.repeatAfterHours,
-            enableCooldown: test.enableCooldown,
-            questions: test.questions,
-            targetUserType: test.targetUserType,
-            showInPublic: test.showInPublic
-          }));
-        }
-      } catch (batchError) {
-        console.error('Error querying user batches:', batchError);
-        // Continue without batch tests if there's an error
-        batchAssignedTests = [];
-      }
-      
-      // Remove duplicates from batch assigned tests
-      const uniqueBatchTests = batchAssignedTests.filter((test, index, self) => 
-        index === self.findIndex(t => t.id === test.id)
-      );
-      
-      console.log('Unique batch assigned tests:', uniqueBatchTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-      
-      if (userType) {
-        // For corporate and government users: ONLY show batch-assigned tests
-        // For students: show both type-filtered tests AND batch-assigned tests
-        if (userType === 'corporate' || userType === 'government') {
-          // Corporate and government users must be in batches to see tests
-          filteredTests = uniqueBatchTests;
-          console.log('Corporate/Government user - showing only batch-assigned tests:', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-        } else if (userType === 'student') {
-          // Students can see both type-filtered tests and batch-assigned tests
-          const typeFilteredTests = practiceTests.filter(test => test.targetUserType === userType);
-          console.log('Student - type filtered tests:', typeFilteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-          
-          // Combine type-filtered tests with batch-assigned tests
-          const allAvailableTests = [...typeFilteredTests, ...uniqueBatchTests];
-          
-          // Remove duplicates
-          filteredTests = allAvailableTests.filter((test, index, self) => 
-            index === self.findIndex(t => t.id === test.id)
-          );
-          
-          console.log('Student - combined filtered tests (type + batch):', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-        } else {
-          // Fallback for any other user types
-          filteredTests = uniqueBatchTests;
-          console.log('Other user type - showing only batch-assigned tests:', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-        }
-      } else {
-        // If no userType, just show batch-assigned tests
-        filteredTests = uniqueBatchTests;
-        console.log('No userType, showing only batch-assigned tests:', filteredTests.map(t => ({ id: t.id, title: t.title, targetUserType: t.targetUserType })));
-      }
-    } else {
-      console.log('No user object found in request');
+    if (!req.user) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Authentication required'
+      });
     }
 
-    let testsWithAvailability;
-    const serializeTest = (test) => (test && typeof test.toJSON === 'function' ? test.toJSON() : test);
-    if (req.user) {
-      console.log('About to query user attempts...');
-      const userAttempts = await TestAttempt.findAll({ 
-        where: {
-          userId: req.user.id,
-          status: 'completed'
+    // Security: Validate user type
+    let userType = req.user.userType;
+    if (!userType && req.user.role && req.user.role !== 'admin') {
+      userType = req.user.role;
+    }
+
+    if (!userType || !['student', 'corporate', 'government'].includes(userType)) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'Invalid user type or insufficient permissions'
+      });
+    }
+
+    // Security: Get user's batch assignments first
+    const userBatchIds = await sequelize.query(`
+      SELECT DISTINCT "batchId" 
+      FROM "BatchStudents" 
+      WHERE "userId" = :userId AND "status" = 'active'
+    `, {
+      replacements: { userId: req.user.id },
+      type: sequelize.QueryTypes.SELECT
+    });
+
+    let filteredTests = [];
+    
+    if (userBatchIds.length > 0) {
+      const batchIds = userBatchIds.map(b => b.batchId);
+      
+      // Security: Only get tests assigned to user's batches
+      const batchTests = await sequelize.query(`
+        SELECT DISTINCT pt.id, pt.title, pt.description, pt.category, pt.totalQuestions, 
+               pt.questionsPerTest, pt.duration, pt.passingScore, pt.repeatAfterHours, 
+               pt.enableCooldown, pt.targetUserType, pt.showInPublic
+        FROM "PracticeTests" pt
+        INNER JOIN "BatchAssignedTests" bat ON pt.id = bat."testId"
+        WHERE bat."batchId" IN (:batchIds) 
+          AND pt."isActive" = true 
+          AND bat."isActive" = true
+          AND pt."targetUserType" = :userType
+      `, {
+        replacements: { batchIds: batchIds, userType: userType },
+        type: sequelize.QueryTypes.SELECT
+      });
+      
+      // Security: Convert to safe format without exposing questions
+      filteredTests = batchTests.map(test => ({
+        id: test.id,
+        title: test.title,
+        description: test.description,
+        category: test.category,
+        totalQuestions: test.totalQuestions,
+        questionsPerTest: test.questionsPerTest,
+        duration: test.duration,
+        passingScore: test.passingScore,
+        repeatAfterHours: test.repeatAfterHours,
+        enableCooldown: test.enableCooldown,
+        targetUserType: test.targetUserType,
+        showInPublic: test.showInPublic,
+        isBatchAssigned: true
+      }));
+    } else {
+      // Security: Users not in batches can only see public tests
+      const publicTests = await PracticeTest.findAll({
+        where: { 
+          isActive: true, 
+          showInPublic: true,
+          targetUserType: userType
         },
-        attributes: ['practiceTestId', 'completedAt']
+        attributes: ['id', 'title', 'description', 'category', 'totalQuestions', 'questionsPerTest', 'duration', 'passingScore', 'repeatAfterHours', 'enableCooldown', 'targetUserType', 'showInPublic'],
+        order: [['createdAt', 'DESC']]
       });
-      console.log('User attempts query completed');
-
-      testsWithAvailability = filteredTests.map(test => {
-        const userTestAttempts = userAttempts.filter(
-          attempt => attempt.practiceTestId.toString() === test.id.toString()
-        );
-        const lastAttempt = userTestAttempts.length > 0 
-          ? userTestAttempts.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0]
-          : null;
-        
-        // Check if this test is assigned to user's batch
-        const isBatchAssigned = batchAssignedTests.some(bt => bt.id === test.id);
-        
-        return {
-          ...serializeTest(test),
-          canTakeTest: true,
-          lastAttemptDate: lastAttempt ? lastAttempt.completedAt : null,
-          attemptsCount: userTestAttempts.length,
-          cooldownHours: 0,
-          nextAvailableTime: null,
-          isBatchAssigned: isBatchAssigned
-        };
-      });
-    } else {
-      // Only show tests marked as public
-      const publicTests = filteredTests.filter(test => test.showInPublic);
-      testsWithAvailability = publicTests.map(test => {
-        const teaserQuestions = (test.questions || []).slice(0, 2).map(q => ({
-          question: q.question,
-          options: q.options
-        }));
-        return {
-          id: test.id,
-          title: test.title,
-          description: test.description,
-          category: test.category,
-          totalQuestions: test.totalQuestions,
-          questionsPerTest: test.questionsPerTest,
-          duration: test.duration,
-          passingScore: test.passingScore,
-          repeatAfterHours: test.repeatAfterHours,
-          enableCooldown: test.enableCooldown,
-          targetUserType: test.targetUserType,
-          teaserQuestions,
-          canTakeTest: false,
-          lastAttemptDate: null,
-          attemptsCount: 0,
-          cooldownHours: 0,
-          nextAvailableTime: null,
-          isBatchAssigned: false
-        };
-      });
+      
+      filteredTests = publicTests.map(test => ({
+        ...test.toJSON(),
+        isBatchAssigned: false
+      }));
     }
 
-    console.log('Final response - testsWithAvailability count:', testsWithAvailability.length);
-    console.log('=== getAvailablePracticeTests END ===');
+    // Security: Get user attempts for availability calculation
+    const userAttempts = await TestAttempt.findAll({ 
+      where: {
+        userId: req.user.id,
+        status: 'completed'
+      },
+      attributes: ['practiceTestId', 'completedAt']
+    });
+
+    // Security: Add availability info without exposing sensitive data
+    const testsWithAvailability = filteredTests.map(test => {
+      const userTestAttempts = userAttempts.filter(
+        attempt => attempt.practiceTestId.toString() === test.id.toString()
+      );
+      const lastAttempt = userTestAttempts.length > 0 
+        ? userTestAttempts.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0]
+        : null;
+      
+      return {
+        ...test,
+        canTakeTest: true,
+        lastAttemptDate: lastAttempt ? lastAttempt.completedAt : null,
+        attemptsCount: userTestAttempts.length,
+        cooldownHours: 0,
+        nextAvailableTime: null
+      };
+    });
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Final response - testsWithAvailability count:', testsWithAvailability.length);
+      console.log('=== getAvailablePracticeTests END ===');
+    }
+
     res.status(200).json({
       status: 'success',
       data: { practiceTests: testsWithAvailability }
@@ -413,68 +337,8 @@ exports.startPracticeTest = async (req, res) => {
       });
     }
     
-    // Check if user has access to this test through batch assignment
-    try {
-      const userBatchIds = await sequelize.query(`
-        SELECT DISTINCT "batchId" 
-        FROM "BatchStudents" 
-        WHERE "userId" = :userId
-      `, {
-        replacements: { userId: req.user.id },
-        type: sequelize.QueryTypes.SELECT
-      });
-      
-      if (userBatchIds.length > 0) {
-        const batchIds = userBatchIds.map(b => b.batchId);
-        
-        // Check if this test is assigned to any of the user's batches
-        const batchTestAssignment = await sequelize.query(`
-          SELECT COUNT(*) as count
-          FROM "BatchAssignedTests" 
-          WHERE "batchId" IN (:batchIds) AND "testId" = :testId AND "isActive" = true
-        `, {
-          replacements: { batchIds: batchIds, testId: testId },
-          type: sequelize.QueryTypes.SELECT
-        });
-        
-        const hasBatchAccess = batchTestAssignment[0]?.count > 0;
-        
-        if (!hasBatchAccess) {
-          console.log('User batch access check failed:', {
-            userId: req.user.id,
-            testId: testId,
-            userBatches: batchIds,
-            testTargetUserType: practiceTest.targetUserType,
-            userType: userType
-          });
-          return res.status(403).json({
-            status: 'fail',
-            message: `Access Denied: This test is not assigned to your batch. You are in batches [${batchIds.join(', ')}] but test ${testId} is not assigned to any of them. Please contact an administrator.`
-          });
-        }
-      } else {
-        // User is not in any batches, check if test is public
-        console.log('User not in any batches:', {
-          userId: req.user.id,
-          userType: userType,
-          testId: testId,
-          testTitle: practiceTest.title,
-          testPublic: practiceTest.showInPublic
-        });
-        if (!practiceTest.showInPublic) {
-          return res.status(403).json({
-            status: 'fail',
-            message: `Access Denied: You are not enrolled in any batches and test "${practiceTest.title}" is not publicly available. Please contact an administrator to be added to a batch.`
-          });
-        }
-      }
-    } catch (batchError) {
-      console.error('Error checking batch access:', batchError);
-      return res.status(500).json({
-        status: 'fail',
-        message: 'Error verifying test access. Please try again.'
-      });
-    }
+    // Security: Batch access validation is now handled by middleware
+    // This ensures consistent security checks across all endpoints
 
     // 1. Check for in-progress attempt for this user and test
     let testAttempt = await TestAttempt.findOne({
@@ -2115,92 +1979,4 @@ exports.downloadAttemptPDF = async (req, res) => {
   }
 }; 
 
-// Debug endpoint to check user batch and test assignments
-exports.debugUserBatchTests = async (req, res) => {
-  try {
-    console.log('=== debugUserBatchTests START ===');
-    console.log('User:', req.user ? { id: req.user.id, role: req.user.role, userType: req.user.userType } : 'No user');
-    
-    if (!req.user) {
-      return res.status(401).json({ status: 'error', message: 'User not authenticated' });
-    }
-    
-    // Get user's batch IDs
-    const userBatchIds = await sequelize.query(`
-      SELECT DISTINCT "batchId" 
-      FROM "BatchStudents" 
-      WHERE "userId" = :userId
-    `, {
-      replacements: { userId: req.user.id },
-      type: sequelize.QueryTypes.SELECT
-    });
-    
-    console.log('User batch IDs:', userBatchIds);
-    
-    let batchDetails = [];
-    let assignedTests = [];
-    
-    if (userBatchIds.length > 0) {
-      const batchIds = userBatchIds.map(b => b.batchId);
-      
-      // Get batch details
-      batchDetails = await sequelize.query(`
-        SELECT * FROM "Batches" WHERE id IN (:batchIds)
-      `, {
-        replacements: { batchIds: batchIds },
-        type: sequelize.QueryTypes.SELECT
-      });
-      
-      // Get tests assigned to these batches
-      assignedTests = await sequelize.query(`
-        SELECT pt.*, bat."batchId"
-        FROM "PracticeTests" pt
-        INNER JOIN "BatchAssignedTests" bat ON pt.id = bat."testId"
-        WHERE bat."batchId" IN (:batchIds)
-      `, {
-        replacements: { batchIds: batchIds },
-        type: sequelize.QueryTypes.SELECT
-      });
-    }
-    
-    // Get all practice tests for comparison
-    const allTests = await PracticeTest.findAll({
-      attributes: ['id', 'title', 'isActive', 'targetUserType']
-    });
-    
-    console.log('=== debugUserBatchTests END ===');
-    
-    res.status(200).json({
-      status: 'success',
-      data: {
-        user: {
-          id: req.user.id,
-          role: req.user.role,
-          userType: req.user.userType
-        },
-        userBatchIds,
-        batchDetails,
-        assignedTests: assignedTests.map(t => ({
-          id: t.id,
-          title: t.title,
-          isActive: t.isActive,
-          targetUserType: t.targetUserType,
-          batchId: t.batchId
-        })),
-        allTests: allTests.map(t => ({
-          id: t.id,
-          title: t.title,
-          isActive: t.isActive,
-          targetUserType: t.targetUserType
-        }))
-      }
-    });
-  } catch (err) {
-    console.error('Error in debugUserBatchTests:', err);
-    res.status(500).json({
-      status: 'error',
-      message: 'Debug failed',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-}; 
+// Security: Debug endpoint removed - was exposing sensitive data 

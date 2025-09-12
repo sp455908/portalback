@@ -3,6 +3,8 @@ const router = express.Router();
 const batchController = require('../controllers/batch.controller');
 const { protect } = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/role.middleware');
+const { validateBatchMembership } = require('../middlewares/batchAccess.middleware');
+const { practiceTestRateLimit } = require('../middlewares/rateLimit.middleware');
 
 // Student routes (for students to view their batches) - MUST BE FIRST
 router.get('/student/:studentId', protect, authorize('student', 'corporate', 'government'), batchController.getStudentBatches);

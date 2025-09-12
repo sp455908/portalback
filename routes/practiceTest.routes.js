@@ -3,6 +3,8 @@ const router = express.Router();
 const practiceTestController = require('../controllers/practiceTest.controller');
 const { protect, protectWithQueryToken } = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/role.middleware');
+const { validateBatchAccess } = require('../middlewares/batchAccess.middleware');
+const { practiceTestRateLimit, testSubmissionRateLimit } = require('../middlewares/rateLimit.middleware');
 const multer = require('multer');
 
 // Configure multer for file uploads
@@ -52,14 +54,11 @@ router.post('/admin/parse-excel', protect, authorize('admin'), upload.single('ex
 router.put('/admin/bulk-settings', protect, authorize('admin'), practiceTestController.bulkUpdateTestSettings);
 
 // Route to get available tests (requires authentication to filter by user type)
-router.get('/available', protect, authorize('student', 'corporate', 'government'), practiceTestController.getAvailablePracticeTests);
-
-// Debug endpoint for troubleshooting
-router.get('/debug-user', protect, authorize('student', 'corporate', 'government'), practiceTestController.debugUserBatchTests);
+router.get('/available', practiceTestRateLimit, protect, authorize('student', 'corporate', 'government'), practiceTestController.getAvailablePracticeTests);
 
 // Student/Corporate/Government routes
-router.post('/:testId/start', protect, authorize('student', 'corporate', 'government'), practiceTestController.startPracticeTest);
-router.post('/attempt/:testAttemptId/submit', protect, authorize('student', 'corporate', 'government'), practiceTestController.submitPracticeTest);
+router.post('/:testId/start', practiceTestRateLimit, protect, authorize('student', 'corporate', 'government'), validateBatchAccess, practiceTestController.startPracticeTest);
+router.post('/attempt/:testAttemptId/submit', testSubmissionRateLimit, protect, authorize('student', 'corporate', 'government'), practiceTestController.submitPracticeTest);
 router.get('/attempts', protect, authorize('student', 'corporate', 'government'), practiceTestController.getUserTestAttempts);
 router.delete('/attempt/:attemptId', protect, practiceTestController.deleteAttempt);
 // Allow either Bearer header or token query for PDF download to support new-tab downloads

@@ -10,6 +10,7 @@ const pgSession = require('connect-pg-simple')(session);
 const errorHandler = require('./middlewares/error.middleware');
 const performanceMonitor = require('./middlewares/performance.middleware');
 const maintenanceGate = require('./middlewares/maintenance.middleware');
+const { securityLogging } = require('./middlewares/securityLogging.middleware');
 const { sequelize } = require('./config/database');
 
 // Route imports
@@ -97,6 +98,7 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
 })); // Security headers first
 app.use(morgan('dev')); // Logging
+app.use(securityLogging); // Security logging
 app.use(performanceMonitor); // Performance monitoring
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
