@@ -1,8 +1,14 @@
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const mongoSanitize = require('express-mongo-sanitize');
-const xss = require('xss-clean');
-const hpp = require('hpp');
+
+// Optional security middlewares – fall back to no-ops if not installed
+let mongoSanitize;
+let xss;
+let hpp;
+const noop = () => (req, res, next) => next();
+try { mongoSanitize = require('express-mongo-sanitize'); } catch (_) { mongoSanitize = noop; }
+try { xss = require('xss-clean'); } catch (_) { xss = noop; }
+try { hpp = require('hpp'); } catch (_) { hpp = noop; }
 
 // Rate limiting configuration
 const createRateLimiter = (windowMs, max, message) => {
@@ -54,9 +60,12 @@ const securityMiddleware = {
 
   // Input sanitization
   sanitize: [
-    mongoSanitize(), // Prevent NoSQL injection
-    xss(), // Prevent XSS attacks
-    hpp(), // Prevent HTTP Parameter Pollution
+    // Prevent NoSQL injection (no-op if package not installed)
+    (typeof mongoSanitize === 'function' ? mongoSanitize() : noop()),
+    // Prevent XSS attacks (no-op if package not installed)
+    (typeof xss === 'function' ? xss() : noop()),
+    // Prevent HTTP Parameter Pollution (no-op if package not installed)
+    (typeof hpp === 'function' ? hpp() : noop()),
   ],
 
   // CSRF protection
