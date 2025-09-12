@@ -2,7 +2,7 @@ require('dotenv').config();
 const app = require('./app');
 const { sequelize, testConnection, syncDatabase } = require('./config/database');
 
-// Validate critical environment variables
+
 const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
@@ -12,7 +12,7 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// Validate JWT_SECRET strength
+
 if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
   console.error('❌ JWT_SECRET is too short. Must be at least 32 characters long');
   process.exit(1);
@@ -27,13 +27,13 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:8080",
   "https://iiftl-portal.vercel.app",
-  "https://your-frontend-domain.onrender.com" // Add your frontend Render domain here
+  "https://your-frontend-domain.onrender.com" 
 ];
 
 const PORT = process.env.PORT || 3000;
 let isConnected = false;
 
-// Check if --force-sync flag is passed
+
 const forceSync = process.argv.includes('--force-sync');
 if (forceSync) {
   console.log('⚠️  Force sync mode enabled - this will recreate all tables!');
@@ -49,8 +49,8 @@ async function connectDB() {
         isConnected = true;
         console.log('PostgreSQL connected successfully');
         
-        // Sync database (create tables if they don't exist)
-        await syncDatabase(forceSync); // Use forceSync flag if passed
+        
+        await syncDatabase(forceSync); 
       } else {
         throw new Error('Failed to connect to PostgreSQL');
       }
@@ -61,10 +61,10 @@ async function connectDB() {
   }
 }
 
-// Start server function
+
 async function startServer() {
   try {
-    // Try to connect to database but don't fail if it doesn't work
+    
     await connectDB();
     
     app.listen(PORT, () => {
@@ -79,7 +79,7 @@ async function startServer() {
   }
 }
 
-// Handle graceful shutdown
+
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   sequelize.close(() => {
@@ -96,5 +96,5 @@ process.on('SIGINT', () => {
   });
 });
 
-// Start the server
+
 startServer();
