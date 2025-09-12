@@ -26,6 +26,7 @@ module.exports = async function maintenanceGate(req, res, next) {
       '/api/courses', // public content
       '/api/settings/maintenance-status', // public maintenance status
       '/api/captcha', // captcha for login page
+      '/api/security/public-key', // public key for encryption
     ];
     if (allowlistPaths.some(p => path.startsWith(p))) {
       return next();
