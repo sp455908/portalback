@@ -1829,9 +1829,11 @@ exports.downloadAttemptPDF = async (req, res) => {
       doc.text(`Date: ${new Date(attempt.completedAt || attempt.startedAt).toLocaleString()}`, { width: contentWidth, align: 'left' });
       doc.moveDown(1);
       
-      // Legend text below Date
-      doc.fontSize(10).font('Helvetica').text('• Correct option', { width: contentWidth, align: 'left' });
-      doc.text('• Your selected option (if incorrect)', { width: contentWidth, align: 'left' });
+      // Legend text below Date with color indicators
+      doc.fontSize(10).font('Helvetica');
+      doc.fillColor('green').text('• Correct option', { width: contentWidth, align: 'left' });
+      doc.fillColor('red').text('• Your selected option (if incorrect)', { width: contentWidth, align: 'left' });
+      doc.fillColor('black');
       doc.moveDown(1.5);
 
 
