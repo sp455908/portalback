@@ -74,12 +74,18 @@ router.get('/admins', async (req, res) => {
   }
 });
 
-// Create an admin user
+// Create an admin user (single-admin policy)
 router.post('/admins', ownerMutationLimiter, async (req, res) => {
   try {
+    // Enforce only one admin user can exist at a time
+    const adminCount = await User.count({ where: { role: 'admin' } });
+    if (adminCount > 0) {
+      return res.status(409).json({ status: 'fail', message: 'Admin user already exists. Only one admin is allowed.' });
+    }
+
     const { firstName, lastName, email, password } = req.body || {};
     if (!isNonEmptyString(firstName) || !isNonEmptyString(lastName) || !isValidEmail(email) || !isStrongPassword(password)) {
-      return res.status(400).json({ status: 'fail', message: 'Missing required fields' });
+      return res.status(400).json({ status: 'fail', message: 'Missing or invalid fields' });
     }
     const normalizedEmail = normalizeEmail(email);
     const existing = await User.findOne({ where: { email: normalizedEmail } });
@@ -92,7 +98,7 @@ router.post('/admins', ownerMutationLimiter, async (req, res) => {
       email: normalizedEmail,
       password,
       role: 'admin',
-      userType: 'student' // userType is required by model; admin userType is not used for access
+      userType: 'student'
     });
     res.status(201).json({ status: 'success', data: { admin: { id: admin.id, email: admin.email } } });
   } catch (err) {
@@ -168,7 +174,6 @@ router.post('/admins/:id/kill-sessions', ownerMutationLimiter, async (req, res) 
       return res.status(404).json({ status: 'fail', message: 'Admin not found' });
     }
     const sessions = await UserSession.findUserActiveSessions(admin.id);
-    // Deactivate by sessionId to ensure DB indexes are used
     const deactivated = await UserSession.update(
       { isActive: false },
       { where: { userId: admin.id, isActive: true } }
