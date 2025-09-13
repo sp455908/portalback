@@ -10,9 +10,9 @@ const { checkRegistrationEnabled } = require('../controllers/settings.controller
 const { verifyCSRFToken } = require('../middlewares/csrf.middleware');
 
 // Register a new user (respect platform setting). Only allows non-admin roles (enforced in controller)
-router.post('/user-auth/register', checkRegistrationEnabled, authController.register);
+router.post('/user-auth/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
 // Alias for frontend compatibility
-router.post('/register', checkRegistrationEnabled, authController.register);
+router.post('/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
 
 // Check if email exists
 router.get('/check-email', async (req, res) => {
@@ -53,8 +53,8 @@ router.post('/verify-token', protect, (req, res) => {
   res.status(200).json({ valid: true, user: req.user });
 });
 
-// Login user (decrypt middleware temporarily disabled for debugging)
-router.post('/login', authController.login);
+// Login user with encryption support
+router.post('/login', decryptRequestBody, authController.login);
 
 // Refresh access token (CSRF protection disabled for now to fix login flow)
 router.post('/refresh-token', authController.refreshToken);
