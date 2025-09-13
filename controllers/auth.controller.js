@@ -111,7 +111,9 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
 
   res.status(statusCode).json({
     status: 'success',
-    // ✅ SECURITY FIX: Remove tokens from response body - they're already in HTTP-only cookies
+    // Return token in response body for frontend localStorage (in addition to HTTP-only cookie)
+    token: accessToken,
+    refreshToken: refreshToken,
     sessionId: session ? session.sessionId : null,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, 
@@ -317,7 +319,9 @@ exports.login = async (req, res, next) => {
 
         return res.status(200).json({
           status: 'success',
-          // ✅ SECURITY FIX: Don't return tokens in response body - they're in HTTP-only cookies
+          // Return tokens in response body for frontend localStorage (in addition to HTTP-only cookies)
+          token: accessToken,
+          refreshToken: ownerRefreshToken,
           sessionId: null,
           expiresIn: process.env.JWT_EXPIRES_IN || '7d',
           sessionTimeout: SESSION_TIMEOUT_MINUTES * 60,
@@ -695,9 +699,10 @@ exports.refreshToken = async (req, res, next) => {
       domain: process.env.NODE_ENV === 'production' ? undefined : undefined
     });
 
-    // ✅ SECURITY FIX: Don't return token in response body - it's in HTTP-only cookie
+    // Return token in response body for frontend localStorage (in addition to HTTP-only cookie)
     res.status(200).json({
       status: 'success',
+      token: newAccessToken,
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       data: {
         user
