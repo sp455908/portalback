@@ -11,6 +11,7 @@ const errorHandler = require('./middlewares/error.middleware');
 const performanceMonitor = require('./middlewares/performance.middleware');
 const maintenanceGate = require('./middlewares/maintenance.middleware');
 const { securityLogging } = require('./middlewares/securityLogging.middleware');
+const { generateCSRFToken, verifyCSRFToken } = require('./middlewares/csrf.middleware');
 const { sequelize } = require('./config/database');
 
 
@@ -153,10 +154,13 @@ app.use(helmet({
 app.use(morgan('dev')); 
 app.use(securityLogging); 
 app.use(performanceMonitor); 
-app.use(express.json()); 
-app.use(express.urlencoded({ extended: true })); 
+app.use(express.json({ limit: '10mb' })); 
+app.use(express.urlencoded({ extended: true, limit: '10mb' })); 
 app.use(cookieParser()); 
-app.use(sanitizeRequest); 
+app.use(sanitizeRequest);
+
+// CSRF Protection - Generate token for all requests
+app.use(generateCSRFToken); 
 
 
 app.use(session({

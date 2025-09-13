@@ -37,15 +37,20 @@ const securityConfig = {
       'https://iiftl-portal.vercel.app'
     ],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
       'X-Requested-With',
       'Accept',
       'Origin',
-      'X-CSRF-Token'
-    ]
+      'X-CSRF-Token',
+      'X-Session-Id',
+      'X-Forwarded-For',
+      'X-Real-IP'
+    ],
+    exposedHeaders: ['X-CSRF-Token', 'X-Session-Id'],
+    maxAge: 86400 // 24 hours
   },
 
   // Content Security Policy
@@ -115,7 +120,28 @@ const securityConfig = {
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '1; mode=block',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()'
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+    'X-DNS-Prefetch-Control': 'off',
+    'X-Download-Options': 'noopen',
+    'X-Permitted-Cross-Domain-Policies': 'none',
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin'
+  },
+
+  // CSRF Configuration
+  csrf: {
+    secret: process.env.CSRF_SECRET || process.env.JWT_SECRET || 'csrf-secret-change-in-production',
+    tokenLength: 32,
+    cookieName: 'csrf-token',
+    headerName: 'x-csrf-token',
+    cookieOptions: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
   },
 
   // Environment-specific settings

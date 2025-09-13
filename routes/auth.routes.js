@@ -7,6 +7,7 @@ const { User } = require('../models');
 const { Op, fn, col } = require('sequelize');
 const { decryptRequestBody } = require('../middlewares/decrypt.middleware');
 const { checkRegistrationEnabled } = require('../controllers/settings.controller');
+const { verifyCSRFToken } = require('../middlewares/csrf.middleware');
 
 // Register a new user (respect platform setting). Only allows non-admin roles (enforced in controller)
 router.post('/user-auth/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
@@ -56,7 +57,7 @@ router.post('/verify-token', protect, (req, res) => {
 router.post('/login', decryptRequestBody, authController.login);
 
 // Refresh access token
-router.post('/refresh-token', authController.refreshToken);
+router.post('/refresh-token', verifyCSRFToken, authController.refreshToken);
 
 // Initial admin creation endpoint (for Render deployment)
 router.post('/create-initial-admin', authController.createInitialAdmin);
@@ -65,7 +66,7 @@ router.post('/create-initial-admin', authController.createInitialAdmin);
 router.get('/me', protect, authController.getMe);
 
 // Logout (optional, for client-side token removal)
-router.post('/logout', protect, authController.logout);
+router.post('/logout', protect, verifyCSRFToken, authController.logout);
 
 // Validate session endpoint
 router.get('/validate-session', authController.validateSession);
