@@ -121,34 +121,9 @@ exports.register = async (req, res, next) => {
     let { firstName, lastName, email, password, role, userType, phone, address, city, state, pincode } = req.body;
     const encryptionService = require('../utils/encryption');
 
-    // Handle both encrypted and plain text credentials
-    try {
-      // If credentials are encrypted, decrypt them
-      if (email.startsWith('encrypted:') && password.startsWith('encrypted:')) {
-        const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
-        const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
-        
-        if (decryptedEmail && decryptedPassword) {
-          email = decryptedEmail.toLowerCase().trim();
-          password = decryptedPassword;
-        } else {
-          return res.status(400).json({
-            status: 'fail',
-            message: 'Invalid encrypted credentials format',
-            code: 'INVALID_ENCRYPTION'
-          });
-        }
-      } else {
-        // Plain text credentials - normalize email
-        email = email.toLowerCase().trim();
-      }
-    } catch (decryptError) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Failed to process credentials',
-        code: 'CREDENTIAL_PROCESSING_FAILED'
-      });
-    }
+    // ✅ FIX: Credentials are already decrypted by decryptRequestBody middleware
+    // Just normalize the email
+    email = email.toLowerCase().trim();
 
     const normalizedEmail = email;
 
@@ -290,36 +265,9 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Handle both encrypted and plain text credentials
-    try {
-      const encryptionService = require('../utils/encryption');
-      
-      // If credentials are encrypted, decrypt them
-      if (email.startsWith('encrypted:') && password.startsWith('encrypted:')) {
-        const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
-        const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
-        
-        if (decryptedEmail && decryptedPassword) {
-          email = decryptedEmail.toLowerCase().trim();
-          password = decryptedPassword;
-        } else {
-          return res.status(400).json({
-            status: 'fail',
-            message: 'Invalid encrypted credentials format',
-            code: 'INVALID_ENCRYPTION'
-          });
-        }
-      } else {
-        // Plain text credentials - normalize email
-        email = email.toLowerCase().trim();
-      }
-    } catch (decryptError) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Failed to process credentials',
-        code: 'CREDENTIAL_PROCESSING_FAILED'
-      });
-    }
+    // ✅ FIX: Credentials are already decrypted by decryptRequestBody middleware
+    // Just normalize the email
+    email = email.toLowerCase().trim();
 
     
     const currentSettings = await Settings.findOne();
@@ -421,8 +369,6 @@ exports.login = async (req, res, next) => {
     if (!user || !(await user.comparePassword(password))) {
       
       if (user) {
-        devLog(`🔐 Failed login attempt for user: ${user.email} (ID: ${user.id})`);
-        
         // ✅ FIX: Create failed login attempt first
         await LoginAttempt.create({
           userId: user.id,
@@ -435,19 +381,14 @@ exports.login = async (req, res, next) => {
         
         // ✅ FIX: Get current failed attempts count after creating the attempt
         const failedAttemptsCount = await LoginAttempt.getFailedAttemptsCount(user.id);
-        devLog(`📊 Current failed attempts for ${user.email}: ${failedAttemptsCount}`);
         
         // ✅ FIX: Check if user should be blocked (5 or more failed attempts)
         if (failedAttemptsCount >= 5 && user.role !== 'admin') {
-          devLog(`🚫 Blocking user ${user.email} after ${failedAttemptsCount} failed attempts`);
-          
           // Block user permanently
           await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
           
           // Mark user as inactive
           await user.update({ isActive: false });
-          
-          devLog(`✅ User ${user.email} blocked successfully and marked as inactive`);
           
           return res.status(423).json({
             status: 'fail',
@@ -459,12 +400,6 @@ exports.login = async (req, res, next) => {
             contactAdmin: true,
             failedAttemptsCount: failedAttemptsCount
           });
-        } else {
-          if (user.role === 'admin') {
-            devLog(`🛡️ Admin ${user.email} failed attempt count ${failedAttemptsCount} – block skipped by policy`);
-          } else {
-            devLog(`⚠️ User ${user.email} has ${failedAttemptsCount} failed attempts, not blocked yet`);
-          }
         }
         
         // ✅ FIX: Return failed attempts count for non-blocked users
@@ -576,8 +511,6 @@ exports.login = async (req, res, next) => {
         : parseInt(process.env.MAX_CONCURRENT_SESSIONS) || 3; // Regular users limited to 3
       
       if (validSessions.length >= MAX_CONCURRENT_SESSIONS) {
-        devLog(`🚫 Session limit reached: User ${user.email} has ${validSessions.length} active sessions (max: ${MAX_CONCURRENT_SESSIONS})`);
-        
         // ✅ FIX: For regular users, block login if session limit reached
         if (user.role !== 'admin' && user.role !== 'owner') {
           return res.status(409).json({
@@ -602,29 +535,20 @@ exports.login = async (req, res, next) => {
           
           for (const session of sessionsToDeactivate) {
             await deactivateSession(session.sessionId);
-            devLog(`🔄 Auto-deactivated old admin session: ${session.sessionId}`);
           }
           
           // Update the valid sessions list after cleanup
           const updatedSessions = await UserSession.findUserActiveSessions(user.id);
           otherActiveSessions = updatedSessions.filter(s => s.isActive && !s.isExpired());
-          
-          devLog(`✅ After cleanup: Admin ${user.email} now has ${otherActiveSessions.length} active sessions`);
         }
       }
       
       // ✅ FIX: Set session conflict flag for regular users with existing sessions
       if (otherActiveSessions.length > 0 && user.role !== 'admin' && user.role !== 'owner') {
         sessionConflict = true;
-        devLog(`⚠️ Session conflict detected for ${user.email}: ${otherActiveSessions.length} other active sessions`);
-      }
-      
-      // Log session info
-      if (validSessions.length > 0) {
-        devLog(`ℹ️ User ${user.email} logging in with ${validSessions.length} existing active session(s)`);
       }
     } catch (sessionError) {
-      devLog(`⚠️ Session management error for ${user.email}:`, sessionError);
+      // Session management error - continue with login
     }
 
     
@@ -655,7 +579,23 @@ exports.login = async (req, res, next) => {
     } : {});
 
   } catch (err) {
-    console.error('Login error:', err);
+    // ✅ FIX: Better error handling for login failures
+    if (err.message && err.message.includes('decrypt')) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Invalid credentials format',
+        code: 'DECRYPTION_FAILED'
+      });
+    }
+    
+    if (err.message && err.message.includes('JSON')) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Invalid request format',
+        code: 'INVALID_FORMAT'
+      });
+    }
+    
     res.status(500).json({
       status: 'error',
       message: 'An error occurred during login',

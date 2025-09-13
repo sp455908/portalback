@@ -31,8 +31,11 @@ function decryptRequestBody(req, res, next) {
           const decrypted = Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
           req.body = JSON.parse(decrypted);
         } catch (decryptError) {
-          console.error('AES-GCM decryption failed:', decryptError);
-          return res.status(400).json({ status: 'fail', message: 'Invalid encrypted payload format' });
+          return res.status(400).json({ 
+            status: 'fail', 
+            message: 'Invalid encrypted payload format',
+            code: 'DECRYPTION_FAILED'
+          });
         }
       } else if (typeof req.body.payload === 'string') {
         // Legacy: RSA-only payload
@@ -40,7 +43,11 @@ function decryptRequestBody(req, res, next) {
         try {
           req.body = JSON.parse(plaintext);
         } catch (_err) {
-          return res.status(400).json({ status: 'fail', message: 'Invalid encrypted payload format' });
+          return res.status(400).json({ 
+            status: 'fail', 
+            message: 'Invalid encrypted payload format',
+            code: 'DECRYPTION_FAILED'
+          });
         }
       }
     }
