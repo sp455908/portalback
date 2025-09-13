@@ -1,0 +1,76 @@
+# Production Environment Variables for IIFTL Backend
+# Copy these variables to your Render environment variables
+
+# Database Configuration
+DATABASE_URL=postgresql://username:password@hostname:port/database_name
+DB_HOST=your-db-host
+DB_PORT=5432
+DB_NAME=your-db-name
+DB_USER=your-db-user
+DB_PASSWORD=your-secure-db-password
+
+# JWT Configuration - CHANGE THESE IN PRODUCTION
+JWT_SECRET=your-super-secure-jwt-secret-key-minimum-32-characters-long
+JWT_EXPIRES_IN=7d
+JWT_COOKIE_EXPIRES_IN=7
+JWT_REFRESH_EXPIRES_IN=30d
+
+# CSRF Configuration - CHANGE THESE IN PRODUCTION
+CSRF_SECRET=your-super-secure-csrf-secret-key-minimum-32-characters-long
+
+# Encryption Configuration - CHANGE THESE IN PRODUCTION
+ENCRYPTION_KEY=your-super-secure-encryption-key-minimum-32-characters-long
+
+# Session Configuration - CHANGE THESE IN PRODUCTION
+SESSION_SECRET=your-super-secure-session-secret-key-minimum-32-characters-long
+
+# Security Configuration
+NODE_ENV=production
+PORT=5000
+
+# CORS Configuration
+ALLOWED_ORIGINS=https://iiftl-frontend.vercel.app,https://exim-portal-guardian.vercel.app,https://iiftl-portal.vercel.app
+
+# Rate Limiting
+MAX_CONCURRENT_SESSIONS=3
+
+# Email Configuration (if using email features)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+
+# File Upload Configuration
+MAX_FILE_SIZE=10485760
+UPLOAD_PATH=./uploads
+
+# Security Headers
+TRUST_PROXY=1
+
+# Logging Configuration
+LOG_LEVEL=error
+ENABLE_REQUEST_LOGGING=false
+
+# Maintenance Mode
+MAINTENANCE_MODE=false
+
+# Setup Key for Initial Admin Creation
+SETUP_KEY=your-super-secure-setup-key-for-admin-creation
+
+# Redis Configuration (if using Redis for caching)
+REDIS_URL=redis://localhost:6379
+
+# Monitoring and Analytics
+ENABLE_ANALYTICS=true
+ENABLE_PERFORMANCE_MONITORING=true
+
+# Security Features
+ENABLE_CSRF_PROTECTION=true
+ENABLE_RATE_LIMITING=true
+ENABLE_SESSION_MANAGEMENT=true
+ENABLE_ENCRYPTION=true
+
+# Backup Configuration
+BACKUP_ENABLED=true
+BACKUP_SCHEDULE=0 2 * * *
+BACKUP_RETENTION_DAYS=30
