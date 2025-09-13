@@ -72,28 +72,23 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
   // ✅ SECURITY FIX: Set access token cookie with proper cross-origin settings
   const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true, // Always secure in production
+    sameSite: 'none', // Required for cross-origin requests
     maxAge: 7 * 24 * 60 * 60 * 1000, // match access token expiry (7d default)
     path: '/' // Ensure cookie is available for all paths
   };
   
-  console.log('🍪 Setting token cookie with options:', cookieOptions);
   res.cookie('token', accessToken, cookieOptions);
 
   const refreshCookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true, // Always secure in production
+    sameSite: 'none', // Required for cross-origin requests
     maxAge: 30 * 24 * 60 * 60 * 1000,
     path: '/' // Ensure cookie is available for all paths
   };
   
-  console.log('🍪 Setting refreshToken cookie with options:', refreshCookieOptions);
   res.cookie('refreshToken', refreshToken, refreshCookieOptions);
-  
-  // ✅ DEBUG: Log response headers
-  console.log('🍪 Response headers being set:', res.getHeaders());
 
   
   // ✅ SECURITY FIX: Minimize sensitive data in login response
@@ -647,8 +642,8 @@ exports.refreshToken = async (req, res, next) => {
       const newOwnerAccess = signOwnerToken(owner.id);
       res.cookie('token', newOwnerAccess, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: true, // Always secure in production
+        sameSite: 'none', // Required for cross-origin requests
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/' // Ensure cookie is available for all paths
       });
@@ -691,8 +686,8 @@ exports.refreshToken = async (req, res, next) => {
     // ✅ SECURITY FIX: Set/refresh access token cookie with consistent options
     res.cookie('token', newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: true, // Always secure in production
+      sameSite: 'none', // Required for cross-origin requests
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/' // Ensure cookie is available for all paths
     });
