@@ -53,7 +53,11 @@ function decryptRequestBody(req, res, next) {
     }
     return next();
   } catch (error) {
-    return res.status(400).json({ status: 'fail', message: 'Failed to decrypt request body' });
+    return res.status(400).json({ 
+      status: 'fail', 
+      message: 'Failed to decrypt request body',
+      code: 'DECRYPTION_ERROR'
+    });
   }
 }
 

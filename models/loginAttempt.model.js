@@ -333,4 +333,29 @@ LoginAttempt.unblockUser = async function(userId, unblockedBy) {
   return true;
 };
 
+// Static method to clear failed attempts for a user (when unblocked)
+LoginAttempt.clearFailedAttempts = async function(userId) {
+  const now = new Date();
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  
+  // Clear failed attempts from the last hour
+  await this.update(
+    {
+      success: true, // Mark as successful to clear the failed count
+      attemptTime: now
+    },
+    {
+      where: {
+        userId,
+        success: false,
+        attemptTime: {
+          [Op.gte]: oneHourAgo
+        }
+      }
+    }
+  );
+  
+  return true;
+};
+
 module.exports = LoginAttempt;
