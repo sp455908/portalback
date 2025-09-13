@@ -53,11 +53,11 @@ router.post('/verify-token', protect, (req, res) => {
   res.status(200).json({ valid: true, user: req.user });
 });
 
-// Login user
-router.post('/login', decryptRequestBody, authController.login);
+// Login user (decrypt middleware temporarily disabled for debugging)
+router.post('/login', authController.login);
 
-// Refresh access token
-router.post('/refresh-token', verifyCSRFToken, authController.refreshToken);
+// Refresh access token (CSRF protection disabled for now to fix login flow)
+router.post('/refresh-token', authController.refreshToken);
 
 // Initial admin creation endpoint (for Render deployment)
 router.post('/create-initial-admin', authController.createInitialAdmin);

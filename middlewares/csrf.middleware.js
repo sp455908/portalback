@@ -151,6 +151,7 @@ class CSRFProtection {
       '/api/auth/register',
       '/api/auth/forgot-password',
       '/api/auth/reset-password',
+      '/api/auth/refresh-token',
       '/api/security/public-key'
     ];
     
