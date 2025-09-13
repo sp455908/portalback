@@ -32,7 +32,7 @@ PORT=5000
 ALLOWED_ORIGINS=https://iiftl-frontend.vercel.app,https://exim-portal-guardian.vercel.app,https://iiftl-portal.vercel.app
 
 # Rate Limiting
-MAX_CONCURRENT_SESSIONS=3
+MAX_CONCURRENT_SESSIONS=5
 
 # Email Configuration (if using email features)
 EMAIL_HOST=smtp.gmail.com

@@ -492,28 +492,26 @@ exports.login = async (req, res, next) => {
       const validSessions = existingSessions.filter(s => s.isActive && !s.isExpired());
       otherActiveSessions = validSessions;
       
-      // Allow up to 3 concurrent sessions per user (configurable via environment)
-      const MAX_CONCURRENT_SESSIONS = parseInt(process.env.MAX_CONCURRENT_SESSIONS) || 3;
+      // Allow up to 5 concurrent sessions per user (configurable via environment)
+      const MAX_CONCURRENT_SESSIONS = parseInt(process.env.MAX_CONCURRENT_SESSIONS) || 5;
       if (validSessions.length >= MAX_CONCURRENT_SESSIONS) {
         devLog(`🚫 Login blocked: User ${user.email} has ${validSessions.length} active sessions (max: ${MAX_CONCURRENT_SESSIONS})`);
-        const statusInfo = await LoginAttempt.getLoginStatus(user.id, email);
-        return res.status(409).json({
-          status: 'fail',
-          message: `You have reached the maximum number of concurrent sessions (${MAX_CONCURRENT_SESSIONS}). Please logout from another device first.`,
-          code: 'TOO_MANY_SESSIONS',
-          failedAttempt: false,
-          shouldCountFailedAttempt: false,
-          failedAttemptsCount: statusInfo?.failedAttemptsCount || 0,
-          data: {
-            activeSessions: validSessions.map(s => ({
-              lastActivity: s.lastActivity,
-              ipAddress: s.ipAddress,
-              userAgent: s.userAgent
-            })),
-            count: validSessions.length,
-            maxSessions: MAX_CONCURRENT_SESSIONS
-          }
-        });
+        
+        // ✅ SECURITY FIX: Auto-logout oldest sessions to allow new login
+        const sessionsToDeactivate = validSessions
+          .sort((a, b) => new Date(a.lastActivity) - new Date(b.lastActivity))
+          .slice(0, validSessions.length - MAX_CONCURRENT_SESSIONS + 1);
+        
+        for (const session of sessionsToDeactivate) {
+          await deactivateSession(session.sessionId);
+          devLog(`🔄 Auto-deactivated old session: ${session.sessionId}`);
+        }
+        
+        // Update the valid sessions list after cleanup
+        const updatedSessions = await UserSession.findUserActiveSessions(user.id);
+        otherActiveSessions = updatedSessions.filter(s => s.isActive && !s.isExpired());
+        
+        devLog(`✅ After cleanup: User ${user.email} now has ${otherActiveSessions.length} active sessions`);
       }
       
       // Log session info but allow login
