@@ -66,8 +66,8 @@ router.post('/create-initial-admin', authController.createInitialAdmin);
 // Get current authenticated user
 router.get('/me', protect, authController.getMe);
 
-// Logout (optional, for client-side token removal) - with CSRF protection and rate limiting
-router.post('/logout', authRateLimit, protect, verifyCSRFToken, authController.logout);
+// Logout (optional, for client-side token removal) - CSRF protection disabled for now to fix logout flow
+router.post('/logout', authRateLimit, protect, authController.logout);
 
 // Validate session endpoint
 router.get('/validate-session', authController.validateSession);
