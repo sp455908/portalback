@@ -423,24 +423,28 @@ exports.login = async (req, res, next) => {
       if (user) {
         devLog(`🔐 Failed login attempt for user: ${user.email} (ID: ${user.id})`);
         
-        const loginResult = await LoginAttempt.processLoginAttempt({
+        // ✅ FIX: Create failed login attempt first
+        await LoginAttempt.create({
           userId: user.id,
           email,
           ipAddress,
           userAgent,
-          success: false
+          success: false,
+          attemptTime: new Date()
         });
-
-        devLog(`📊 Login result:`, loginResult);
-
         
-        if (loginResult.shouldBlock && user.role !== 'admin') {
-          devLog(`🚫 Blocking user ${user.email} after ${loginResult.failedCount} failed attempts`);
+        // ✅ FIX: Get current failed attempts count after creating the attempt
+        const failedAttemptsCount = await LoginAttempt.getFailedAttemptsCount(user.id);
+        devLog(`📊 Current failed attempts for ${user.email}: ${failedAttemptsCount}`);
+        
+        // ✅ FIX: Check if user should be blocked (5 or more failed attempts)
+        if (failedAttemptsCount >= 5 && user.role !== 'admin') {
+          devLog(`🚫 Blocking user ${user.email} after ${failedAttemptsCount} failed attempts`);
           
+          // Block user permanently
+          await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
           
-          const blockedUntil = await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
-          
-          
+          // Mark user as inactive
           await user.update({ isActive: false });
           
           devLog(`✅ User ${user.email} blocked successfully and marked as inactive`);
@@ -452,27 +456,38 @@ exports.login = async (req, res, next) => {
             blockedUntil: null,
             remainingMinutes: null,
             isPermanent: true,
-            contactAdmin: true
+            contactAdmin: true,
+            failedAttemptsCount: failedAttemptsCount
           });
         } else {
-          
           if (user.role === 'admin') {
-            devLog(`🛡️ Admin ${user.email} failed attempt count ${loginResult.failedCount || 0} – block skipped by policy`);
+            devLog(`🛡️ Admin ${user.email} failed attempt count ${failedAttemptsCount} – block skipped by policy`);
           } else {
-            devLog(`⚠️ User ${user.email} has ${loginResult.failedCount || 0} failed attempts, not blocked yet`);
+            devLog(`⚠️ User ${user.email} has ${failedAttemptsCount} failed attempts, not blocked yet`);
           }
         }
+        
+        // ✅ FIX: Return failed attempts count for non-blocked users
+        return res.status(401).json({
+          status: 'fail',
+          message: 'Incorrect email or password',
+          code: 'INVALID_CREDENTIALS',
+          shouldCountFailedAttempt: true,
+          failedAttemptsCount: failedAttemptsCount,
+          remainingAttempts: Math.max(0, 5 - failedAttemptsCount)
+        });
+      } else {
+        // ✅ FIX: Handle case where user doesn't exist
+        const failedAttemptsCount = await LoginAttempt.getFailedAttemptsCountByEmail(email);
+        return res.status(401).json({
+          status: 'fail',
+          message: 'Incorrect email or password',
+          code: 'INVALID_CREDENTIALS',
+          shouldCountFailedAttempt: true,
+          failedAttemptsCount: failedAttemptsCount,
+          remainingAttempts: Math.max(0, 5 - failedAttemptsCount)
+        });
       }
-
-      
-      const failedAttemptsCount = user ? await LoginAttempt.getFailedAttemptsCount(user.id) : await LoginAttempt.getFailedAttemptsCountByEmail(email);
-      return res.status(401).json({
-        status: 'fail',
-        message: 'Incorrect email or password',
-        code: 'INVALID_CREDENTIALS',
-        shouldCountFailedAttempt: true,
-        failedAttemptsCount: failedAttemptsCount || 0
-      });
     }
 
     
@@ -535,8 +550,9 @@ exports.login = async (req, res, next) => {
     }
 
     
-    // ✅ SECURITY FIX: Allow multiple sessions but limit to prevent abuse
+    // ✅ FIX: Enhanced session management for multiple devices
     let otherActiveSessions = [];
+    let sessionConflict = false;
     try {
       // First, clean up any expired sessions for this user
       await UserSession.update(
@@ -554,33 +570,61 @@ exports.login = async (req, res, next) => {
       const validSessions = existingSessions.filter(s => s.isActive && !s.isExpired());
       otherActiveSessions = validSessions;
       
-      // Allow up to 5 concurrent sessions per user (configurable via environment)
-      const MAX_CONCURRENT_SESSIONS = parseInt(process.env.MAX_CONCURRENT_SESSIONS) || 5;
+      // ✅ FIX: Configurable session limits based on user role
+      const MAX_CONCURRENT_SESSIONS = user.role === 'admin' || user.role === 'owner' 
+        ? parseInt(process.env.MAX_ADMIN_SESSIONS) || 10  // Admins can have more sessions
+        : parseInt(process.env.MAX_CONCURRENT_SESSIONS) || 3; // Regular users limited to 3
+      
       if (validSessions.length >= MAX_CONCURRENT_SESSIONS) {
-        devLog(`🚫 Login blocked: User ${user.email} has ${validSessions.length} active sessions (max: ${MAX_CONCURRENT_SESSIONS})`);
+        devLog(`🚫 Session limit reached: User ${user.email} has ${validSessions.length} active sessions (max: ${MAX_CONCURRENT_SESSIONS})`);
         
-        // ✅ SECURITY FIX: Auto-logout oldest sessions to allow new login
-        const sessionsToDeactivate = validSessions
-          .sort((a, b) => new Date(a.lastActivity) - new Date(b.lastActivity))
-          .slice(0, validSessions.length - MAX_CONCURRENT_SESSIONS + 1);
-        
-        for (const session of sessionsToDeactivate) {
-          await deactivateSession(session.sessionId);
-          devLog(`🔄 Auto-deactivated old session: ${session.sessionId}`);
+        // ✅ FIX: For regular users, block login if session limit reached
+        if (user.role !== 'admin' && user.role !== 'owner') {
+          return res.status(409).json({
+            status: 'fail',
+            message: `You have reached the maximum number of concurrent sessions (${MAX_CONCURRENT_SESSIONS}). Please logout from another device first.`,
+            code: 'TOO_MANY_SESSIONS',
+            data: {
+              maxSessions: MAX_CONCURRENT_SESSIONS,
+              currentSessions: validSessions.length,
+              activeSessions: validSessions.slice(0, 3).map(s => ({
+                lastActivity: s.lastActivity,
+                ipAddress: s.ipAddress,
+                userAgent: s.userAgent
+              }))
+            }
+          });
+        } else {
+          // ✅ FIX: For admins, auto-logout oldest sessions
+          const sessionsToDeactivate = validSessions
+            .sort((a, b) => new Date(a.lastActivity) - new Date(b.lastActivity))
+            .slice(0, validSessions.length - MAX_CONCURRENT_SESSIONS + 1);
+          
+          for (const session of sessionsToDeactivate) {
+            await deactivateSession(session.sessionId);
+            devLog(`🔄 Auto-deactivated old admin session: ${session.sessionId}`);
+          }
+          
+          // Update the valid sessions list after cleanup
+          const updatedSessions = await UserSession.findUserActiveSessions(user.id);
+          otherActiveSessions = updatedSessions.filter(s => s.isActive && !s.isExpired());
+          
+          devLog(`✅ After cleanup: Admin ${user.email} now has ${otherActiveSessions.length} active sessions`);
         }
-        
-        // Update the valid sessions list after cleanup
-        const updatedSessions = await UserSession.findUserActiveSessions(user.id);
-        otherActiveSessions = updatedSessions.filter(s => s.isActive && !s.isExpired());
-        
-        devLog(`✅ After cleanup: User ${user.email} now has ${otherActiveSessions.length} active sessions`);
       }
       
-      // Log session info but allow login
+      // ✅ FIX: Set session conflict flag for regular users with existing sessions
+      if (otherActiveSessions.length > 0 && user.role !== 'admin' && user.role !== 'owner') {
+        sessionConflict = true;
+        devLog(`⚠️ Session conflict detected for ${user.email}: ${otherActiveSessions.length} other active sessions`);
+      }
+      
+      // Log session info
       if (validSessions.length > 0) {
         devLog(`ℹ️ User ${user.email} logging in with ${validSessions.length} existing active session(s)`);
       }
     } catch (sessionError) {
+      devLog(`⚠️ Session management error for ${user.email}:`, sessionError);
     }
 
     
@@ -596,15 +640,18 @@ exports.login = async (req, res, next) => {
     
 
     
-    const conflict = otherActiveSessions.length > 0 && user.role !== 'admin';
-    await createSendToken(user, 200, res, req, conflict ? {
+    // ✅ FIX: Pass session conflict information to createSendToken
+    await createSendToken(user, 200, res, req, sessionConflict ? {
       sessionConflict: true,
       activeSessions: otherActiveSessions.slice(0, 3).map(s => ({
         lastActivity: s.lastActivity,
         ipAddress: s.ipAddress,
         userAgent: s.userAgent
       })),
-      count: otherActiveSessions.length
+      count: otherActiveSessions.length,
+      maxSessions: user.role === 'admin' || user.role === 'owner' 
+        ? parseInt(process.env.MAX_ADMIN_SESSIONS) || 10
+        : parseInt(process.env.MAX_CONCURRENT_SESSIONS) || 3
     } : {});
 
   } catch (err) {
