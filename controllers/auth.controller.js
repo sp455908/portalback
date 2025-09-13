@@ -69,13 +69,13 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
   }
 
   
-  // Set access token cookie for browser requests (supports new-tab file downloads)
+  // ✅ SECURITY FIX: Set access token cookie with proper cross-origin settings
   const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // match access token expiry (7d default)
-    domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+    path: '/' // Ensure cookie is available for all paths
   };
   
   console.log('Setting token cookie with options:', cookieOptions);
@@ -86,7 +86,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 30 * 24 * 60 * 60 * 1000,
-    domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+    path: '/' // Ensure cookie is available for all paths
   };
   
   console.log('Setting refreshToken cookie with options:', refreshCookieOptions);
@@ -870,54 +870,8 @@ exports.updateSessionActivity = async (req, res, next) => {
 
 
 
-exports.protect = async (req, res, next) => {
-  try {
-    
-    let token;
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer')
-    ) {
-      token = req.headers.authorization.split(' ')[1];
-    }
-
-    if (!token) {
-      return res.status(401).json({
-        status: 'fail',
-        message: 'You are not logged in! Please log in to get access.'
-      });
-    }
-
-    
-    const decoded = await verifyToken(token, process.env.JWT_SECRET);
-
-    
-    const currentUser = await User.findByPk(decoded.id);
-    if (!currentUser) {
-      return res.status(401).json({
-        status: 'fail',
-        message: 'The user belonging to this token no longer exists.'
-      });
-    }
-
-    
-    if (currentUser.changedPasswordAfter(decoded.iat)) {
-      return res.status(401).json({
-        status: 'fail',
-        message: 'User recently changed password! Please log in again.'
-      });
-    }
-
-    
-    req.user = currentUser;
-    next();
-  } catch (err) {
-    res.status(401).json({
-      status: 'fail',
-      message: 'Invalid token or session expired'
-    });
-  }
-};
+// ✅ SECURITY FIX: Removed duplicate protect function - using the one from auth.middleware.js
+// The middleware version properly handles HTTP-only cookies
 
 
 exports.getActiveSessions = async (req, res, next) => {
