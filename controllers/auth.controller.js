@@ -802,28 +802,43 @@ exports.logout = async (req, res, next) => {
     
     // ✅ SECURITY FIX: Always clear cookies regardless of user state
     const clearAllCookies = () => {
-      // Clear token cookie with all possible configurations
+      // Clear token cookie with same configuration as login
       res.clearCookie('token', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: true, // Always secure to match login
+        sameSite: 'none', // Always none to match login
         path: '/'
       });
       
-      // Clear refresh token cookie
+      // Clear refresh token cookie with same configuration as login
       res.clearCookie('refreshToken', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: true, // Always secure to match login
+        sameSite: 'none', // Always none to match login
         path: '/'
       });
       
       // Clear any additional cookies that might exist
       res.clearCookie('sessionId', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: true,
+        sameSite: 'none',
         path: '/'
+      });
+      
+      // Additional aggressive cookie clearing with different configurations
+      const cookieNames = ['token', 'refreshToken', 'sessionId'];
+      const configs = [
+        { httpOnly: true, secure: true, sameSite: 'none', path: '/' },
+        { httpOnly: true, secure: false, sameSite: 'lax', path: '/' },
+        { httpOnly: true, secure: true, sameSite: 'lax', path: '/' },
+        { httpOnly: true, secure: false, sameSite: 'none', path: '/' }
+      ];
+      
+      cookieNames.forEach(cookieName => {
+        configs.forEach(config => {
+          res.clearCookie(cookieName, config);
+        });
       });
     };
     
@@ -893,15 +908,15 @@ exports.logout = async (req, res, next) => {
     try {
       res.clearCookie('token', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: true, // Always secure to match login
+        sameSite: 'none', // Always none to match login
         path: '/'
       });
       
       res.clearCookie('refreshToken', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: true, // Always secure to match login
+        sameSite: 'none', // Always none to match login
         path: '/'
       });
     } catch (cookieError) {
