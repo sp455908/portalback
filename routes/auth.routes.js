@@ -85,6 +85,25 @@ router.post('/logout-all-other-sessions', protect, authController.logoutAllOther
 // Get user's active sessions
 router.get('/sessions', protect, authController.getActiveSessions);
 
+// Secure authentication status endpoint - returns user info if authenticated
+router.get('/me', protect, (req, res) => {
+  res.json({
+    status: 'success',
+    authenticated: true,
+    data: {
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        role: req.user.role,
+        isOwner: req.user.isOwner || false,
+        isActive: req.user.isActive
+      }
+    }
+  });
+});
+
 // Test endpoint to verify cookie setting
 router.get('/test-cookies', (req, res) => {
   res.cookie('test-cookie', 'test-value', {

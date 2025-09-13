@@ -111,9 +111,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
 
   res.status(statusCode).json({
     status: 'success',
-    // Return token in response body for frontend localStorage (in addition to HTTP-only cookie)
-    token: accessToken,
-    refreshToken: refreshToken,
+    // ✅ SECURITY: Tokens are only in HTTP-only cookies, not accessible to JavaScript
     sessionId: session ? session.sessionId : null,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, 
@@ -319,9 +317,7 @@ exports.login = async (req, res, next) => {
 
         return res.status(200).json({
           status: 'success',
-          // Return tokens in response body for frontend localStorage (in addition to HTTP-only cookies)
-          token: accessToken,
-          refreshToken: ownerRefreshToken,
+          // ✅ SECURITY: Tokens are only in HTTP-only cookies, not accessible to JavaScript
           sessionId: null,
           expiresIn: process.env.JWT_EXPIRES_IN || '7d',
           sessionTimeout: SESSION_TIMEOUT_MINUTES * 60,
@@ -699,10 +695,9 @@ exports.refreshToken = async (req, res, next) => {
       domain: process.env.NODE_ENV === 'production' ? undefined : undefined
     });
 
-    // Return token in response body for frontend localStorage (in addition to HTTP-only cookie)
+    // ✅ SECURITY: Tokens are only in HTTP-only cookies, not accessible to JavaScript
     res.status(200).json({
       status: 'success',
-      token: newAccessToken,
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       data: {
         user
