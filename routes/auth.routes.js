@@ -10,9 +10,9 @@ const { checkRegistrationEnabled } = require('../controllers/settings.controller
 const { verifyCSRFToken } = require('../middlewares/csrf.middleware');
 
 // Register a new user (respect platform setting). Only allows non-admin roles (enforced in controller)
-router.post('/user-auth/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
+router.post('/user-auth/register', checkRegistrationEnabled, authController.register);
 // Alias for frontend compatibility
-router.post('/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
+router.post('/register', checkRegistrationEnabled, authController.register);
 
 // Check if email exists
 router.get('/check-email', async (req, res) => {
