@@ -11,6 +11,7 @@ const {
   enforceSingleSession,
   SESSION_TIMEOUT_MINUTES 
 } = require('../middlewares/sessionManagement.middleware');
+const eventBus = require('../utils/eventBus');
 
 
 
@@ -391,7 +392,7 @@ exports.login = async (req, res, next) => {
 
     if (currentSettings?.maintenanceMode) {
       
-      if (!user || (user.role !== 'admin')) {
+      if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
         return res.status(503).json({
           status: 'fail',
           message: 'Platform is under maintenance.'
@@ -638,7 +639,7 @@ exports.getMe = async (req, res, next) => {
       });
     }
 
-    
+    // ✅ SECURITY FIX: Only return essential user data for authentication
     const encryptionService = require('../utils/encryption');
     const userJson = user.toJSON();
     const decryptedUser = {
@@ -646,10 +647,29 @@ exports.getMe = async (req, res, next) => {
       phone: userJson.phone ? encryptionService.safeDecrypt(String(userJson.phone)) : userJson.phone
     };
 
+    // ✅ SECURITY FIX: Return only essential data for authentication
+    const safeUserData = {
+      id: decryptedUser.id,
+      firstName: decryptedUser.firstName,
+      lastName: decryptedUser.lastName,
+      email: decryptedUser.email,
+      role: decryptedUser.role,
+      userType: decryptedUser.userType,
+      phone: decryptedUser.phone,
+      address: decryptedUser.address,
+      city: decryptedUser.city,
+      state: decryptedUser.state,
+      pincode: decryptedUser.pincode,
+      isActive: decryptedUser.isActive,
+      createdAt: decryptedUser.createdAt,
+      updatedAt: decryptedUser.updatedAt
+      // Removed: studentId, corporateId, governmentId, profileImage
+    };
+
     res.status(200).json({
       status: 'success',
       data: {
-        user: decryptedUser
+        user: safeUserData
       }
     });
   } catch (err) {
@@ -722,7 +742,7 @@ exports.refreshToken = async (req, res, next) => {
 
     
     const currentSettings = await Settings.findOne();
-    if (currentSettings?.maintenanceMode && user.role !== 'admin') {
+    if (currentSettings?.maintenanceMode && user.role !== 'admin' && user.role !== 'owner') {
       return res.status(503).json({
         status: 'fail',
         message: 'Platform under maintenance. Please try again later.'
@@ -780,36 +800,113 @@ exports.logout = async (req, res, next) => {
       ? req.headers.authorization.split(' ')[1]
       : null;
     
+    // ✅ SECURITY FIX: Always clear cookies regardless of user state
+    const clearAllCookies = () => {
+      // Clear token cookie with all possible configurations
+      res.clearCookie('token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/'
+      });
+      
+      // Clear refresh token cookie
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/'
+      });
+      
+      // Clear any additional cookies that might exist
+      res.clearCookie('sessionId', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/'
+      });
+    };
     
-    if (sessionId) {
-      
+    // ✅ SECURITY FIX: Enhanced session invalidation
+    if (req.user?.id) {
       try {
-        await UserSession.update(
-          { isActive: false },
-          { where: { userId: req.user?.id, sessionId } }
-        );
-      } catch (_) {}
-      await deactivateSession(sessionId);
-    } else if (req.user?.id && authHeader) {
-      
-      await UserSession.update(
-        { isActive: false },
-        { where: { userId: req.user.id, accessToken: authHeader, isActive: true } }
-      );
+        // Invalidate all sessions for this user if sessionId is provided
+        if (sessionId) {
+          await UserSession.update(
+            { isActive: false },
+            { where: { userId: req.user.id, sessionId } }
+          );
+          await deactivateSession(sessionId);
+        } else if (authHeader) {
+          // Invalidate sessions by access token
+          await UserSession.update(
+            { isActive: false },
+            { where: { userId: req.user.id, accessToken: authHeader, isActive: true } }
+          );
+        } else {
+          // If no specific session info, invalidate all active sessions for this user
+          await UserSession.update(
+            { isActive: false },
+            { where: { userId: req.user.id, isActive: true } }
+          );
+        }
+        
+        // ✅ SECURITY FIX: Log logout event for audit trail
+        console.log(`🔐 User ${req.user.email} (ID: ${req.user.id}) logged out successfully`);
+        
+        // Emit session termination event
+        if (sessionId) {
+          eventBus.emit('session_terminated', { 
+            sessionId, 
+            userId: req.user.id,
+            reason: 'user_logout'
+          });
+        }
+        
+      } catch (sessionError) {
+        // Log error but don't fail the logout
+        console.log(`⚠️ Session cleanup failed for user ${req.user.id}:`, sessionError);
+      }
     }
     
+    // ✅ SECURITY FIX: Always clear cookies
+    clearAllCookies();
     
-    res.clearCookie('refreshToken');
+    // ✅ SECURITY FIX: Set security headers
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     
     res.status(200).json({
       status: 'success',
       message: 'Logged out successfully'
     });
   } catch (err) {
+    // ✅ SECURITY FIX: Even on error, clear cookies and return success
+    try {
+      res.clearCookie('token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/'
+      });
+      
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/'
+      });
+    } catch (cookieError) {
+      console.log('⚠️ Failed to clear cookies during logout error:', cookieError);
+    }
     
-    res.status(500).json({
-      status: 'error',
-      message: 'Logout failed'
+    console.log('❌ Logout error:', err);
+    
+    // Return success even if there was an error - client should clear local state
+    res.status(200).json({
+      status: 'success',
+      message: 'Logged out successfully'
     });
   }
 };

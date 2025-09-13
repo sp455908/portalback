@@ -292,7 +292,7 @@ exports.getProfile = async (req, res) => {
       });
     }
 
-    
+    // ✅ SECURITY FIX: Only return essential user data for profile viewing
     const encryptionService = require('../utils/encryption');
     const userJson = user.toJSON();
     const decryptedUser = {
@@ -300,9 +300,28 @@ exports.getProfile = async (req, res) => {
       phone: userJson.phone ? encryptionService.safeDecrypt(String(userJson.phone)) : userJson.phone
     };
 
+    // ✅ SECURITY FIX: Return only essential data for profile viewing
+    const safeUserData = {
+      id: decryptedUser.id,
+      firstName: decryptedUser.firstName,
+      lastName: decryptedUser.lastName,
+      email: decryptedUser.email,
+      role: decryptedUser.role,
+      userType: decryptedUser.userType,
+      phone: decryptedUser.phone,
+      address: decryptedUser.address,
+      city: decryptedUser.city,
+      state: decryptedUser.state,
+      pincode: decryptedUser.pincode,
+      isActive: decryptedUser.isActive,
+      createdAt: decryptedUser.createdAt,
+      updatedAt: decryptedUser.updatedAt
+      // Removed: studentId, corporateId, governmentId, profileImage
+    };
+
     res.status(200).json({
       status: 'success',
-      data: { user: decryptedUser }
+      data: { user: safeUserData }
     });
   } catch (err) {
     console.error('Error fetching profile:', err);
@@ -334,8 +353,10 @@ exports.updateProfile = async (req, res) => {
       attributes: { exclude: ['password'] }
     });
 
-    
+    // ✅ SECURITY FIX: Only return essential user data for profile updates
     let userForResponse = updatedUser && typeof updatedUser.toJSON === 'function' ? updatedUser.toJSON() : updatedUser;
+    
+    // Decrypt phone if present
     try {
       const encryptionService = require('../utils/encryption');
       if (userForResponse && userForResponse.phone) {
@@ -343,10 +364,28 @@ exports.updateProfile = async (req, res) => {
       }
     } catch (_) { /* ignore */ }
 
+    // ✅ SECURITY FIX: Return only essential data for profile updates
+    const safeUserData = {
+      id: userForResponse.id,
+      firstName: userForResponse.firstName,
+      lastName: userForResponse.lastName,
+      email: userForResponse.email,
+      role: userForResponse.role,
+      userType: userForResponse.userType,
+      phone: userForResponse.phone,
+      address: userForResponse.address,
+      city: userForResponse.city,
+      state: userForResponse.state,
+      pincode: userForResponse.pincode,
+      isActive: userForResponse.isActive,
+      updatedAt: userForResponse.updatedAt
+      // Removed: studentId, corporateId, governmentId, profileImage, createdAt
+    };
+
     res.status(200).json({
       status: 'success',
       message: 'Profile updated successfully',
-      data: { user: userForResponse }
+      data: { user: safeUserData }
     });
   } catch (err) {
     console.error('Error updating profile:', err);

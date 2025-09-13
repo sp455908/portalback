@@ -8,6 +8,7 @@ const { Op, fn, col } = require('sequelize');
 const { decryptRequestBody } = require('../middlewares/decrypt.middleware');
 const { checkRegistrationEnabled } = require('../controllers/settings.controller');
 const { verifyCSRFToken } = require('../middlewares/csrf.middleware');
+const { authRateLimit } = require('../middlewares/rateLimit.middleware');
 
 // Register a new user (respect platform setting). Only allows non-admin roles (enforced in controller)
 router.post('/user-auth/register', checkRegistrationEnabled, decryptRequestBody, authController.register);
@@ -65,8 +66,8 @@ router.post('/create-initial-admin', authController.createInitialAdmin);
 // Get current authenticated user
 router.get('/me', protect, authController.getMe);
 
-// Logout (optional, for client-side token removal)
-router.post('/logout', protect, authController.logout);
+// Logout (optional, for client-side token removal) - with CSRF protection and rate limiting
+router.post('/logout', authRateLimit, protect, verifyCSRFToken, authController.logout);
 
 // Validate session endpoint
 router.get('/validate-session', authController.validateSession);
