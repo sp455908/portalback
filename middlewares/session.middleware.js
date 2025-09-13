@@ -58,6 +58,17 @@ const csrfProtection = {
     next();
   },
 
+  // Validate CSRF token with owner bypass for critical operations
+  validateTokenWithOwnerBypass: (req, res, next) => {
+    // Allow owners to bypass CSRF for critical security operations
+    if (req.user && req.user.isOwner === true) {
+      return next();
+    }
+    
+    // For non-owners, use standard CSRF validation
+    return csrfProtection.validateToken(req, res, next);
+  },
+
   // Refresh CSRF token
   refreshToken: (req, res, next) => {
     req.session.csrfToken = crypto.randomBytes(32).toString('hex');

@@ -105,7 +105,7 @@ router.get('/stats',
   }
 );
 
-// CSRF token fetch (admin only) - returns a fresh token
+// CSRF token fetch (admin/owner only) - returns a fresh token
 router.get(
   '/csrf-token',
   protect,
@@ -120,7 +120,7 @@ router.get(
 router.get('/config', 
   protect, 
   restrictTo('admin'), 
-  csrfProtection.validateToken, 
+  csrfProtection.validateTokenWithOwnerBypass, 
   (req, res) => {
     try {
       const config = {
@@ -197,7 +197,7 @@ router.post(
   '/sessions/kill-one',
   protect,
   restrictTo('admin'),
-  csrfProtection.validateToken,
+  csrfProtection.validateTokenWithOwnerBypass,
   async (req, res) => {
     try {
       const { userId, sessionId } = req.body;
@@ -233,7 +233,7 @@ router.post(
   '/sessions/kill-all',
   protect,
   restrictTo('admin'),
-  csrfProtection.validateToken,
+  csrfProtection.validateTokenWithOwnerBypass,
   async (req, res) => {
     try {
       const { userId } = req.body;

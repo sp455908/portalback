@@ -41,20 +41,25 @@ app.set('trust proxy', 1);
 
 const allowedOrigins = [
   'https://iiftl-portal.vercel.app',
+ 
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
+    // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     
+    // Log blocked origins for debugging
     console.log('CORS blocked origin:', origin);
+    console.log('Allowed origins:', allowedOrigins);
+    
     const error = new Error(`Origin ${origin} not allowed by CORS`);
-    return callback(error);
+    return callback(error, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -71,10 +76,11 @@ const corsOptions = {
     'Cache-Control',
     'Pragma',
     'If-Modified-Since',
-    'If-None-Match'
+    'If-None-Match',
+    'X-API-Key'
   ],
-  exposedHeaders: ['set-cookie', 'Authorization'],
-  maxAge: 86400, 
+  exposedHeaders: ['set-cookie', 'Authorization', 'X-Total-Count'],
+  maxAge: 86400, // 24 hours
   preflightContinue: false,
   optionsSuccessStatus: 204
 };
@@ -82,6 +88,46 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+
+// Additional CORS middleware for better compatibility
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Log CORS requests for debugging
+  console.log(`CORS Request - Method: ${req.method}, Origin: ${origin}, Path: ${req.path}`);
+  
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    console.log(`✅ CORS allowed for origin: ${origin}`);
+  } else if (origin) {
+    console.log(`❌ CORS blocked for origin: ${origin}`);
+  }
+  
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, x-csrf-token, x-session-id, Access-Control-Request-Method, Access-Control-Request-Headers, Cache-Control, Pragma, If-Modified-Since, If-None-Match, X-API-Key');
+  res.setHeader('Access-Control-Expose-Headers', 'set-cookie, Authorization, X-Total-Count');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Log cookie-related headers for debugging
+  if (req.path.includes('/auth/login')) {
+    console.log('Login request - setting CORS headers for cookie support');
+    console.log('Request headers:', {
+      origin: req.headers.origin,
+      'user-agent': req.headers['user-agent'],
+      'x-forwarded-for': req.headers['x-forwarded-for']
+    });
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    console.log('Handling preflight request');
+    res.status(204).end();
+    return;
+  }
+  
+  next();
+});
 
 
 app.disable('x-powered-by');

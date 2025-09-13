@@ -70,19 +70,27 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
 
   
   // Set access token cookie for browser requests (supports new-tab file downloads)
-  res.cookie('token', accessToken, {
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'none',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // match access token expiry (7d default)
-  });
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // match access token expiry (7d default)
+    domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+  };
+  
+  console.log('Setting token cookie with options:', cookieOptions);
+  res.cookie('token', accessToken, cookieOptions);
 
-  res.cookie('refreshToken', refreshToken, {
+  const refreshCookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'none',
-    maxAge: 30 * 24 * 60 * 60 * 1000 
-  });
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+  };
+  
+  console.log('Setting refreshToken cookie with options:', refreshCookieOptions);
+  res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
   
   // ✅ SECURITY FIX: Minimize sensitive data in login response
@@ -295,14 +303,16 @@ exports.login = async (req, res, next) => {
         res.cookie('token', accessToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'none',
-          maxAge: 7 * 24 * 60 * 60 * 1000
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+          domain: process.env.NODE_ENV === 'production' ? undefined : undefined
         });
         res.cookie('refreshToken', ownerRefreshToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'none',
-          maxAge: 30 * 24 * 60 * 60 * 1000
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          maxAge: 30 * 24 * 60 * 60 * 1000,
+          domain: process.env.NODE_ENV === 'production' ? undefined : undefined
         });
 
         return res.status(200).json({
@@ -680,8 +690,9 @@ exports.refreshToken = async (req, res, next) => {
     res.cookie('token', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none',
-      maxAge: 7 * 24 * 60 * 60 * 1000
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      domain: process.env.NODE_ENV === 'production' ? undefined : undefined
     });
 
     // ✅ SECURITY FIX: Don't return token in response body - it's in HTTP-only cookie
