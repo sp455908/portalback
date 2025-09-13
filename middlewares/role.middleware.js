@@ -3,11 +3,6 @@
 module.exports = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
-      console.log('Role middleware - No user object found:', {
-        path: req.path,
-        method: req.method,
-        headers: req.headers
-      });
       return res.status(401).json({ 
         message: "Unauthorized: No user object found"
       });
