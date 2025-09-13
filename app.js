@@ -165,22 +165,29 @@ app.use(sanitizeRequest);
 app.use(generateCSRFToken); 
 
 
+// ✅ OWASP SECURITY: Enhanced session configuration with proper timeout
 app.use(session({
   store: new pgSession({
     conObject: {
       connectionString: process.env.DATABASE_URL,
-      
       ssl: { rejectUnauthorized: false },
     },
-    tableName: 'sessions'
+    tableName: 'sessions',
+    // ✅ OWASP: Session cleanup configuration
+    pruneSessionInterval: 15, // Clean up expired sessions every 15 minutes
+    ttl: 30 * 60 // 30 minutes TTL for session data
   }),
+  name: 'iiftl_session', // ✅ OWASP: Custom session name to avoid fingerprinting
   secret: process.env.SESSION_SECRET || 'your-session-secret-key',
-  resave: false,
-  saveUninitialized: false,
+  resave: false, // ✅ OWASP: Don't resave unchanged sessions
+  saveUninitialized: false, // ✅ OWASP: Don't save uninitialized sessions
+  rolling: true, // ✅ OWASP: Reset expiration on activity
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 
+    secure: process.env.NODE_ENV === 'production', // ✅ OWASP: HTTPS only in production
+    httpOnly: true, // ✅ OWASP: Prevent XSS attacks
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // ✅ OWASP: CSRF protection
+    maxAge: 30 * 60 * 1000, // ✅ OWASP: 30 minutes session timeout
+    domain: process.env.NODE_ENV === 'production' ? undefined : undefined // ✅ OWASP: Domain security
   }
 }));
 

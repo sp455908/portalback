@@ -39,20 +39,44 @@ class SecurityMonitor {
     return securityEvent;
   }
 
-  // Track failed login attempts
-  trackFailedLogin(ip, email) {
+  // ✅ OWASP SECURITY: Enhanced failed login tracking with detailed logging
+  trackFailedLogin(ip, email, userId = null, userAgent = null) {
     const key = `${ip}:${email}`;
     const attempts = this.failedAttempts.get(key) || 0;
     this.failedAttempts.set(key, attempts + 1);
 
+    // ✅ OWASP: Comprehensive security event logging
     this.logEvent({
       type: 'failed_login',
       ip,
+      userId,
       path: '/api/auth/login',
       method: 'POST',
-      details: { email, attempts: attempts + 1 },
+      userAgent,
+      details: { 
+        email, 
+        attempts: attempts + 1,
+        timestamp: new Date().toISOString(),
+        riskLevel: this.calculateRiskLevel(attempts + 1)
+      },
       severity: attempts + 1 >= this.maxFailedAttempts ? 'high' : 'medium'
     });
+
+    // ✅ OWASP: Additional security measures for high-risk attempts
+    if (attempts + 1 >= 3) {
+      this.logEvent({
+        type: 'suspicious_login_activity',
+        ip,
+        userId,
+        details: {
+          email,
+          attempts: attempts + 1,
+          message: 'Multiple failed login attempts detected',
+          recommendedAction: 'Monitor for potential brute force attack'
+        },
+        severity: 'high'
+      });
+    }
 
     // Block IP if too many failed attempts
     if (attempts + 1 >= this.maxFailedAttempts) {
@@ -61,6 +85,14 @@ class SecurityMonitor {
     }
 
     return true; // Allowed
+  }
+
+  // ✅ OWASP: Calculate risk level based on failed attempts
+  calculateRiskLevel(attempts) {
+    if (attempts >= 5) return 'CRITICAL';
+    if (attempts >= 3) return 'HIGH';
+    if (attempts >= 2) return 'MEDIUM';
+    return 'LOW';
   }
 
   // Block IP address

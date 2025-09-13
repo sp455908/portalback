@@ -13,6 +13,7 @@ const {
   SESSION_TIMEOUT_MINUTES 
 } = require('../middlewares/sessionManagement.middleware');
 const eventBus = require('../utils/eventBus');
+const securityMonitor = require('../utils/securityMonitor');
 
 
 
@@ -370,7 +371,55 @@ exports.login = async (req, res, next) => {
     if (!user || !(await user.comparePassword(password))) {
       
       if (user) {
-        // ✅ FIX: Create failed login attempt first
+        // ✅ OWASP SECURITY: Check if user is currently blocked BEFORE creating new attempt
+        const currentBlock = await LoginAttempt.findOne({
+          where: {
+            userId: user.id,
+            isBlocked: true,
+            [Op.or]: [
+              { blockedUntil: null }, // Permanent block
+              { blockedUntil: { [Op.gt]: new Date() } } // Temporary block not expired
+            ]
+          },
+          order: [['createdAt', 'DESC']]
+        });
+        
+        if (currentBlock) {
+          // User is currently blocked - don't create new attempt, just return block status
+          const isPermanent = !currentBlock.blockedUntil;
+          const blockedUntil = currentBlock.blockedUntil;
+          const failedAttemptsCount = await LoginAttempt.getFailedAttemptsCount(user.id);
+          
+          return res.status(423).json({
+            status: 'fail',
+            message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
+            code: 'ACCOUNT_BLOCKED',
+            blockedUntil: blockedUntil,
+            remainingMinutes: blockedUntil ? Math.ceil((new Date(blockedUntil) - new Date()) / (1000 * 60)) : null,
+            isPermanent: isPermanent,
+            contactAdmin: true,
+            failedAttemptsCount: failedAttemptsCount
+          });
+        }
+        
+        // ✅ OWASP SECURITY: Check if user was recently unblocked and clear failed attempts
+        const recentUnblock = await LoginAttempt.findOne({
+          where: {
+            userId: user.id,
+            isBlocked: false,
+            unblockedAt: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
+          },
+          order: [['unblockedAt', 'DESC']]
+        });
+        
+        if (recentUnblock) {
+          // User was recently unblocked, clear failed attempts and reactivate account
+          await LoginAttempt.clearFailedAttempts(user.id);
+          await user.update({ isActive: true });
+          console.log(`User ${user.email} was recently unblocked, clearing failed attempts and reactivating account`);
+        }
+        
+        // ✅ OWASP SECURITY: Create failed login attempt with proper logging
         await LoginAttempt.create({
           userId: user.id,
           email,
@@ -380,75 +429,36 @@ exports.login = async (req, res, next) => {
           attemptTime: new Date()
         });
         
-        // ✅ FIX: Get current failed attempts count after creating the attempt
+        // ✅ OWASP SECURITY: Get current failed attempts count after creating the attempt
         const failedAttemptsCount = await LoginAttempt.getFailedAttemptsCount(user.id);
         
-    // ✅ FIX: Check if user is currently blocked before checking failed attempts
-    const currentBlock = await LoginAttempt.findOne({
-      where: {
-        userId: user.id,
-        isBlocked: true,
-        [Op.or]: [
-          { blockedUntil: null }, // Permanent block
-          { blockedUntil: { [Op.gt]: new Date() } } // Temporary block not expired
-        ]
-      },
-      order: [['createdAt', 'DESC']]
-    });
-    
-    if (currentBlock) {
-      // User is currently blocked
-      const isPermanent = !currentBlock.blockedUntil;
-      const blockedUntil = currentBlock.blockedUntil;
-      
-      return res.status(423).json({
-        status: 'fail',
-        message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
-        code: 'ACCOUNT_BLOCKED',
-        blockedUntil: blockedUntil,
-        remainingMinutes: blockedUntil ? Math.ceil((new Date(blockedUntil) - new Date()) / (1000 * 60)) : null,
-        isPermanent: isPermanent,
-        contactAdmin: true,
-        failedAttemptsCount: failedAttemptsCount
-      });
-    }
-    
-    // ✅ FIX: Check if user was recently unblocked and clear failed attempts
-    const recentUnblock = await LoginAttempt.findOne({
-      where: {
-        userId: user.id,
-        isBlocked: false,
-        unblockedAt: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
-      },
-      order: [['unblockedAt', 'DESC']]
-    });
-    
-    if (recentUnblock) {
-      // User was recently unblocked, clear failed attempts and reactivate account
-      await LoginAttempt.clearFailedAttempts(user.id);
-      await user.update({ isActive: true });
-      console.log(`User ${user.email} was recently unblocked, clearing failed attempts and reactivating account`);
-    }
-    
-    // ✅ FIX: Check if user should be blocked (5 or more failed attempts)
-    if (failedAttemptsCount >= 5 && user.role !== 'admin') {
-      // Block user permanently
-      await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
-      
-      // Mark user as inactive
-      await user.update({ isActive: false });
-      
-      return res.status(423).json({
-        status: 'fail',
-        message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
-        code: 'ACCOUNT_BLOCKED',
-        blockedUntil: null,
-        remainingMinutes: null,
-        isPermanent: true,
-        contactAdmin: true,
-        failedAttemptsCount: failedAttemptsCount
-      });
-    }
+        // ✅ OWASP SECURITY: Track failed login with security monitor
+        securityMonitor.trackFailedLogin(ipAddress, email, user.id, userAgent);
+        
+        // ✅ OWASP SECURITY: Log security event for monitoring
+        console.log(`[SECURITY] Failed login attempt for user ${user.email} (ID: ${user.id}): ${failedAttemptsCount}/5 attempts`);
+        
+        // ✅ OWASP SECURITY: Check if user should be blocked (5 or more failed attempts)
+        if (failedAttemptsCount >= 5 && user.role !== 'admin') {
+          // Block user permanently
+          await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
+          
+          // Mark user as inactive
+          await user.update({ isActive: false });
+          
+          console.log(`[SECURITY] User ${user.email} (ID: ${user.id}) permanently blocked after ${failedAttemptsCount} failed attempts`);
+          
+          return res.status(423).json({
+            status: 'fail',
+            message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
+            code: 'ACCOUNT_BLOCKED',
+            blockedUntil: null,
+            remainingMinutes: null,
+            isPermanent: true,
+            contactAdmin: true,
+            failedAttemptsCount: failedAttemptsCount
+          });
+        }
         
         // ✅ FIX: Return failed attempts count for non-blocked users
         return res.status(401).json({
@@ -609,8 +619,8 @@ exports.login = async (req, res, next) => {
       attemptTime: new Date()
     });
 
-    
-
+    // ✅ OWASP SECURITY: Track successful login
+    securityMonitor.trackSuccessfulLogin(ipAddress, user.id, email);
     
     // ✅ FIX: Pass session conflict information to createSendToken
     await createSendToken(user, 200, res, req, sessionConflict ? {
