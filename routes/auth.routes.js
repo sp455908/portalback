@@ -66,7 +66,7 @@ router.post('/create-initial-admin', authController.createInitialAdmin);
 router.get('/me', protect, authController.getMe);
 
 // Logout (optional, for client-side token removal)
-router.post('/logout', protect, verifyCSRFToken, authController.logout);
+router.post('/logout', protect, authController.logout);
 
 // Validate session endpoint
 router.get('/validate-session', authController.validateSession);

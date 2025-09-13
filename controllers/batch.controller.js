@@ -1161,12 +1161,7 @@ exports.getAllStudentConflicts = async (req, res) => {
 
 exports.batchHealthCheck = async (req, res) => {
   try {
-    console.log('Batch health check requested');
-    
-    
     const batchCount = await Batch.count();
-    
-    console.log('Batch count:', batchCount);
     
     res.status(200).json({
       status: 'success',
@@ -1179,12 +1174,9 @@ exports.batchHealthCheck = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Error in batch health check:', err);
-    console.error('Error stack:', err.stack);
     res.status(500).json({
       status: 'error',
-      message: 'Batch model health check failed',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: 'Batch model health check failed'
     });
   }
 }; 

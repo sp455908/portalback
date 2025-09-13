@@ -26,7 +26,6 @@ const checkActiveSessions = async (userId, currentSessionId = null) => {
       currentSession: currentSessionId ? activeSessions.find(s => s.sessionId === currentSessionId) : null
     };
   } catch (error) {
-    console.error('Error checking active sessions:', error);
     return { hasActiveSessions: false, activeSessions: [], currentSession: null };
   }
 };
@@ -59,7 +58,6 @@ const createSession = async (user, req) => {
     const session = await UserSession.createSession(sessionData);
     return session;
   } catch (error) {
-    console.error('Error creating session:', error);
     throw error;
   }
 };
@@ -76,7 +74,6 @@ const updateSessionActivity = async (sessionId) => {
     }
     return null;
   } catch (error) {
-    console.error('Error updating session activity:', error);
     return null;
   }
 };
@@ -92,7 +89,6 @@ const deactivateSession = async (sessionId) => {
     eventBus.emit('session_terminated', { sessionId });
     return true;
   } catch (error) {
-    console.error('Error deactivating session:', error);
     return false;
   }
 };
@@ -101,10 +97,8 @@ const deactivateSession = async (sessionId) => {
 const cleanupExpiredSessions = async () => {
   try {
     const result = await UserSession.cleanupExpiredSessions();
-    console.log(`Cleaned up ${result[0]} expired sessions`);
     return result[0];
   } catch (error) {
-    console.error('Error cleaning up expired sessions:', error);
     return 0;
   }
 };
@@ -171,7 +165,6 @@ const validateSession = async (req, res, next) => {
     req.session = session;
     next();
   } catch (error) {
-    console.error('Session validation error:', error);
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
         status: 'fail',
@@ -204,13 +197,11 @@ const enforceSingleSession = async (req, res, next) => {
     if (sessionCheck.hasActiveSessions) {
       // Deactivate other sessions
       await UserSession.deactivateUserSessions(userId);
-      console.log(`Deactivated ${sessionCheck.activeSessions.length} existing sessions for user ${userId}`);
       // Emit broadcast to notify UI to refresh its active sessions list
       eventBus.emit('broadcast', { type: 'sessions_deactivated', userId });
     }
     next();
   } catch (error) {
-    console.error('Single session enforcement error:', error);
     next(); // Continue even if enforcement fails
   }
 };

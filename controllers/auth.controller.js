@@ -13,12 +13,6 @@ const {
 } = require('../middlewares/sessionManagement.middleware');
 
 
-const devLog = (...args) => {
-  if (process.env.NODE_ENV !== 'production') {
-    
-    console.log(...args);
-  }
-};
 
 
 const verifyToken = promisify(jwt.verify);
@@ -517,9 +511,6 @@ exports.login = async (req, res, next) => {
         devLog(`ℹ️ User ${user.email} logging in with ${validSessions.length} existing active session(s)`);
       }
     } catch (sessionError) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('Session check error (non-critical):', sessionError);
-      }
     }
 
     
@@ -936,7 +927,6 @@ exports.logoutAllOtherSessions = async (req, res, next) => {
       }
     });
   } catch (err) {
-    console.error('Logout all other sessions error:', err);
     res.status(500).json({
       status: 'error',
       message: 'Failed to logout other sessions'
@@ -1004,8 +994,6 @@ exports.createInitialAdmin = async (req, res, next) => {
     });
 
   } catch (err) {
-    console.error('Initial admin creation error:', err);
-    
     if (err.message === 'Only one admin user is allowed in the system') {
       return res.status(400).json({
         status: 'fail',
@@ -1015,8 +1003,7 @@ exports.createInitialAdmin = async (req, res, next) => {
     
     res.status(500).json({
       status: 'error',
-      message: 'Failed to create initial admin user',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: 'Failed to create initial admin user'
     });
   }
 };

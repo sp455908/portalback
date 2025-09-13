@@ -4,17 +4,6 @@ const courseController = require('../controllers/course.controller');
 const { protect } = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/role.middleware');
 
-// Debug middleware to log all course route requests
-router.use((req, res, next) => {
-  console.log(`📚 Course Route: ${req.method} ${req.path}`, {
-    method: req.method,
-    path: req.path,
-    params: req.params,
-    body: req.body,
-    user: req.user ? { id: req.user.id, role: req.user.role } : 'No user'
-  });
-  next();
-});
 
 // Create a new course (admin only)
 router.post('/', protect, authorize('admin'), courseController.createCourse);

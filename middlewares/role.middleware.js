@@ -25,6 +25,7 @@ module.exports = (...allowedRoles) => {
       return next();
     }
 
+    // Check if user role is in allowed roles
     if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({ 
         message: "Forbidden: insufficient permissions"
