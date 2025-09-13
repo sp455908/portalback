@@ -120,35 +120,32 @@ exports.register = async (req, res, next) => {
     let { firstName, lastName, email, password, role, userType, phone, address, city, state, pincode } = req.body;
     const encryptionService = require('../utils/encryption');
 
-    // Enforce encrypted credentials only
-    if (!email.startsWith('encrypted:') || !password.startsWith('encrypted:')) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Encrypted credentials required for security',
-        code: 'ENCRYPTION_REQUIRED'
-      });
-    }
-
-    // Decrypt credentials
+    // Handle both encrypted and plain text credentials
     try {
-      const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
-      const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
-      
-      if (!decryptedEmail || !decryptedPassword) {
-        return res.status(400).json({
-          status: 'fail',
-          message: 'Invalid encrypted credentials format',
-          code: 'INVALID_ENCRYPTION'
-        });
+      // If credentials are encrypted, decrypt them
+      if (email.startsWith('encrypted:') && password.startsWith('encrypted:')) {
+        const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
+        const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
+        
+        if (decryptedEmail && decryptedPassword) {
+          email = decryptedEmail.toLowerCase().trim();
+          password = decryptedPassword;
+        } else {
+          return res.status(400).json({
+            status: 'fail',
+            message: 'Invalid encrypted credentials format',
+            code: 'INVALID_ENCRYPTION'
+          });
+        }
+      } else {
+        // Plain text credentials - normalize email
+        email = email.toLowerCase().trim();
       }
-      
-      email = decryptedEmail.toLowerCase().trim();
-      password = decryptedPassword;
     } catch (decryptError) {
       return res.status(400).json({
         status: 'fail',
-        message: 'Failed to decrypt credentials',
-        code: 'DECRYPTION_FAILED'
+        message: 'Failed to process credentials',
+        code: 'CREDENTIAL_PROCESSING_FAILED'
       });
     }
 
@@ -292,36 +289,34 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Enforce encrypted credentials only
-    if (!email.startsWith('encrypted:') || !password.startsWith('encrypted:')) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Encrypted credentials required for security',
-        code: 'ENCRYPTION_REQUIRED'
-      });
-    }
-
-    // Decrypt credentials
+    // Handle both encrypted and plain text credentials
     try {
       const encryptionService = require('../utils/encryption');
-      const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
-      const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
       
-      if (!decryptedEmail || !decryptedPassword) {
-        return res.status(400).json({
-          status: 'fail',
-          message: 'Invalid encrypted credentials format',
-          code: 'INVALID_ENCRYPTION'
-        });
+      // If credentials are encrypted, decrypt them
+      if (email.startsWith('encrypted:') && password.startsWith('encrypted:')) {
+        const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
+        const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
+        
+        if (decryptedEmail && decryptedPassword) {
+          email = decryptedEmail.toLowerCase().trim();
+          password = decryptedPassword;
+        } else {
+          return res.status(400).json({
+            status: 'fail',
+            message: 'Invalid encrypted credentials format',
+            code: 'INVALID_ENCRYPTION'
+          });
+        }
+      } else {
+        // Plain text credentials - normalize email
+        email = email.toLowerCase().trim();
       }
-      
-      email = decryptedEmail.toLowerCase().trim();
-      password = decryptedPassword;
     } catch (decryptError) {
       return res.status(400).json({
         status: 'fail',
-        message: 'Failed to decrypt credentials',
-        code: 'DECRYPTION_FAILED'
+        message: 'Failed to process credentials',
+        code: 'CREDENTIAL_PROCESSING_FAILED'
       });
     }
 
