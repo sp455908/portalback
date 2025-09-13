@@ -26,6 +26,20 @@ exports.protect = async (req, res, next) => {
   let token;
   let sessionId;
 
+  // Debug logging for owner requests
+  if (req.path.includes('/users/stats') || req.path.includes('/batches') || req.path.includes('/practice-tests')) {
+    console.log('🔍 Auth Debug - Request:', {
+      path: req.path,
+      method: req.method,
+      cookies: req.cookies,
+      headers: {
+        authorization: req.headers.authorization,
+        'x-session-id': req.headers['x-session-id'],
+        origin: req.headers.origin
+      }
+    });
+  }
+
   // Prefer JWT from HTTP-only cookie (set by backend auth)
   if (req.cookies && typeof req.cookies.token === 'string') {
     token = sanitizeToken(req.cookies.token);

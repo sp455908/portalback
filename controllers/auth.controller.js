@@ -353,21 +353,29 @@ exports.login = async (req, res, next) => {
         const accessToken = signOwnerToken(owner.id);
         const ownerRefreshToken = signRefreshToken(owner.id);
 
-        // Set cookies
+        // Set cookies with consistent settings for cross-origin support
+        console.log('🍪 Setting owner cookies:', {
+          origin: req.headers.origin,
+          userAgent: req.headers['user-agent'],
+          cookies: req.cookies
+        });
+        
         res.cookie('token', accessToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          secure: true, // Always secure in production
+          sameSite: 'none', // Required for cross-origin requests
           maxAge: 7 * 24 * 60 * 60 * 1000,
-          domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+          path: '/' // Ensure cookie is available for all paths
         });
         res.cookie('refreshToken', ownerRefreshToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          secure: true, // Always secure in production
+          sameSite: 'none', // Required for cross-origin requests
           maxAge: 30 * 24 * 60 * 60 * 1000,
-          domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+          path: '/' // Ensure cookie is available for all paths
         });
+        
+        console.log('✅ Owner cookies set successfully');
 
         return res.status(200).json({
           status: 'success',
