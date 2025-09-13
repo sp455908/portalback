@@ -117,9 +117,42 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
 
 exports.register = async (req, res, next) => {
   try {
-    const { firstName, lastName, email, password, role, userType, phone, address, city, state, pincode } = req.body;
+    let { firstName, lastName, email, password, role, userType, phone, address, city, state, pincode } = req.body;
     const encryptionService = require('../utils/encryption');
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+
+    // Enforce encrypted credentials only
+    if (!email.startsWith('encrypted:') || !password.startsWith('encrypted:')) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Encrypted credentials required for security',
+        code: 'ENCRYPTION_REQUIRED'
+      });
+    }
+
+    // Decrypt credentials
+    try {
+      const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
+      const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
+      
+      if (!decryptedEmail || !decryptedPassword) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Invalid encrypted credentials format',
+          code: 'INVALID_ENCRYPTION'
+        });
+      }
+      
+      email = decryptedEmail.toLowerCase().trim();
+      password = decryptedPassword;
+    } catch (decryptError) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Failed to decrypt credentials',
+        code: 'DECRYPTION_FAILED'
+      });
+    }
+
+    const normalizedEmail = email;
 
     if (!role || !userType) {
       return res.status(400).json({
@@ -259,19 +292,36 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Decrypt credentials if they are encrypted
+    // Enforce encrypted credentials only
+    if (!email.startsWith('encrypted:') || !password.startsWith('encrypted:')) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Encrypted credentials required for security',
+        code: 'ENCRYPTION_REQUIRED'
+      });
+    }
+
+    // Decrypt credentials
     try {
       const encryptionService = require('../utils/encryption');
-      if (typeof email === 'string' && email.startsWith('encrypted:')) {
-        email = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
+      const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
+      const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
+      
+      if (!decryptedEmail || !decryptedPassword) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Invalid encrypted credentials format',
+          code: 'INVALID_ENCRYPTION'
+        });
       }
-      if (typeof password === 'string' && password.startsWith('encrypted:')) {
-        password = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
-      }
+      
+      email = decryptedEmail.toLowerCase().trim();
+      password = decryptedPassword;
     } catch (decryptError) {
       return res.status(400).json({
         status: 'fail',
-        message: 'Invalid encrypted credentials format'
+        message: 'Failed to decrypt credentials',
+        code: 'DECRYPTION_FAILED'
       });
     }
 
@@ -554,14 +604,11 @@ exports.login = async (req, res, next) => {
     } : {});
 
   } catch (err) {
-    if (process.env.NODE_ENV !== 'production') {
-      
-      
-    }
+    console.error('Login error:', err);
     res.status(500).json({
       status: 'error',
       message: 'An error occurred during login',
-      error: process.env.NODE_ENV === 'development' ? err : undefined
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };

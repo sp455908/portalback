@@ -33,7 +33,41 @@ const sanitizeName = (v) => (typeof v === 'string' ? v.replace(/[\r\n\t<>]/g, ''
 // Owner auth (email/password) → issues OWNER JWT
 router.post('/auth/login', ownerAuthLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    let { email, password } = req.body || {};
+    
+    // Enforce encrypted credentials only
+    if (!email.startsWith('encrypted:') || !password.startsWith('encrypted:')) {
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: 'Encrypted credentials required for security',
+        code: 'ENCRYPTION_REQUIRED'
+      });
+    }
+
+    // Decrypt credentials
+    try {
+      const encryptionService = require('../utils/encryption');
+      const decryptedEmail = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
+      const decryptedPassword = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
+      
+      if (!decryptedEmail || !decryptedPassword) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Invalid encrypted credentials format',
+          code: 'INVALID_ENCRYPTION'
+        });
+      }
+      
+      email = decryptedEmail.toLowerCase().trim();
+      password = decryptedPassword;
+    } catch (decryptError) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Failed to decrypt credentials',
+        code: 'DECRYPTION_FAILED'
+      });
+    }
+
     if (!isValidEmail(email) || !isNonEmptyString(password)) {
       return res.status(400).json({ status: 'fail', message: 'Email and password required' });
     }

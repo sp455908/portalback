@@ -632,12 +632,6 @@ exports.unblockUser = async (req, res) => {
 
 exports.blockUser = async (req, res) => {
   try {
-    console.log('Block user controller called:', {
-      userId: req.params.userId,
-      user: req.user,
-      body: req.body
-    });
-    
     const { userId } = req.params;
     const { reason, blockDuration } = req.body;
 
