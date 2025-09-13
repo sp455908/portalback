@@ -46,6 +46,11 @@ exports.protect = async (req, res, next) => {
   }
 
   if (!token) {
+    console.log('Auth middleware - No token found:', {
+      cookies: req.cookies,
+      authorization: req.headers.authorization,
+      path: req.path
+    });
     return res.status(401).json({ 
       status: 'fail',
       message: 'Not authorized - No token provided' 
@@ -70,7 +75,8 @@ exports.protect = async (req, res, next) => {
         id: owner.id,
         email: owner.email,
         role: 'owner',
-        isOwner: true
+        isOwner: true,
+        isActive: owner.isActive
       };
       return next();
     }

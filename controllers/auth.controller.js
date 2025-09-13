@@ -248,7 +248,7 @@ exports.register = async (req, res, next) => {
 
 exports.login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
     const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
     const userAgent = req.headers['user-agent'];
 
@@ -256,6 +256,22 @@ exports.login = async (req, res, next) => {
       return res.status(400).json({
         status: 'fail',
         message: 'Please provide email and password'
+      });
+    }
+
+    // Decrypt credentials if they are encrypted
+    try {
+      const encryptionService = require('../utils/encryption');
+      if (typeof email === 'string' && email.startsWith('encrypted:')) {
+        email = encryptionService.safeDecrypt(email.replace('encrypted:', ''));
+      }
+      if (typeof password === 'string' && password.startsWith('encrypted:')) {
+        password = encryptionService.safeDecrypt(password.replace('encrypted:', ''));
+      }
+    } catch (decryptError) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Invalid encrypted credentials format'
       });
     }
 
