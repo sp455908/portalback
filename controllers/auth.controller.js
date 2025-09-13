@@ -78,7 +78,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     path: '/' // Ensure cookie is available for all paths
   };
   
-  console.log('Setting token cookie with options:', cookieOptions);
+  console.log('🍪 Setting token cookie with options:', cookieOptions);
   res.cookie('token', accessToken, cookieOptions);
 
   const refreshCookieOptions = {
@@ -89,8 +89,11 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     path: '/' // Ensure cookie is available for all paths
   };
   
-  console.log('Setting refreshToken cookie with options:', refreshCookieOptions);
+  console.log('🍪 Setting refreshToken cookie with options:', refreshCookieOptions);
   res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+  
+  // ✅ DEBUG: Log response headers
+  console.log('🍪 Response headers being set:', res.getHeaders());
 
   
   // ✅ SECURITY FIX: Minimize sensitive data in login response
@@ -645,8 +648,9 @@ exports.refreshToken = async (req, res, next) => {
       res.cookie('token', newOwnerAccess, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'none',
-        maxAge: 7 * 24 * 60 * 60 * 1000
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/' // Ensure cookie is available for all paths
       });
       return res.status(200).json({
         status: 'success',
@@ -684,13 +688,13 @@ exports.refreshToken = async (req, res, next) => {
     
     const newAccessToken = signToken(user.id);
 
-    // Also set/refresh access token cookie for browser-based auth (supports new-tab downloads)
+    // ✅ SECURITY FIX: Set/refresh access token cookie with consistent options
     res.cookie('token', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+      path: '/' // Ensure cookie is available for all paths
     });
 
     // ✅ SECURITY: Tokens are only in HTTP-only cookies, not accessible to JavaScript

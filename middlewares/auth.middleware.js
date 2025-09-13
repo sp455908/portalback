@@ -26,9 +26,18 @@ exports.protect = async (req, res, next) => {
   let token;
   let sessionId;
 
+  // ✅ DEBUG: Log cookie information
+  console.log('🔍 Auth middleware - Cookies received:', req.cookies);
+  console.log('🔍 Auth middleware - Headers:', {
+    origin: req.headers.origin,
+    'user-agent': req.headers['user-agent'],
+    authorization: req.headers.authorization ? 'Bearer [REDACTED]' : 'none'
+  });
+
   // Prefer JWT from HTTP-only cookie (set by backend auth)
   if (req.cookies && typeof req.cookies.token === 'string') {
     token = sanitizeToken(req.cookies.token);
+    console.log('✅ Token found in cookie');
   }
 
   // Fallback to Authorization header for legacy clients/tools
