@@ -82,6 +82,9 @@ router.get('/active-sessions', protect, authController.getActiveSessions);
 // Force logout from all other sessions
 router.post('/logout-all-other-sessions', protect, authController.logoutAllOtherSessions);
 
+// Get user's active sessions
+router.get('/sessions', protect, authController.getActiveSessions);
+
 // CSP reporting endpoint
 router.post('/security/csp-report', (req, res) => {
   console.log('CSP Violation Report:', req.body);

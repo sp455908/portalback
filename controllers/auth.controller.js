@@ -463,20 +463,34 @@ exports.login = async (req, res, next) => {
     }
 
     
+    // ✅ SECURITY FIX: Allow multiple sessions but limit to prevent abuse
     let otherActiveSessions = [];
     try {
-      const existingSessions = await UserSession.findUserActiveSessions(user.id);
+      // First, clean up any expired sessions for this user
+      await UserSession.update(
+        { isActive: false },
+        { 
+          where: { 
+            userId: user.id, 
+            isActive: true,
+            expiresAt: { [require('sequelize').Op.lt]: new Date() }
+          } 
+        }
+      );
       
+      const existingSessions = await UserSession.findUserActiveSessions(user.id);
       const validSessions = existingSessions.filter(s => s.isActive && !s.isExpired());
       otherActiveSessions = validSessions;
       
-      if (validSessions.length > 0) {
-        devLog(`🚫 Admin login blocked due to existing active session(s): ${validSessions.length} for ${user.email}`);
+      // Allow up to 3 concurrent sessions per user (configurable via environment)
+      const MAX_CONCURRENT_SESSIONS = parseInt(process.env.MAX_CONCURRENT_SESSIONS) || 3;
+      if (validSessions.length >= MAX_CONCURRENT_SESSIONS) {
+        devLog(`🚫 Login blocked: User ${user.email} has ${validSessions.length} active sessions (max: ${MAX_CONCURRENT_SESSIONS})`);
         const statusInfo = await LoginAttempt.getLoginStatus(user.id, email);
         return res.status(409).json({
           status: 'fail',
-          message: 'You are already logged in on another device. Please logout there first.',
-          code: 'SESSION_ALREADY_ACTIVE',
+          message: `You have reached the maximum number of concurrent sessions (${MAX_CONCURRENT_SESSIONS}). Please logout from another device first.`,
+          code: 'TOO_MANY_SESSIONS',
           failedAttempt: false,
           shouldCountFailedAttempt: false,
           failedAttemptsCount: statusInfo?.failedAttemptsCount || 0,
@@ -486,14 +500,19 @@ exports.login = async (req, res, next) => {
               ipAddress: s.ipAddress,
               userAgent: s.userAgent
             })),
-            count: validSessions.length
+            count: validSessions.length,
+            maxSessions: MAX_CONCURRENT_SESSIONS
           }
         });
       }
+      
+      // Log session info but allow login
+      if (validSessions.length > 0) {
+        devLog(`ℹ️ User ${user.email} logging in with ${validSessions.length} existing active session(s)`);
+      }
     } catch (sessionError) {
       if (process.env.NODE_ENV !== 'production') {
-        
-        
+        console.log('Session check error (non-critical):', sessionError);
       }
     }
 
