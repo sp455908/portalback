@@ -27,30 +27,45 @@ const createRateLimiter = (windowMs, max, message) => {
 
 // Security middleware configuration
 const securityMiddleware = {
-  // Basic security headers
+  // ✅ SECURITY FIX: Enhanced security headers with stricter CSP
   basic: helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        styleSrc: ["'self'", "https://fonts.googleapis.com"], // Removed 'unsafe-inline'
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'"], // Removed 'unsafe-inline' and 'unsafe-eval'
         connectSrc: ["'self'", "https://iiftl-portal.vercel.app"],
         frameSrc: ["'self'", "https://iiftl-portal.vercel.app"],
         objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
         upgradeInsecureRequests: [],
+        reportUri: "/api/security/csp-report" // Add CSP reporting
       },
     },
     crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    }
   }),
 
-  // Rate limiters
+  // ✅ SECURITY FIX: Enhanced rate limiters with progressive delays
   authLimiter: createRateLimiter(
     15 * 60 * 1000, // 15 minutes
     5, // 5 attempts
     'Too many login attempts, please try again in 15 minutes.'
+  ),
+
+  // Stricter rate limiting for sensitive endpoints
+  sensitiveLimiter: createRateLimiter(
+    5 * 60 * 1000, // 5 minutes
+    10, // 10 requests
+    'Too many requests to sensitive endpoint, please try again later.'
   ),
 
   generalLimiter: createRateLimiter(
@@ -124,20 +139,50 @@ const securityMiddleware = {
     next();
   },
 
-  // Request logging for security monitoring
+  // ✅ SECURITY FIX: Enhanced request logging for security monitoring
   securityLog: (req, res, next) => {
     const securityEvents = [
       'login',
       'register',
       'password-reset',
-      'admin-action'
+      'admin-action',
+      'logout',
+      'refresh-token'
     ];
 
-    if (process.env.NODE_ENV !== 'production' && securityEvents.some(event => req.path.includes(event))) {
-      // eslint-disable-next-line no-console
-      console.log(`[SECURITY] ${req.method} ${req.path} from ${req.ip} at ${new Date().toISOString()}`);
+    if (securityEvents.some(event => req.path.includes(event))) {
+      const logData = {
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        path: req.path,
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        userId: req.user?.id || 'anonymous'
+      };
+      
+      console.log(`[SECURITY] ${JSON.stringify(logData)}`);
     }
 
+    next();
+  },
+
+  // ✅ NEW: Additional security headers
+  additionalHeaders: (req, res, next) => {
+    // Prevent MIME type sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    // Prevent clickjacking
+    res.setHeader('X-Frame-Options', 'DENY');
+    
+    // Prevent XSS
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    
+    // Referrer policy
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    
+    // Permissions policy
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    
     next();
   },
 

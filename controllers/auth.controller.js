@@ -85,23 +85,25 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
   });
 
   
+  // ✅ SECURITY FIX: Minimize sensitive data in login response
   let userForResponse = user && typeof user.toJSON === 'function' ? user.toJSON() : user;
-  try {
-    const encryptionService = require('../utils/encryption');
-    if (userForResponse && userForResponse.phone) {
-      userForResponse = {
-        ...userForResponse,
-        phone: encryptionService.safeDecrypt(String(userForResponse.phone))
-      };
-    }
-  } catch (_) {
-    
-  }
+  
+  // Only include essential user data for login response
+  userForResponse = {
+    id: userForResponse.id,
+    email: userForResponse.email,
+    firstName: userForResponse.firstName,
+    lastName: userForResponse.lastName,
+    role: userForResponse.role,
+    userType: userForResponse.userType,
+    isActive: userForResponse.isActive,
+    createdAt: userForResponse.createdAt
+    // Removed: phone, address, studentId, corporateId, governmentId, pincode, city, state, profileImage
+  };
 
   res.status(statusCode).json({
     status: 'success',
-    token: accessToken,
-    refreshToken: refreshToken,
+    // ✅ SECURITY FIX: Remove tokens from response body - they're already in HTTP-only cookies
     sessionId: session ? session.sessionId : null,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     sessionTimeout: SESSION_TIMEOUT_MINUTES * 60, 
@@ -305,8 +307,7 @@ exports.login = async (req, res, next) => {
 
         return res.status(200).json({
           status: 'success',
-          token: accessToken,
-          refreshToken: ownerRefreshToken,
+          // ✅ SECURITY FIX: Don't return tokens in response body - they're in HTTP-only cookies
           sessionId: null,
           expiresIn: process.env.JWT_EXPIRES_IN || '7d',
           sessionTimeout: SESSION_TIMEOUT_MINUTES * 60,
@@ -622,7 +623,7 @@ exports.refreshToken = async (req, res, next) => {
       });
       return res.status(200).json({
         status: 'success',
-        token: newOwnerAccess,
+        // ✅ SECURITY FIX: Don't return token in response body - it's in HTTP-only cookie
         expiresIn: process.env.JWT_EXPIRES_IN || '7d',
         data: {
           user: {
@@ -664,10 +665,9 @@ exports.refreshToken = async (req, res, next) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
-    // user.password removed above
+    // ✅ SECURITY FIX: Don't return token in response body - it's in HTTP-only cookie
     res.status(200).json({
       status: 'success',
-      token: newAccessToken,
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       data: {
         user

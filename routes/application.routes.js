@@ -8,8 +8,8 @@ const { decryptRequestBody } = require('../middlewares/decrypt.middleware');
 // Create a new application (any user or guest)
 router.post('/', decryptRequestBody, applicationController.createApplication);
 
-// Get all applications (admin only)
-router.get('/', protect, authorize('admin'), applicationController.getAllApplications);
+// Get all applications (admin or owner)
+router.get('/', protect, authorize('admin', 'owner'), applicationController.getAllApplications);
 
 // Get applications for current user
 router.get('/me', protect, applicationController.getMyApplications);

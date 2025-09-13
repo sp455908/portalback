@@ -14,15 +14,24 @@ function decryptRequestBody(req, res, next) {
         // 2) AES-GCM decrypt payload
         const iv = Buffer.from(req.body.iv, 'base64');
         const ct = Buffer.from(req.body.payload, 'base64');
+        
+        // ✅ SECURITY FIX: Proper AES-GCM decryption with validation
+        if (ct.length < 16) {
+          return res.status(400).json({ status: 'fail', message: 'Invalid encrypted payload length' });
+        }
+        
         const decipher = crypto.createDecipheriv('aes-256-gcm', aesKeyRaw, iv);
-        // Node expect authTag at end; here payload is raw ct+tag combined is not guaranteed. Assume appended last 16 bytes as tag.
+        
+        // Extract auth tag from the last 16 bytes
         const tag = ct.slice(ct.length - 16);
         const data = ct.slice(0, ct.length - 16);
-        decipher.setAuthTag(tag);
-        const decrypted = Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+        
         try {
+          decipher.setAuthTag(tag);
+          const decrypted = Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
           req.body = JSON.parse(decrypted);
-        } catch (_) {
+        } catch (decryptError) {
+          console.error('AES-GCM decryption failed:', decryptError);
           return res.status(400).json({ status: 'fail', message: 'Invalid encrypted payload format' });
         }
       } else if (typeof req.body.payload === 'string') {
