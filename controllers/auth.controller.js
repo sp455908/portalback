@@ -853,7 +853,7 @@ exports.logout = async (req, res, next) => {
         
         // ✅ SECURITY FIX: Clear user cache
         try {
-          userCache.del(`user_${req.user.id}`);
+          userCache.delete(`user_${req.user.id}`);
         } catch (cacheError) {
           console.log(`⚠️ Failed to clear user cache for user ${req.user.id}:`, cacheError);
         }
