@@ -851,7 +851,7 @@ exports.logout = async (req, res, next) => {
         secure: process.env.NODE_ENV === 'production', // Match login configuration
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Match login configuration
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+        domain: undefined // No domain restriction for cross-origin
       });
       
       // Clear refresh token cookie with same configuration as login
@@ -860,7 +860,7 @@ exports.logout = async (req, res, next) => {
         secure: process.env.NODE_ENV === 'production', // Match login configuration
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Match login configuration
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+        domain: undefined // No domain restriction for cross-origin
       });
       
       // Clear any additional cookies that might exist
@@ -869,7 +869,7 @@ exports.logout = async (req, res, next) => {
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+        domain: undefined // No domain restriction for cross-origin
       });
       
       // Additional aggressive cookie clearing with different configurations
