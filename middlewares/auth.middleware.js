@@ -26,10 +26,7 @@ exports.protect = async (req, res, next) => {
   let token;
   let sessionId;
 
-  // Debug logging for owner requests
-  if (req.path.includes('/users/stats') || req.path.includes('/batches') || req.path.includes('/practice-tests')) {
-    // Debug logging removed for production security
-  }
+  // Production security: No debug logging
 
   // Prefer JWT from HTTP-only cookie (set by backend auth)
   if (req.cookies && typeof req.cookies.token === 'string') {
@@ -219,7 +216,6 @@ exports.protect = async (req, res, next) => {
 
 // Variant: allow JWT via query token (e.g., for file downloads opened in a new tab)
 exports.protectWithQueryToken = async (req, res, next) => {
-  // Auth middleware (query token allowed) called
   let token;
   let sessionId;
 
@@ -296,7 +292,6 @@ exports.protectWithQueryToken = async (req, res, next) => {
     }
     next();
   } catch (err) {
-    console.error('Auth (query token) error:', err);
     return res.status(401).json({ status: 'fail', message: 'Invalid token or session expired' });
   }
 };

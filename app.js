@@ -57,10 +57,6 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // Log blocked origins for debugging
-    console.log('CORS blocked origin:', origin);
-    console.log('Allowed origins:', allowedOrigins);
-    
     const error = new Error(`Origin ${origin} not allowed by CORS`);
     return callback(error, false);
   },
@@ -96,14 +92,8 @@ app.options('*', cors(corsOptions));
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
-  // Log CORS requests for debugging
-  console.log(`CORS Request - Method: ${req.method}, Origin: ${origin}, Path: ${req.path}`);
-  
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-    console.log(`✅ CORS allowed for origin: ${origin}`);
-  } else if (origin) {
-    console.log(`❌ CORS blocked for origin: ${origin}`);
   }
   
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -112,19 +102,8 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Expose-Headers', 'set-cookie, Authorization, X-Total-Count');
   res.setHeader('Access-Control-Max-Age', '86400');
   
-  // Log cookie-related headers for debugging
-  if (req.path.includes('/auth/login')) {
-    console.log('Login request - setting CORS headers for cookie support');
-    console.log('Request headers:', {
-      origin: req.headers.origin,
-      'user-agent': req.headers['user-agent'],
-      'x-forwarded-for': req.headers['x-forwarded-for']
-    });
-  }
-  
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('Handling preflight request');
     res.status(204).end();
     return;
   }
@@ -143,8 +122,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "https://iiftl-portal.vercel.app"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Added unsafe-inline for React development
+      connectSrc: ["'self'", "https://iiftl-portal.vercel.app", "https://portalback-8tth.onrender.com"],
       frameSrc: ["'self'", "https://iiftl-portal.vercel.app"],
       objectSrc: ["'none'"]
     }
