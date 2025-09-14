@@ -27,22 +27,25 @@ const createRateLimiter = (windowMs, max, message) => {
 
 // Security middleware configuration
 const securityMiddleware = {
-  // ✅ SECURITY FIX: Enhanced security headers with stricter CSP
+  // ✅ SECURITY FIX: Enhanced security headers with strict CSP
   basic: helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "https://fonts.googleapis.com"], // Removed 'unsafe-inline'
+        styleSrc: ["'self'", "https://fonts.googleapis.com"], // Removed unsafe-inline for security
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "https:"],
-        scriptSrc: ["'self'"], // Removed 'unsafe-inline' and 'unsafe-eval'
-        connectSrc: ["'self'", "https://iiftl-portal.vercel.app"],
+        imgSrc: ["'self'", "data:", "https:", "blob:"],
+        scriptSrc: ["'self'"], // Removed unsafe-inline for security
+        connectSrc: ["'self'", "https://iiftl-portal.vercel.app", "https://portalback-8tth.onrender.com"],
         frameSrc: ["'self'", "https://iiftl-portal.vercel.app"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
         upgradeInsecureRequests: [],
-        reportUri: "/api/security/csp-report" // Add CSP reporting
+        reportUri: "/api/security/csp-report",
+        workerSrc: ["'self'", "blob:"],
+        childSrc: ["'self'", "blob:"],
+        manifestSrc: ["'self'"]
       },
     },
     crossOriginEmbedderPolicy: false,
