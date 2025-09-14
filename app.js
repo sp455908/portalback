@@ -42,6 +42,7 @@ app.set('trust proxy', 1);
 
 const allowedOrigins = [
   'https://iiftl-portal.vercel.app',
+  'https://exim-portal-guardian.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173'
 ];
@@ -55,6 +56,10 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
+    
+    // Log blocked origins for debugging
+    console.log('CORS blocked origin:', origin);
+    console.log('Allowed origins:', allowedOrigins);
     
     const error = new Error(`Origin ${origin} not allowed by CORS`);
     return callback(error, false);
@@ -77,7 +82,7 @@ const corsOptions = {
     'If-None-Match',
     'X-API-Key'
   ],
-  exposedHeaders: ['set-cookie', 'Authorization', 'X-Total-Count', 'X-CSRF-Token'],
+  exposedHeaders: ['set-cookie', 'Authorization', 'X-Total-Count'],
   maxAge: 86400, // 24 hours
   preflightContinue: false,
   optionsSuccessStatus: 204
@@ -91,18 +96,35 @@ app.options('*', cors(corsOptions));
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
+  // Log CORS requests for debugging
+  console.log(`CORS Request - Method: ${req.method}, Origin: ${origin}, Path: ${req.path}`);
+  
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+    console.log(`✅ CORS allowed for origin: ${origin}`);
+  } else if (origin) {
+    console.log(`❌ CORS blocked for origin: ${origin}`);
   }
   
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, x-csrf-token, x-session-id, Access-Control-Request-Method, Access-Control-Request-Headers, Cache-Control, Pragma, If-Modified-Since, If-None-Match, X-API-Key');
-  res.setHeader('Access-Control-Expose-Headers', 'set-cookie, Authorization, X-Total-Count, X-CSRF-Token');
+  res.setHeader('Access-Control-Expose-Headers', 'set-cookie, Authorization, X-Total-Count');
   res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Log cookie-related headers for debugging
+  if (req.path.includes('/auth/login')) {
+    console.log('Login request - setting CORS headers for cookie support');
+    console.log('Request headers:', {
+      origin: req.headers.origin,
+      'user-agent': req.headers['user-agent'],
+      'x-forwarded-for': req.headers['x-forwarded-for']
+    });
+  }
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('Handling preflight request');
     res.status(204).end();
     return;
   }
@@ -121,8 +143,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Added unsafe-eval for React development
-      connectSrc: ["'self'", "https://iiftl-portal.vercel.app", "https://portalback-8tth.onrender.com"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'", "https://iiftl-portal.vercel.app"],
       frameSrc: ["'self'", "https://iiftl-portal.vercel.app"],
       objectSrc: ["'none'"]
     }
@@ -165,7 +187,7 @@ app.use(session({
     httpOnly: true, // ✅ OWASP: Prevent XSS attacks
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // ✅ OWASP: CSRF protection
     maxAge: 30 * 60 * 1000, // ✅ OWASP: 30 minutes session timeout
-    domain: undefined // No domain restriction for cross-origin
+    domain: process.env.NODE_ENV === 'production' ? undefined : undefined // ✅ OWASP: Domain security
   }
 }));
 

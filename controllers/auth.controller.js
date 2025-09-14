@@ -69,22 +69,20 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
   // ✅ SECURITY FIX: Set access token cookie with proper cross-origin settings
   const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Only secure in production
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
+    secure: true, // Always secure in production
+    sameSite: 'none', // Required for cross-origin requests
     maxAge: 7 * 24 * 60 * 60 * 1000, // match access token expiry (7d default)
-    path: '/', // Ensure cookie is available for all paths
-    domain: undefined // No domain restriction for cross-origin
+    path: '/' // Ensure cookie is available for all paths
   };
   
   res.cookie('token', accessToken, cookieOptions);
 
   const refreshCookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Only secure in production
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
+    secure: true, // Always secure in production
+    sameSite: 'none', // Required for cross-origin requests
     maxAge: 30 * 24 * 60 * 60 * 1000,
-    path: '/', // Ensure cookie is available for all paths
-    domain: undefined // No domain restriction for cross-origin
+    path: '/' // Ensure cookie is available for all paths
   };
   
   res.cookie('refreshToken', refreshToken, refreshCookieOptions);
@@ -752,11 +750,10 @@ exports.refreshToken = async (req, res, next) => {
       const newOwnerAccess = signOwnerToken(owner.id);
       res.cookie('token', newOwnerAccess, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Only secure in production
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
+        secure: true, // Always secure in production
+        sameSite: 'none', // Required for cross-origin requests
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/', // Ensure cookie is available for all paths
-        domain: undefined // No domain restriction for cross-origin
+        path: '/' // Ensure cookie is available for all paths
       });
       return res.status(200).json({
         status: 'success',
@@ -797,11 +794,10 @@ exports.refreshToken = async (req, res, next) => {
     // ✅ SECURITY FIX: Set/refresh access token cookie with consistent options
     res.cookie('token', newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Only secure in production
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
+      secure: true, // Always secure in production
+      sameSite: 'none', // Required for cross-origin requests
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/', // Ensure cookie is available for all paths
-      domain: undefined // No domain restriction for cross-origin
+      path: '/' // Ensure cookie is available for all paths
     });
 
     // ✅ SECURITY: Tokens are only in HTTP-only cookies, not accessible to JavaScript
@@ -848,28 +844,25 @@ exports.logout = async (req, res, next) => {
       // Clear token cookie with same configuration as login
       res.clearCookie('token', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Match login configuration
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Match login configuration
-        path: '/',
-        domain: undefined // No domain restriction for cross-origin
+        secure: true, // Always secure to match login
+        sameSite: 'none', // Always none to match login
+        path: '/'
       });
       
       // Clear refresh token cookie with same configuration as login
       res.clearCookie('refreshToken', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Match login configuration
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Match login configuration
-        path: '/',
-        domain: undefined // No domain restriction for cross-origin
+        secure: true, // Always secure to match login
+        sameSite: 'none', // Always none to match login
+        path: '/'
       });
       
       // Clear any additional cookies that might exist
       res.clearCookie('sessionId', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        path: '/',
-        domain: undefined // No domain restriction for cross-origin
+        secure: true,
+        sameSite: 'none',
+        path: '/'
       });
       
       // Additional aggressive cookie clearing with different configurations
