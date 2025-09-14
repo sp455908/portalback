@@ -304,12 +304,6 @@ exports.login = async (req, res, next) => {
         const ownerRefreshToken = signRefreshToken(owner.id);
 
         // Set cookies with consistent settings for cross-origin support
-        console.log('🍪 Setting owner cookies:', {
-          origin: req.headers.origin,
-          userAgent: req.headers['user-agent'],
-          cookies: req.cookies
-        });
-        
         res.cookie('token', accessToken, {
           httpOnly: true,
           secure: true, // Always secure in production
@@ -324,8 +318,6 @@ exports.login = async (req, res, next) => {
           maxAge: 30 * 24 * 60 * 60 * 1000,
           path: '/' // Ensure cookie is available for all paths
         });
-        
-        console.log('✅ Owner cookies set successfully');
 
         return res.status(200).json({
           status: 'success',
@@ -416,7 +408,6 @@ exports.login = async (req, res, next) => {
           // User was recently unblocked, clear failed attempts and reactivate account
           await LoginAttempt.clearFailedAttempts(user.id);
           await user.update({ isActive: true });
-          console.log(`User ${user.email} was recently unblocked, clearing failed attempts and reactivating account`);
         }
         
         // ✅ OWASP SECURITY: Create failed login attempt with proper logging
@@ -435,9 +426,6 @@ exports.login = async (req, res, next) => {
         // ✅ OWASP SECURITY: Track failed login with security monitor
         securityMonitor.trackFailedLogin(ipAddress, email, user.id, userAgent);
         
-        // ✅ OWASP SECURITY: Log security event for monitoring
-        console.log(`[SECURITY] Failed login attempt for user ${user.email} (ID: ${user.id}): ${failedAttemptsCount}/5 attempts`);
-        
         // ✅ OWASP SECURITY: Check if user should be blocked (5 or more failed attempts)
         if (failedAttemptsCount >= 5 && user.role !== 'admin') {
           // Block user permanently
@@ -445,8 +433,6 @@ exports.login = async (req, res, next) => {
           
           // Mark user as inactive
           await user.update({ isActive: false });
-          
-          console.log(`[SECURITY] User ${user.email} (ID: ${user.id}) permanently blocked after ${failedAttemptsCount} failed attempts`);
           
           return res.status(423).json({
             status: 'fail',
@@ -923,11 +909,10 @@ exports.logout = async (req, res, next) => {
         try {
           userCache.delete(`user_${req.user.id}`);
         } catch (cacheError) {
-          console.log(`⚠️ Failed to clear user cache for user ${req.user.id}:`, cacheError);
+          // Failed to clear user cache
         }
         
         // ✅ SECURITY FIX: Log logout event for audit trail
-        console.log(`🔐 User ${req.user.email} (ID: ${req.user.id}) logged out successfully`);
         
         // Emit session termination event
         if (sessionId) {
@@ -940,7 +925,6 @@ exports.logout = async (req, res, next) => {
         
       } catch (sessionError) {
         // Log error but don't fail the logout
-        console.log(`⚠️ Session cleanup failed for user ${req.user.id}:`, sessionError);
       }
     }
     
@@ -973,10 +957,8 @@ exports.logout = async (req, res, next) => {
         path: '/'
       });
     } catch (cookieError) {
-      console.log('⚠️ Failed to clear cookies during logout error:', cookieError);
+      // Failed to clear cookies during logout error
     }
-    
-    console.log('❌ Logout error:', err);
     
     // Return success even if there was an error - client should clear local state
     res.status(200).json({

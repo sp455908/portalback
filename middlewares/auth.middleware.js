@@ -28,16 +28,7 @@ exports.protect = async (req, res, next) => {
 
   // Debug logging for owner requests
   if (req.path.includes('/users/stats') || req.path.includes('/batches') || req.path.includes('/practice-tests')) {
-    console.log('🔍 Auth Debug - Request:', {
-      path: req.path,
-      method: req.method,
-      cookies: req.cookies,
-      headers: {
-        authorization: req.headers.authorization,
-        'x-session-id': req.headers['x-session-id'],
-        origin: req.headers.origin
-      }
-    });
+    // Debug logging removed for production security
   }
 
   // Prefer JWT from HTTP-only cookie (set by backend auth)
@@ -228,7 +219,7 @@ exports.protect = async (req, res, next) => {
 
 // Variant: allow JWT via query token (e.g., for file downloads opened in a new tab)
 exports.protectWithQueryToken = async (req, res, next) => {
-  console.log('Auth middleware (query token allowed) called');
+  // Auth middleware (query token allowed) called
   let token;
   let sessionId;
 
@@ -322,7 +313,7 @@ exports.detectSessionConflict = async (req, res, next) => {
       
       if (otherSessions.length > 0) {
         // Log the conflict
-        console.log(`⚠️ Session conflict detected for user ${req.user.email}: ${otherSessions.length} other active sessions`);
+        // Session conflict detected
         
         // You can choose to either:
         // 1. Allow the request but log the conflict (current behavior)
