@@ -77,7 +77,7 @@ const corsOptions = {
     'If-None-Match',
     'X-API-Key'
   ],
-  exposedHeaders: ['set-cookie', 'Authorization', 'X-Total-Count'],
+  exposedHeaders: ['set-cookie', 'Authorization', 'X-Total-Count', 'X-CSRF-Token'],
   maxAge: 86400, // 24 hours
   preflightContinue: false,
   optionsSuccessStatus: 204
@@ -98,7 +98,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, x-csrf-token, x-session-id, Access-Control-Request-Method, Access-Control-Request-Headers, Cache-Control, Pragma, If-Modified-Since, If-None-Match, X-API-Key');
-  res.setHeader('Access-Control-Expose-Headers', 'set-cookie, Authorization, X-Total-Count');
+  res.setHeader('Access-Control-Expose-Headers', 'set-cookie, Authorization, X-Total-Count, X-CSRF-Token');
   res.setHeader('Access-Control-Max-Age', '86400');
   
   // Handle preflight requests
@@ -165,7 +165,7 @@ app.use(session({
     httpOnly: true, // ✅ OWASP: Prevent XSS attacks
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // ✅ OWASP: CSRF protection
     maxAge: 30 * 60 * 1000, // ✅ OWASP: 30 minutes session timeout
-    domain: process.env.NODE_ENV === 'production' ? undefined : undefined // ✅ OWASP: Domain security
+    domain: undefined // No domain restriction for cross-origin
   }
 }));
 

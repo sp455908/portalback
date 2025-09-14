@@ -62,7 +62,7 @@ class CSRFProtection {
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? undefined : undefined
+        domain: undefined // No domain restriction for cross-origin
       });
 
       // Also send token in response header for frontend to read
