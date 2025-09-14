@@ -122,7 +122,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'", "'unsafe-inline'"], // Added unsafe-inline for React development
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Added unsafe-eval for React development
       connectSrc: ["'self'", "https://iiftl-portal.vercel.app", "https://portalback-8tth.onrender.com"],
       frameSrc: ["'self'", "https://iiftl-portal.vercel.app"],
       objectSrc: ["'none'"]
