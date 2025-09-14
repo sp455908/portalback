@@ -73,7 +73,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
     maxAge: 7 * 24 * 60 * 60 * 1000, // match access token expiry (7d default)
     path: '/', // Ensure cookie is available for all paths
-    domain: process.env.NODE_ENV === 'production' ? undefined : undefined // No domain restriction
+    domain: undefined // No domain restriction for cross-origin
   };
   
   res.cookie('token', accessToken, cookieOptions);
@@ -84,7 +84,7 @@ const createSendToken = async (user, statusCode, res, req = null, extraMeta = {}
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
     maxAge: 30 * 24 * 60 * 60 * 1000,
     path: '/', // Ensure cookie is available for all paths
-    domain: process.env.NODE_ENV === 'production' ? undefined : undefined // No domain restriction
+    domain: undefined // No domain restriction for cross-origin
   };
   
   res.cookie('refreshToken', refreshToken, refreshCookieOptions);
@@ -756,7 +756,7 @@ exports.refreshToken = async (req, res, next) => {
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/', // Ensure cookie is available for all paths
-        domain: process.env.NODE_ENV === 'production' ? undefined : undefined // No domain restriction
+        domain: undefined // No domain restriction for cross-origin
       });
       return res.status(200).json({
         status: 'success',
@@ -801,7 +801,7 @@ exports.refreshToken = async (req, res, next) => {
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, same-origin in dev
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/', // Ensure cookie is available for all paths
-      domain: process.env.NODE_ENV === 'production' ? undefined : undefined // No domain restriction
+      domain: undefined // No domain restriction for cross-origin
     });
 
     // ✅ SECURITY: Tokens are only in HTTP-only cookies, not accessible to JavaScript
