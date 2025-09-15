@@ -169,7 +169,7 @@ const securityMiddleware = {
     next();
   },
 
-  // ✅ NEW: Additional security headers
+  // ✅ OWASP: Enhanced security headers
   additionalHeaders: (req, res, next) => {
     // Prevent MIME type sniffing
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -184,7 +184,30 @@ const securityMiddleware = {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     
     // Permissions policy
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()');
+    
+    // Strict Transport Security (HSTS)
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    }
+    
+    // Content Security Policy
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+      "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+      "img-src 'self' data: https: blob:",
+      "connect-src 'self' https: wss:",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join('; ');
+    res.setHeader('Content-Security-Policy', csp);
+    
+    // Remove server information
+    res.removeHeader('X-Powered-By');
+    res.removeHeader('Server');
     
     next();
   },

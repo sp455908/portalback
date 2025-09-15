@@ -6,6 +6,8 @@ const { verifyOriginForDownloads } = require('../middlewares/security.middleware
 const authorize = require('../middlewares/role.middleware');
 const { validateBatchAccess } = require('../middlewares/batchAccess.middleware');
 const { practiceTestRateLimit, testSubmissionRateLimit } = require('../middlewares/rateLimit.middleware');
+const { validationMiddleware } = require('../middlewares/validation.middleware');
+const windowFocusMiddleware = require('../middlewares/windowFocus.middleware');
 const multer = require('multer');
 
 // Configure multer for file uploads
@@ -58,11 +60,11 @@ router.put('/admin/bulk-settings', protect, authorize('admin'), practiceTestCont
 router.get('/available', practiceTestRateLimit, protect, authorize('student', 'corporate', 'government'), practiceTestController.getAvailablePracticeTests);
 
 // Student/Corporate/Government routes
-router.post('/:testId/start', practiceTestRateLimit, protect, authorize('student', 'corporate', 'government'), validateBatchAccess, practiceTestController.startPracticeTest);
-router.get('/attempt/:testAttemptId', protect, authorize('student', 'corporate', 'government'), practiceTestController.getAttemptDetails);
-router.post('/attempt/:testAttemptId/submit', testSubmissionRateLimit, protect, authorize('student', 'corporate', 'government'), practiceTestController.submitPracticeTest);
-router.get('/attempts', protect, authorize('student', 'corporate', 'government'), practiceTestController.getUserTestAttempts);
-router.delete('/attempt/:attemptId', protect, practiceTestController.deleteAttempt);
+router.post('/:testId/start', practiceTestRateLimit, protect, authorize('student', 'corporate', 'government'), validateBatchAccess, windowFocusMiddleware.preventConcurrentSessions, windowFocusMiddleware.addTestSecurityHeaders, validationMiddleware.validateTestId, practiceTestController.startPracticeTest);
+router.get('/attempt/:testAttemptId', protect, authorize('student', 'corporate', 'government'), windowFocusMiddleware.addTestSecurityHeaders, validationMiddleware.validateAttemptId, practiceTestController.getAttemptDetails);
+router.post('/attempt/:testAttemptId/submit', testSubmissionRateLimit, protect, authorize('student', 'corporate', 'government'), windowFocusMiddleware.validateTestIntegrity, validationMiddleware.validateAttemptId, validationMiddleware.validateTestSubmission, practiceTestController.submitPracticeTest);
+router.get('/attempts', protect, authorize('student', 'corporate', 'government'), validationMiddleware.validatePagination, practiceTestController.getUserTestAttempts);
+router.delete('/attempt/:attemptId', protect, validationMiddleware.validateAttemptId, practiceTestController.deleteAttempt);
 
 // Handle invalid attempt routes
 router.get('/attempt', (req, res) => {

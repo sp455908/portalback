@@ -256,6 +256,14 @@ exports.protectWithQueryToken = async (req, res, next) => {
   }
 
   try {
+    // Additional validation for query token
+    if (req.query.token && typeof req.query.token !== 'string') {
+      return res.status(401).json({ 
+        status: 'fail',
+        message: 'Invalid token format' 
+      });
+    }
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (usedRefreshToken && decoded.type !== 'refresh') {
       return res.status(401).json({ status: 'fail', message: 'Invalid token' });
@@ -297,7 +305,18 @@ exports.protectWithQueryToken = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('Auth (query token) error:', err);
-    return res.status(401).json({ status: 'fail', message: 'Invalid token or session expired' });
+    
+    // Provide more specific error messages for debugging
+    let errorMessage = 'Invalid token or session expired';
+    if (err.name === 'JsonWebTokenError') {
+      errorMessage = 'Invalid token format';
+    } else if (err.name === 'TokenExpiredError') {
+      errorMessage = 'Token has expired';
+    } else if (err.name === 'NotBeforeError') {
+      errorMessage = 'Token not active';
+    }
+    
+    return res.status(401).json({ status: 'fail', message: errorMessage });
   }
 };
 // Middleware to detect session conflicts

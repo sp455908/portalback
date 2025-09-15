@@ -1796,17 +1796,46 @@ exports.updateTestQuestion = async (req, res) => {
 exports.deleteAttempt = async (req, res) => {
   try {
     const { attemptId } = req.params;
+    
+    // Validate attemptId
+    if (!attemptId || attemptId === 'undefined' || attemptId === 'null') {
+      console.log('Invalid attemptId received for deletion:', attemptId);
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: 'Attempt ID is required and must be valid' 
+      });
+    }
+
+    // Check if attemptId is a valid number
+    if (isNaN(parseInt(attemptId))) {
+      console.log('Non-numeric attemptId received for deletion:', attemptId);
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: 'Attempt ID must be a valid number' 
+      });
+    }
+
     const attempt = await TestAttempt.findByPk(attemptId);
     if (!attempt) {
+      console.log('Attempt not found for deletion:', attemptId);
       return res.status(404).json({ status: 'fail', message: 'Attempt not found' });
     }
     
-    if (String(attempt.userId) !== String(req.user._id)) {
+    // Check authorization - use req.user.id instead of req.user._id
+    if (String(attempt.userId) !== String(req.user.id)) {
+      console.log('Unauthorized deletion attempt:', {
+        attemptUserId: attempt.userId,
+        requestUserId: req.user.id,
+        userRole: req.user.role
+      });
       return res.status(403).json({ status: 'fail', message: 'Not authorized' });
     }
+    
     await TestAttempt.destroy({ where: { id: attemptId } });
+    console.log('Attempt deleted successfully:', attemptId);
     res.status(204).send();
   } catch (err) {
+    console.error('Error in deleteAttempt:', err);
     res.status(500).json({ status: 'error', message: 'Failed to delete attempt' });
   }
 }; 
