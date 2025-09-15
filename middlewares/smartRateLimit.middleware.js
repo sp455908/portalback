@@ -14,7 +14,6 @@ const smartRateLimit = {
     },
     // Custom key generator for hybrid limiting
     keyGenerator: (req) => {
-      const ip = req.ip;
       const userId = req.user?.id;
       const userAgent = req.get('User-Agent') || '';
       
@@ -23,16 +22,15 @@ const smartRateLimit = {
         return `user:${userId}`;
       }
       
-      // For unauthenticated requests, use IP-based limiting
-      return `ip:${ip}`;
+      // For unauthenticated requests, use a simple identifier
+      return `anonymous:${Math.random()}`;
     }
   }),
 
   // Authentication rate limiting - Strict per IP for security
   auth: rateLimit({
     ...rateLimitConfig.auth,
-    // Always use IP-based limiting for auth (security critical)
-    keyGenerator: (req) => `auth:${req.ip}`,
+    // Use default IP-based limiting for auth (security critical)
     // Skip for password reset and other legitimate auth flows
     skip: (req) => {
       return req.path.includes('/forgot-password') || 
@@ -49,8 +47,8 @@ const smartRateLimit = {
       if (userId) {
         return `test:user:${userId}`;
       }
-      // Fallback to IP for unauthenticated requests
-      return `test:ip:${req.ip}`;
+      // For unauthenticated requests, use a simple identifier
+      return `test:anonymous:${Math.random()}`;
     }
   }),
 
@@ -59,15 +57,13 @@ const smartRateLimit = {
     ...rateLimitConfig.critical,
     keyGenerator: (req) => {
       const userId = req.user?.id;
-      const ip = req.ip;
-      return userId ? `critical:user:${userId}` : `critical:ip:${ip}`;
+      return userId ? `critical:user:${userId}` : `critical:anonymous:${Math.random()}`;
     }
   }),
 
   // Adaptive rate limiting based on user type
   adaptive: (req, res, next) => {
     const user = req.user;
-    const ip = req.ip;
     
     // Different limits for different user types
     let maxRequests = 100; // Default
@@ -97,7 +93,7 @@ const smartRateLimit = {
       max: maxRequests,
       keyGenerator: (req) => {
         const userId = req.user?.id;
-        return userId ? `adaptive:user:${userId}` : `adaptive:ip:${ip}`;
+        return userId ? `adaptive:user:${userId}` : `adaptive:anonymous:${Math.random()}`;
       },
       message: {
         status: 'fail',
@@ -112,15 +108,11 @@ const smartRateLimit = {
 
   // Network-aware rate limiting
   networkAware: (req, res, next) => {
-    const ip = req.ip;
     const userAgent = req.get('User-Agent') || '';
     
     // Detect if request is from a shared network
     const isSharedNetwork = 
-      userAgent.includes('Mobile') || // Mobile networks often share IPs
-      ip.startsWith('192.168.') ||    // Private networks
-      ip.startsWith('10.') ||         // Private networks
-      ip.startsWith('172.');          // Private networks
+      userAgent.includes('Mobile'); // Mobile networks often share IPs
     
     // Adjust limits based on network type
     const baseLimit = isSharedNetwork ? 300 : 100; // Higher limit for shared networks

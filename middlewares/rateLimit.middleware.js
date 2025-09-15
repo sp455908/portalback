@@ -58,18 +58,18 @@ const pdfDownloadRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Per user limiting for PDF downloads
+  // Per user limiting for PDF downloads - only for authenticated users
   keyGenerator: (req) => {
     const userId = req.user?.id;
     if (userId) {
       return `pdf:user:${userId}`;
     }
-    // Fallback to IP for unauthenticated requests
-    return `pdf:ip:${req.ip}`;
+    // For unauthenticated requests, skip rate limiting (they'll be blocked by auth anyway)
+    return `pdf:skip:${Math.random()}`;
   },
   skip: (req) => {
-    // Skip rate limiting for admin users
-    return req.user && (req.user.role === 'admin' || req.user.isOwner);
+    // Skip rate limiting for admin users or unauthenticated requests
+    return !req.user || (req.user.role === 'admin' || req.user.isOwner);
   }
 });
 
