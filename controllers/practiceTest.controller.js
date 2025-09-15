@@ -419,6 +419,19 @@ exports.startPracticeTest = async (req, res) => {
       question: practiceTest.questions[index].question,
       options: practiceTest.questions[index].options
     }));
+    // Create snapshot of test settings at the time of attempt
+    const testSettingsSnapshot = {
+      questions: selectedQuestionIndices.map(idx => ({
+        index: idx,
+        marks: practiceTest.questions[idx]?.marks ?? 1,
+        negativeMarks: practiceTest.questions[idx]?.negativeMarks ?? 0
+      })),
+      duration: practiceTest.duration,
+      passingScore: practiceTest.passingScore,
+      questionsPerTest: practiceTest.questionsPerTest,
+      snapshotDate: new Date().toISOString()
+    };
+
     const testAttemptData = {
       userId: req.user.id,
       practiceTestId: testId,
@@ -429,7 +442,8 @@ exports.startPracticeTest = async (req, res) => {
       startedAt: new Date(),
       ipAddress: req.ip,
       userAgent: req.get('User-Agent'),
-      attemptsCount: (await TestAttempt.count({ where: { userId: req.user.id, practiceTestId: testId } })) + 1
+      attemptsCount: (await TestAttempt.count({ where: { userId: req.user.id, practiceTestId: testId } })) + 1,
+      testSettingsSnapshot: testSettingsSnapshot
     };
     const newTestAttempt = await TestAttempt.create(testAttemptData);
     
@@ -582,7 +596,8 @@ exports.submitPracticeTest = async (req, res) => {
       timeTaken: timeTaken,
       completedAt: new Date(),
       status: 'completed',
-      passed: passed
+      passed: passed,
+      obtainedMarks: obtained
     });
 
     res.status(200).json({
@@ -594,7 +609,9 @@ exports.submitPracticeTest = async (req, res) => {
         wrongAnswers: testAttempt.wrongAnswers,
         totalQuestions: testAttempt.totalQuestions,
         timeTaken,
-        passingScore: practiceTest.passingScore
+        passingScore: practiceTest.passingScore,
+        obtainedMarks: obtained,
+        totalPossibleMarks: totalPossible
       }
     });
   } catch (err) {
@@ -1887,25 +1904,40 @@ exports.downloadAttemptPDF = async (req, res) => {
 
       
       try {
-        const getQuestionMarks = (q) => {
-          try { return Number((q && q.marks) ?? 1); } catch (_) { return 1; }
+        // Use historical settings from snapshot if available, otherwise fall back to current test settings
+        const useHistoricalSettings = attempt.testSettingsSnapshot && attempt.testSettingsSnapshot.questions;
+        
+        const getQuestionMarks = (idx) => {
+          if (useHistoricalSettings) {
+            const historicalQ = attempt.testSettingsSnapshot.questions.find(q => q.index === idx);
+            return historicalQ ? Number(historicalQ.marks ?? 1) : 1;
+          } else {
+            const q = test.questions[idx] || {};
+            return Number((q && q.marks) ?? 1);
+          }
         };
-        const getQuestionNegative = (q) => {
-          try { return Number((q && q.negativeMarks) ?? 0); } catch (_) { return 0; }
+        
+        const getQuestionNegative = (idx) => {
+          if (useHistoricalSettings) {
+            const historicalQ = attempt.testSettingsSnapshot.questions.find(q => q.index === idx);
+            return historicalQ ? Number(historicalQ.negativeMarks ?? 0) : 0;
+          } else {
+            const q = test.questions[idx] || {};
+            return Number((q && q.negativeMarks) ?? 0);
+          }
         };
 
         const askedIndices = Array.isArray(attempt.questionsAsked) ? attempt.questionsAsked : [];
-        const perQuestionMarksEnabled = askedIndices.some(idx => getQuestionMarks(test.questions[idx]) !== 1);
+        const perQuestionMarksEnabled = askedIndices.some(idx => getQuestionMarks(idx) !== 1);
         
-        const negativeMarkingEnabled = askedIndices.some(idx => getQuestionNegative(test.questions[idx]) < 0);
+        const negativeMarkingEnabled = askedIndices.some(idx => getQuestionNegative(idx) < 0);
 
         const totalPossibleMarks = askedIndices.reduce((sum, idx) => {
-          const q = test.questions[idx] || {};
-          const marks = getQuestionMarks(q);
+          const marks = getQuestionMarks(idx);
           return sum + Math.max(0, marks);
         }, 0);
 
-        const obtainedMarks = (attempt.answers || []).reduce((sum, a) => {
+        const obtainedMarks = attempt.obtainedMarks || (attempt.answers || []).reduce((sum, a) => {
           const awarded = typeof a.marksAwarded === 'number' ? a.marksAwarded : 0;
           return sum + awarded;
         }, 0);
@@ -1913,8 +1945,8 @@ exports.downloadAttemptPDF = async (req, res) => {
         const outOfQuestions = Number(attempt.totalQuestions || test.questionsPerTest || askedIndices.length || 0);
 
         
-        const marksValues = askedIndices.map(idx => getQuestionMarks(test.questions[idx]));
-        const negValues = askedIndices.map(idx => getQuestionNegative(test.questions[idx])).filter(v => v < 0);
+        const marksValues = askedIndices.map(idx => getQuestionMarks(idx));
+        const negValues = askedIndices.map(idx => getQuestionNegative(idx)).filter(v => v < 0);
         const uniqueMarks = Array.from(new Set(marksValues.map(v => Number.isFinite(v) ? v : 1)));
         const uniqueNegs = Array.from(new Set(negValues.map(v => Number.isFinite(v) ? v : -1)));
         const uniformMarksPerCorrect = uniqueMarks.length === 1 ? uniqueMarks[0] : null;

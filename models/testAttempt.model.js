@@ -47,6 +47,15 @@ const TestAttempt = sequelize.define('TestAttempt', {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
+  obtainedMarks: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  testSettingsSnapshot: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Snapshot of test settings at the time of attempt'
+  },
   totalQuestions: {
     type: DataTypes.INTEGER,
     allowNull: false
