@@ -686,7 +686,7 @@ exports.getMe = async (req, res, next) => {
       phone: userJson.phone ? encryptionService.safeDecrypt(String(userJson.phone)) : userJson.phone
     };
 
-    // ✅ SECURITY FIX: Return only essential data for authentication
+    // ✅ SECURITY FIX: Return essential data for authentication including user IDs
     const safeUserData = {
       id: decryptedUser.id,
       firstName: decryptedUser.firstName,
@@ -701,8 +701,12 @@ exports.getMe = async (req, res, next) => {
       pincode: decryptedUser.pincode,
       isActive: decryptedUser.isActive,
       createdAt: decryptedUser.createdAt,
-      updatedAt: decryptedUser.updatedAt
-      // Removed: studentId, corporateId, governmentId, profileImage
+      updatedAt: decryptedUser.updatedAt,
+      // Include user-specific IDs for display purposes
+      studentId: decryptedUser.studentId,
+      corporateId: decryptedUser.corporateId,
+      governmentId: decryptedUser.governmentId
+      // Removed: profileImage (security concern)
     };
 
     res.status(200).json({
