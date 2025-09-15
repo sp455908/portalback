@@ -1876,9 +1876,27 @@ exports.bulkUpdateTestSettings = async (req, res) => {
 
 exports.downloadAttemptPDF = async (req, res) => {
   try {
+    console.log('PDF download request:', {
+      testAttemptId: req.params.testAttemptId,
+      userId: req.user?.id,
+      userRole: req.user?.role,
+      hasAuth: !!req.user,
+      ip: req.ip
+    });
+    
     const { testAttemptId } = req.params;
     const attempt = await TestAttempt.findByPk(testAttemptId);
     if (!attempt) return res.status(404).json({ status: 'fail', message: 'Attempt not found' });
+
+    // Check authorization
+    if (attempt.userId.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
+      console.log('Unauthorized PDF access attempt:', {
+        attemptUserId: attempt.userId,
+        requestUserId: req.user.id,
+        userRole: req.user.role
+      });
+      return res.status(403).json({ status: 'fail', message: 'Not authorized to access this attempt' });
+    }
 
     const test = await PracticeTest.findByPk(attempt.practiceTestId);
     if (!test) return res.status(404).json({ status: 'fail', message: 'Test not found' });
