@@ -423,17 +423,6 @@ exports.startPracticeTest = async (req, res) => {
     const testSettingsSnapshot = {
       questions: selectedQuestionIndices.map(idx => {
         const question = practiceTest.questions[idx];
-        // Debug logging to see actual question structure
-        console.log('Question data for snapshot:', {
-          idx,
-          question: question ? {
-            marks: question.marks,
-            negativeMarks: question.negativeMarks,
-            hasMarks: 'marks' in question,
-            hasNegativeMarks: 'negativeMarks' in question
-          } : 'question not found'
-        });
-        
         return {
           index: idx,
           marks: question && typeof question.marks === 'number' ? question.marks : 1,
@@ -2082,7 +2071,7 @@ exports.downloadAttemptPDF = async (req, res) => {
           ['Wrong Answers', String(attempt.wrongAnswers ?? '')],
           ['Score (%)', `${typeof attempt.score === 'number' ? attempt.score : 0}%`],
           ['Obtained Marks', `${obtainedMarks} / ${totalPossibleMarks}`],
-          ['Correct Percentage', `${correctPercentage}%`],
+          ['Final Score (%)', `${correctPercentage}%`],
           ['Negative Marking', negativeMarkingEnabled ? 'Enabled' : '—'],
           ['Marks per correct', perQuestionMarksEnabled ? (uniformMarksPerCorrect !== null ? String(uniformMarksPerCorrect) : 'mixed') : '1'],
           ['Negative per wrong', negativeMarkingEnabled ? (uniformNegativePerWrong !== null ? String(uniformNegativePerWrong) : 'mixed') : '—']

@@ -47,20 +47,25 @@ const windowFocusMiddleware = {
   preventConcurrentSessions: async (req, res, next) => {
     try {
       if (req.user && req.path.includes('/start')) {
-        // Check for existing in-progress tests
+        // Check for existing in-progress tests for the SAME test
         const TestAttempt = require('../models/testAttempt.model');
+        const testId = req.params.testId;
+        
         const existingAttempt = await TestAttempt.findOne({
           where: {
             userId: req.user.id,
+            practiceTestId: testId,
             status: 'in_progress'
           }
         });
 
         if (existingAttempt) {
-          return res.status(409).json({
-            status: 'fail',
-            message: 'You already have a test in progress. Please complete it before starting a new one.',
-            existingAttemptId: existingAttempt.id
+          // Let the controller handle this - it will return the existing attempt for resumption
+          // Don't block here, just log for monitoring
+          console.log('Found existing in-progress attempt for same test:', {
+            userId: req.user.id,
+            testId: testId,
+            attemptId: existingAttempt.id
           });
         }
       }
