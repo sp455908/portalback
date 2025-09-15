@@ -305,14 +305,6 @@ exports.protectWithQueryToken = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('Auth (query token) error:', err);
-    console.error('Request details:', {
-      path: req.path,
-      method: req.method,
-      hasCookies: !!req.cookies,
-      hasAuthHeader: !!req.headers.authorization,
-      hasQueryToken: !!req.query.token,
-      userAgent: req.get('User-Agent')
-    });
     
     // Provide more specific error messages for debugging
     let errorMessage = 'Invalid token or session expired';

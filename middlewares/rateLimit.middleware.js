@@ -46,8 +46,36 @@ const authRateLimit = rateLimit({
   legacyHeaders: false
 });
 
+/**
+ * Rate limiting for PDF downloads - Prevent abuse
+ */
+const pdfDownloadRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 10, // Limit each user to 10 PDF downloads per 5 minutes
+  message: {
+    status: 'fail',
+    message: 'Too many PDF downloads, please wait before downloading again'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Per user limiting for PDF downloads
+  keyGenerator: (req) => {
+    const userId = req.user?.id;
+    if (userId) {
+      return `pdf:user:${userId}`;
+    }
+    // Fallback to IP for unauthenticated requests
+    return `pdf:ip:${req.ip}`;
+  },
+  skip: (req) => {
+    // Skip rate limiting for admin users
+    return req.user && (req.user.role === 'admin' || req.user.isOwner);
+  }
+});
+
 module.exports = {
   practiceTestRateLimit,
   testSubmissionRateLimit,
-  authRateLimit
+  authRateLimit,
+  pdfDownloadRateLimit
 };

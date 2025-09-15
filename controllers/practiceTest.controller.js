@@ -1876,33 +1876,79 @@ exports.bulkUpdateTestSettings = async (req, res) => {
 
 exports.downloadAttemptPDF = async (req, res) => {
   try {
-    console.log('PDF download request:', {
-      testAttemptId: req.params.testAttemptId,
-      userId: req.user?.id,
-      userRole: req.user?.role,
-      hasAuth: !!req.user,
-      ip: req.ip
-    });
-    
+    // ✅ OWASP: Input validation and sanitization
     const { testAttemptId } = req.params;
-    const attempt = await TestAttempt.findByPk(testAttemptId);
-    if (!attempt) return res.status(404).json({ status: 'fail', message: 'Attempt not found' });
-
-    // Check authorization
-    if (attempt.userId.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
-      console.log('Unauthorized PDF access attempt:', {
-        attemptUserId: attempt.userId,
-        requestUserId: req.user.id,
-        userRole: req.user.role
+    
+    // Validate testAttemptId format
+    if (!testAttemptId || testAttemptId === 'undefined' || testAttemptId === 'null') {
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: 'Test attempt ID is required and must be valid' 
       });
-      return res.status(403).json({ status: 'fail', message: 'Not authorized to access this attempt' });
+    }
+
+    // Validate numeric ID
+    if (!/^\d+$/.test(testAttemptId)) {
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: 'Invalid test attempt ID format' 
+      });
+    }
+
+    // ✅ OWASP: Rate limiting check (should be handled by middleware)
+    // ✅ OWASP: Authorization check
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ 
+        status: 'fail', 
+        message: 'Authentication required' 
+      });
+    }
+
+    // ✅ OWASP: Secure database query with proper error handling
+    const attempt = await TestAttempt.findByPk(testAttemptId);
+    if (!attempt) {
+      return res.status(404).json({ 
+        status: 'fail', 
+        message: 'Test attempt not found' 
+      });
+    }
+
+    // ✅ OWASP: Authorization check - user can only access their own attempts
+    if (attempt.userId.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        status: 'fail', 
+        message: 'Not authorized to access this attempt' 
+      });
+    }
+
+    // ✅ OWASP: Additional validation - only completed attempts can generate PDFs
+    if (attempt.status !== 'completed') {
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: 'PDF can only be generated for completed test attempts' 
+      });
     }
 
     const test = await PracticeTest.findByPk(attempt.practiceTestId);
-    if (!test) return res.status(404).json({ status: 'fail', message: 'Test not found' });
+    if (!test) {
+      return res.status(404).json({ 
+        status: 'fail', 
+        message: 'Test not found' 
+      });
+    }
 
+    // ✅ OWASP: Security headers for PDF downloads
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="PracticeTest_Result_${attempt.id}.pdf"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    // ✅ OWASP: Input sanitization for filename
+    const sanitizedFilename = `PracticeTest_Result_${attempt.id}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}"`);
 
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
     doc.pipe(res);
@@ -2119,7 +2165,15 @@ exports.downloadAttemptPDF = async (req, res) => {
     })();
   } catch (err) {
     console.error('PDF generation error:', err);
-    res.status(500).json({ status: 'error', message: 'Failed to generate PDF' });
+    
+    // ✅ OWASP: Secure error handling - don't expose internal details
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        status: 'error', 
+        message: 'Failed to generate PDF',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
+    }
   }
 }; 
 

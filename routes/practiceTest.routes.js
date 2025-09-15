@@ -5,7 +5,7 @@ const { protect, protectWithQueryToken } = require('../middlewares/auth.middlewa
 const { verifyOriginForDownloads } = require('../middlewares/security.middleware');
 const authorize = require('../middlewares/role.middleware');
 const { validateBatchAccess } = require('../middlewares/batchAccess.middleware');
-const { practiceTestRateLimit, testSubmissionRateLimit } = require('../middlewares/rateLimit.middleware');
+const { practiceTestRateLimit, testSubmissionRateLimit, pdfDownloadRateLimit } = require('../middlewares/rateLimit.middleware');
 const { validationMiddleware } = require('../middlewares/validation.middleware');
 const windowFocusMiddleware = require('../middlewares/windowFocus.middleware');
 const multer = require('multer');
@@ -74,6 +74,6 @@ router.get('/attempt', (req, res) => {
   });
 });
 // PDF download: allow cookie, header, or query token auth to support new-tab flow
-router.get('/attempt/:testAttemptId/pdf', protectWithQueryToken, verifyOriginForDownloads, authorize('student', 'corporate', 'government', 'admin'), practiceTestController.downloadAttemptPDF);
+router.get('/attempt/:testAttemptId/pdf', pdfDownloadRateLimit, protectWithQueryToken, verifyOriginForDownloads, authorize('student', 'corporate', 'government', 'admin'), practiceTestController.downloadAttemptPDF);
 
 module.exports = router; 
