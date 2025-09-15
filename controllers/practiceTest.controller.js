@@ -623,6 +623,70 @@ exports.submitPracticeTest = async (req, res) => {
 };
 
 
+exports.getAttemptDetails = async (req, res) => {
+  try {
+    const { testAttemptId } = req.params;
+    
+    // Validate testAttemptId
+    if (!testAttemptId || testAttemptId === 'undefined' || testAttemptId === 'null') {
+      console.log('Invalid testAttemptId received:', testAttemptId);
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Test attempt ID is required and must be valid'
+      });
+    }
+
+    // Check if testAttemptId is a valid number
+    if (isNaN(parseInt(testAttemptId))) {
+      console.log('Non-numeric testAttemptId received:', testAttemptId);
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Test attempt ID must be a valid number'
+      });
+    }
+
+    const testAttempt = await TestAttempt.findByPk(testAttemptId, {
+      include: [{
+        model: PracticeTest,
+        as: 'test',
+        attributes: ['id', 'title', 'description', 'category', 'duration', 'passingScore']
+      }]
+    });
+
+    if (!testAttempt) {
+      console.log('Test attempt not found for ID:', testAttemptId);
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Test attempt not found'
+      });
+    }
+
+    // Check if user is authorized to access this attempt
+    if (testAttempt.userId.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
+      console.log('Unauthorized access attempt:', {
+        attemptUserId: testAttempt.userId,
+        requestUserId: req.user.id,
+        userRole: req.user.role
+      });
+      return res.status(403).json({
+        status: 'fail',
+        message: 'Not authorized to access this test attempt'
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: { testAttempt }
+    });
+  } catch (err) {
+    console.error('Error in getAttemptDetails:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch test attempt details'
+    });
+  }
+};
+
 exports.getUserTestAttempts = async (req, res) => {
   try {
     if (!req.user || !req.user.id) {

@@ -59,9 +59,18 @@ router.get('/available', practiceTestRateLimit, protect, authorize('student', 'c
 
 // Student/Corporate/Government routes
 router.post('/:testId/start', practiceTestRateLimit, protect, authorize('student', 'corporate', 'government'), validateBatchAccess, practiceTestController.startPracticeTest);
+router.get('/attempt/:testAttemptId', protect, authorize('student', 'corporate', 'government'), practiceTestController.getAttemptDetails);
 router.post('/attempt/:testAttemptId/submit', testSubmissionRateLimit, protect, authorize('student', 'corporate', 'government'), practiceTestController.submitPracticeTest);
 router.get('/attempts', protect, authorize('student', 'corporate', 'government'), practiceTestController.getUserTestAttempts);
 router.delete('/attempt/:attemptId', protect, practiceTestController.deleteAttempt);
+
+// Handle invalid attempt routes
+router.get('/attempt', (req, res) => {
+  res.status(400).json({
+    status: 'fail',
+    message: 'Test attempt ID is required'
+  });
+});
 // PDF download: allow cookie, header, or query token auth to support new-tab flow
 router.get('/attempt/:testAttemptId/pdf', protectWithQueryToken, verifyOriginForDownloads, authorize('student', 'corporate', 'government', 'admin'), practiceTestController.downloadAttemptPDF);
 
