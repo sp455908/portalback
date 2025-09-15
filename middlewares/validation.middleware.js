@@ -118,39 +118,64 @@ const validationMiddleware = {
   ]
 };
 
-// Rate limiting configuration
+// Rate limiting configuration - Hybrid approach (IP + User-based)
 const rateLimitConfig = {
-  // General API rate limiting
+  // General API rate limiting - More lenient for shared networks
   general: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    max: 200, // Increased limit for shared networks (was 100)
     message: {
       status: 'fail',
-      message: 'Too many requests, please try again later'
+      message: 'Too many requests from this network, please try again later'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    // Custom key generator for hybrid limiting
+    keyGenerator: (req) => {
+      // Use IP + User ID if authenticated, otherwise just IP
+      const ip = req.ip;
+      const userId = req.user?.id;
+      return userId ? `${ip}:${userId}` : ip;
+    }
   },
 
-  // Strict rate limiting for authentication
+  // Authentication rate limiting - Per IP (security critical)
   auth: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 requests per windowMs
+    max: 10, // Increased from 5 for shared networks
     message: {
       status: 'fail',
-      message: 'Too many authentication attempts, please try again later'
+      message: 'Too many authentication attempts from this network, please try again later'
     },
     standardHeaders: true,
     legacyHeaders: false
   },
 
-  // Test submission rate limiting
+  // Test submission rate limiting - Per user (more fair)
   testSubmission: {
     windowMs: 60 * 1000, // 1 minute
-    max: 10, // limit each IP to 10 test submissions per minute
+    max: 5, // Reduced per user (was 10 per IP)
     message: {
       status: 'fail',
       message: 'Too many test submissions, please slow down'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Per user limiting for test submissions
+    keyGenerator: (req) => {
+      const ip = req.ip;
+      const userId = req.user?.id;
+      return userId ? `user:${userId}` : `ip:${ip}`;
+    }
+  },
+
+  // Strict rate limiting for critical operations
+  critical: {
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 3, // Very strict for critical operations
+    message: {
+      status: 'fail',
+      message: 'Too many critical operations, please wait before trying again'
     },
     standardHeaders: true,
     legacyHeaders: false

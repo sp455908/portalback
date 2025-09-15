@@ -421,11 +421,25 @@ exports.startPracticeTest = async (req, res) => {
     }));
     // Create snapshot of test settings at the time of attempt
     const testSettingsSnapshot = {
-      questions: selectedQuestionIndices.map(idx => ({
-        index: idx,
-        marks: practiceTest.questions[idx]?.marks ?? 1,
-        negativeMarks: practiceTest.questions[idx]?.negativeMarks ?? 0
-      })),
+      questions: selectedQuestionIndices.map(idx => {
+        const question = practiceTest.questions[idx];
+        // Debug logging to see actual question structure
+        console.log('Question data for snapshot:', {
+          idx,
+          question: question ? {
+            marks: question.marks,
+            negativeMarks: question.negativeMarks,
+            hasMarks: 'marks' in question,
+            hasNegativeMarks: 'negativeMarks' in question
+          } : 'question not found'
+        });
+        
+        return {
+          index: idx,
+          marks: question && typeof question.marks === 'number' ? question.marks : 1,
+          negativeMarks: question && typeof question.negativeMarks === 'number' ? question.negativeMarks : 0
+        };
+      }),
       duration: practiceTest.duration,
       passingScore: practiceTest.passingScore,
       questionsPerTest: practiceTest.questionsPerTest,
@@ -2035,7 +2049,8 @@ exports.downloadAttemptPDF = async (req, res) => {
           return sum + awarded;
         }, 0);
 
-        const outOfQuestions = Number(attempt.totalQuestions || test.questionsPerTest || askedIndices.length || 0);
+        // Calculate total possible marks based on historical settings
+        const outOfQuestions = totalPossibleMarks;
 
         
         const marksValues = askedIndices.map(idx => getQuestionMarks(idx));
