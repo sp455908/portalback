@@ -2073,13 +2073,16 @@ exports.downloadAttemptPDF = async (req, res) => {
         const col1Width = Math.min(240, Math.floor(tableContentWidth * 0.45));
         const col2Width = tableContentWidth - col1Width;
 
+        // Calculate the correct percentage based on obtained marks vs total possible marks
+        const correctPercentage = totalPossibleMarks > 0 ? ((obtainedMarks / totalPossibleMarks) * 100).toFixed(2) : '0.00';
+
         const rows = [
           ['Total Questions', String(attempt.totalQuestions ?? askedIndices.length ?? 0)],
           ['Correct Answers', String(attempt.correctAnswers ?? '')],
           ['Wrong Answers', String(attempt.wrongAnswers ?? '')],
           ['Score (%)', `${typeof attempt.score === 'number' ? attempt.score : 0}%`],
           ['Obtained Marks', `${obtainedMarks} / ${totalPossibleMarks}`],
-          ['Out of (Questions)', `${outOfQuestions}`],
+          ['Correct Percentage', `${correctPercentage}%`],
           ['Negative Marking', negativeMarkingEnabled ? 'Enabled' : '—'],
           ['Marks per correct', perQuestionMarksEnabled ? (uniformMarksPerCorrect !== null ? String(uniformMarksPerCorrect) : 'mixed') : '1'],
           ['Negative per wrong', negativeMarkingEnabled ? (uniformNegativePerWrong !== null ? String(uniformNegativePerWrong) : 'mixed') : '—']
