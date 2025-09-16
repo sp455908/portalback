@@ -206,10 +206,16 @@ router.post('/admins/:id/kill-sessions', ownerMutationLimiter, async (req, res) 
       return res.status(404).json({ status: 'fail', message: 'Admin not found' });
     }
     const sessions = await UserSession.findUserActiveSessions(admin.id);
+    
+    // Deactivate sessions and set expiration to past date to ensure immediate invalidation
     const deactivated = await UserSession.update(
-      { isActive: false },
+      { 
+        isActive: false,
+        expiresAt: new Date(Date.now() - 1000) // Set expiration to 1 second ago
+      },
       { where: { userId: admin.id, isActive: true } }
     );
+    
     res.status(200).json({ status: 'success', message: 'Admin sessions terminated', data: { count: deactivated?.[0] ?? sessions.length } });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to kill sessions' });
