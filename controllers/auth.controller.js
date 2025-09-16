@@ -394,21 +394,8 @@ exports.login = async (req, res, next) => {
           });
         }
         
-        // ✅ OWASP SECURITY: Check if user was recently unblocked and clear failed attempts
-        const recentUnblock = await LoginAttempt.findOne({
-          where: {
-            userId: user.id,
-            isBlocked: false,
-            unblockedAt: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
-          },
-          order: [['unblockedAt', 'DESC']]
-        });
-        
-        if (recentUnblock) {
-          // User was recently unblocked, clear failed attempts and reactivate account
-          await LoginAttempt.clearFailedAttempts(user.id);
-          await user.update({ isActive: true });
-        }
+        // Removed: Clearing failed attempts on recent unblock in failed-login path
+        // This was preventing the counter from reaching the blocking threshold.
         
         // ✅ OWASP SECURITY: Create failed login attempt with proper logging
         await LoginAttempt.create({
