@@ -201,22 +201,37 @@ router.post('/admins/:id/change-password', ownerMutationLimiter, async (req, res
 router.post('/admins/:id/kill-sessions', ownerMutationLimiter, async (req, res) => {
   try {
     const { id } = req.params;
-    const admin = await User.findByPk(id);
+    
+    // Validate admin ID parameter
+    if (!id || isNaN(parseInt(id))) {
+      return res.status(400).json({ status: 'fail', message: 'Invalid admin ID' });
+    }
+    
+    const admin = await User.findByPk(parseInt(id));
     if (!admin || admin.role !== 'admin') {
       return res.status(404).json({ status: 'fail', message: 'Admin not found' });
     }
-    const sessions = await UserSession.findUserActiveSessions(admin.id);
     
-    // Deactivate sessions and set expiration to past date to ensure immediate invalidation
-    const deactivated = await UserSession.update(
-      { 
-        isActive: false,
-        expiresAt: new Date(Date.now() - 1000) // Set expiration to 1 second ago
-      },
-      { where: { userId: admin.id, isActive: true } }
-    );
+    // Count active sessions before deactivation
+    const activeSessions = await UserSession.findUserActiveSessions(admin.id);
+    const sessionCount = activeSessions.length;
     
-    res.status(200).json({ status: 'success', message: 'Admin sessions terminated', data: { count: deactivated?.[0] ?? sessions.length } });
+    if (sessionCount === 0) {
+      return res.status(200).json({ 
+        status: 'success', 
+        message: 'No active sessions found', 
+        data: { count: 0 } 
+      });
+    }
+    
+    // Kill all sessions for this admin using the dedicated method
+    const killedCount = await UserSession.killAllUserSessions(admin.id);
+    
+    res.status(200).json({ 
+      status: 'success', 
+      message: 'Admin sessions terminated', 
+      data: { count: killedCount } 
+    });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to kill sessions' });
   }

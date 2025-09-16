@@ -160,6 +160,20 @@ UserSession.cleanupExpiredSessions = async function() {
   );
 };
 
+// Kill all sessions for a specific user
+UserSession.killAllUserSessions = async function(userId) {
+  const result = await this.update(
+    { 
+      isActive: false,
+      expiresAt: new Date(Date.now() - 60000) // Set expiration to 1 minute ago
+    },
+    { 
+      where: { userId: userId } 
+    }
+  );
+  return result[0] || 0; // Return count of affected rows
+};
+
 UserSession.createSession = async function(sessionData) {
   const session = await this.create(sessionData);
   return session;
