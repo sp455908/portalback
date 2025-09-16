@@ -122,7 +122,20 @@ router.post('/admins', ownerMutationLimiter, async (req, res) => {
     const normalizedEmail = normalizeEmail(email);
     const existing = await User.findOne({ where: { email: normalizedEmail } });
     if (existing) {
-      return res.status(409).json({ status: 'fail', message: 'Email already in use' });
+      // Reactivate or promote existing user to admin instead of throwing conflict
+      const Op = require('sequelize').Op;
+      const activeAdminCount = await User.count({ where: { role: 'admin', isActive: true, id: { [Op.ne]: existing.id } } });
+      if (activeAdminCount >= 5 && (existing.role !== 'admin' || existing.isActive === false)) {
+        return res.status(409).json({ status: 'fail', message: 'Maximum of 5 admin users are allowed in the system.' });
+      }
+      existing.firstName = sanitizeName(firstName);
+      existing.lastName = sanitizeName(lastName);
+      existing.password = password; // hashed by model hook
+      existing.role = 'admin';
+      existing.userType = existing.userType || 'student';
+      existing.isActive = true;
+      await existing.save();
+      return res.status(200).json({ status: 'success', data: { admin: { id: existing.id, email: existing.email } } });
     }
     const admin = await User.create({
       firstName: sanitizeName(firstName),
@@ -132,7 +145,7 @@ router.post('/admins', ownerMutationLimiter, async (req, res) => {
       role: 'admin',
       userType: 'student'
     });
-    res.status(201).json({ status: 'success', data: { admin: { id: admin.id, email: admin.email } } });
+    return res.status(201).json({ status: 'success', data: { admin: { id: admin.id, email: admin.email } } });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to create admin' });
   }
