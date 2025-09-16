@@ -460,8 +460,8 @@ exports.login = async (req, res, next) => {
           message: 'Incorrect email or password',
           code: 'INVALID_CREDENTIALS',
           shouldCountFailedAttempt: true,
-          failedAttemptsCount: failedAttemptsCount,
-          remainingAttempts: Math.max(0, 5 - failedAttemptsCount)
+          failedAttemptsCount: Number(failedAttemptsCount) || 0,
+          remainingAttempts: Math.max(0, 5 - (Number(failedAttemptsCount) || 0))
         });
       } else {
         // ✅ FIX: Handle case where user doesn't exist
@@ -471,8 +471,8 @@ exports.login = async (req, res, next) => {
           message: 'Incorrect email or password',
           code: 'INVALID_CREDENTIALS',
           shouldCountFailedAttempt: true,
-          failedAttemptsCount: failedAttemptsCount,
-          remainingAttempts: Math.max(0, 5 - failedAttemptsCount)
+          failedAttemptsCount: Number(failedAttemptsCount) || 0,
+          remainingAttempts: Math.max(0, 5 - (Number(failedAttemptsCount) || 0))
         });
       }
     }
