@@ -428,10 +428,9 @@ exports.login = async (req, res, next) => {
           LoginAttempt.getFailedAttemptsCount(user.id, ALL_TIME_MS),
           LoginAttempt.getFailedAttemptsCountByEmail(email, ALL_TIME_MS)
         ]);
-        const failedAttemptsCount = Math.max(
-          typeof failedAttemptsByUser === 'number' ? failedAttemptsByUser : 0,
-          typeof failedAttemptsByEmail === 'number' ? failedAttemptsByEmail : 0
-        );
+        const failedByUserNum = Number(failedAttemptsByUser) || 0;
+        const failedByEmailNum = Number(failedAttemptsByEmail) || 0;
+        const failedAttemptsCount = Math.max(failedByUserNum, failedByEmailNum);
         
         // ✅ OWASP SECURITY: Track failed login with security monitor
         securityMonitor.trackFailedLogin(ipAddress, email, user.id, userAgent);
