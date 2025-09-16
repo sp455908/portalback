@@ -438,16 +438,33 @@ exports.login = async (req, res, next) => {
         // ✅ OWASP SECURITY: Check if user should be blocked (5 or more failed attempts)
         if (failedAttemptsCount >= 5 && user.role !== 'admin') {
           // Block user permanently
-          await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
-          
-          // Mark user as inactive immediately
+          await LoginAttempt.manuallyBlockUser(
+            user.id,
+            email,
+            'Multiple failed login attempts - Account blocked for security',
+            null
+          );
+
+          // Ensure the user is marked inactive in a robust way
           try {
-            await user.update({ isActive: false });
-          } catch (_) {}
-          
+            // Try a direct update first (more reliable than instance update under some hook/validation scenarios)
+            const [rowsUpdated] = await User.update(
+              { isActive: false },
+              { where: { id: user.id, isActive: true } }
+            );
+
+            // Fallback to instance update if no rows were affected (e.g., stale instance state)
+            if (!rowsUpdated) {
+              try { await user.update({ isActive: false }); } catch (_) {}
+            }
+          } catch (_) {
+            // Non-fatal: even if DB flag fails, the login response below still blocks access
+          }
+
           return res.status(423).json({
             status: 'fail',
-            message: 'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
+            message:
+              'Your account has been blocked due to multiple failed login attempts. Please contact an administrator to unblock your account.',
             code: 'ACCOUNT_BLOCKED',
             blockedUntil: null,
             remainingMinutes: null,
