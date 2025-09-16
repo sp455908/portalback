@@ -106,11 +106,11 @@ router.get('/admins', async (req, res) => {
   }
 });
 
-// Create an admin user (max 5 admins policy)
+// Create an admin user (max 5 ACTIVE admins policy)
 router.post('/admins', ownerMutationLimiter, async (req, res) => {
   try {
-    // Enforce max 5 admin users
-    const adminCount = await User.count({ where: { role: 'admin' } });
+    // Enforce max 5 ACTIVE admin users
+    const adminCount = await User.count({ where: { role: 'admin', isActive: true } });
     if (adminCount >= 5) {
       return res.status(409).json({ status: 'fail', message: 'Maximum of 5 admin users are allowed in the system.' });
     }
@@ -138,7 +138,7 @@ router.post('/admins', ownerMutationLimiter, async (req, res) => {
   }
 });
 
-// Delete an admin user by id
+// Delete (safely deactivate/demote) an admin user by id
 router.delete('/admins/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -146,17 +146,26 @@ router.delete('/admins/:id', async (req, res) => {
     if (!admin || admin.role !== 'admin') {
       return res.status(404).json({ status: 'fail', message: 'Admin not found' });
     }
-    // Prevent deleting the last remaining admin
-    const adminCount = await User.count({ where: { role: 'admin' } });
+    // Prevent deleting the last remaining ACTIVE admin
+    const adminCount = await User.count({ where: { role: 'admin', isActive: true } });
     if (adminCount <= 1) {
       return res.status(400).json({ status: 'fail', message: 'Cannot delete the last admin user. At least one admin must remain.' });
     }
-    // Kill all sessions for this admin before delete
+    // Kill all sessions for this admin before deactivation
     try { await UserSession.killAllUserSessions(admin.id); } catch (_) {}
-    await admin.destroy();
-    res.status(200).json({ status: 'success', message: 'Admin deleted' });
+
+    // Soft-delete pattern to avoid FK constraint issues:
+    // - Demote role away from 'admin' so active admin counts and access stop
+    // - Mark isActive=false to disable logins
+    // Note: We purposefully do not hard-delete to preserve referential integrity
+    admin.role = 'student';
+    admin.userType = admin.userType || 'student';
+    admin.isActive = false;
+    await admin.save();
+
+    res.status(200).json({ status: 'success', message: 'Admin deactivated' });
   } catch (err) {
-    res.status(500).json({ status: 'error', message: 'Failed to delete admin' });
+    res.status(500).json({ status: 'error', message: 'Failed to deactivate admin' });
   }
 });
 
