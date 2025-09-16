@@ -165,9 +165,9 @@ UserSession.createSession = async function(sessionData) {
   return session;
 };
 
-// ✅ IMPROVEMENT: Enhanced automatic session cleanup job
+// ✅ FIX: Add automatic session cleanup job
 UserSession.startCleanupJob = function() {
-  // Run cleanup every 3 minutes for more responsive cleanup
+  // Run cleanup every 5 minutes
   setInterval(async () => {
     try {
       const result = await this.cleanupExpiredSessions();
@@ -177,29 +177,7 @@ UserSession.startCleanupJob = function() {
     } catch (error) {
       console.error('[SESSION CLEANUP] Error:', error);
     }
-  }, 3 * 60 * 1000); // 3 minutes
-  
-  // Also run a more comprehensive cleanup every hour
-  setInterval(async () => {
-    try {
-      // Clean up sessions that are older than 7 days (even if not expired)
-      const oldSessions = await this.update(
-        { isActive: false },
-        {
-          where: {
-            isActive: true,
-            createdAt: { [require('sequelize').Op.lt]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-          }
-        }
-      );
-      
-      if (oldSessions[0] > 0) {
-        console.log(`[SESSION CLEANUP] Deactivated ${oldSessions[0]} old sessions (7+ days)`);
-      }
-    } catch (error) {
-      console.error('[SESSION CLEANUP] Error cleaning old sessions:', error);
-    }
-  }, 60 * 60 * 1000); // 1 hour
+  }, 5 * 60 * 1000); // 5 minutes
 };
 
 module.exports = UserSession;

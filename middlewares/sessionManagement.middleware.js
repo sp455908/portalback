@@ -243,33 +243,22 @@ const trackActivity = async (req, res, next) => {
   }
 };
 
-// ✅ IMPROVEMENT: Enhanced session conflict detection middleware
+// Session conflict detection middleware
 const detectSessionConflict = async (req, res, next) => {
   try {
     if (req.user && req.session) {
       const sessionCheck = await checkActiveSessions(req.user.id, req.session.sessionId);
       if (sessionCheck.hasActiveSessions) {
-        // ✅ IMPROVEMENT: More detailed session conflict information
         return res.status(409).json({
           status: 'fail',
           message: 'User is already logged in on another device. Please log out from other sessions or contact administrator.',
           code: 'SESSION_CONFLICT',
-          data: {
-            activeSessions: sessionCheck.activeSessions.map(session => ({
-              id: session.id,
-              sessionId: session.sessionId,
-              lastActivity: session.lastActivity,
-              ipAddress: session.ipAddress,
-              userAgent: session.userAgent,
-              deviceInfo: session.deviceInfo
-            })),
-            currentSession: {
-              id: req.session.id,
-              sessionId: req.session.sessionId,
-              lastActivity: req.session.lastActivity
-            },
-            totalActiveSessions: sessionCheck.activeSessions.length + 1
-          }
+          activeSessions: sessionCheck.activeSessions.map(session => ({
+            id: session.id,
+            lastActivity: session.lastActivity,
+            ipAddress: session.ipAddress,
+            userAgent: session.userAgent
+          }))
         });
       }
     }
