@@ -421,7 +421,15 @@ exports.login = async (req, res, next) => {
         });
         
         // ✅ OWASP SECURITY: Get current failed attempts count after creating the attempt
-        const failedAttemptsCount = await LoginAttempt.getFailedAttemptsCount(user.id);
+        // Use both userId and email counters to be robust in case some attempts were recorded without userId binding
+        const [failedAttemptsByUser, failedAttemptsByEmail] = await Promise.all([
+          LoginAttempt.getFailedAttemptsCount(user.id),
+          LoginAttempt.getFailedAttemptsCountByEmail(email)
+        ]);
+        const failedAttemptsCount = Math.max(
+          typeof failedAttemptsByUser === 'number' ? failedAttemptsByUser : 0,
+          typeof failedAttemptsByEmail === 'number' ? failedAttemptsByEmail : 0
+        );
         
         // ✅ OWASP SECURITY: Track failed login with security monitor
         securityMonitor.trackFailedLogin(ipAddress, email, user.id, userAgent);
