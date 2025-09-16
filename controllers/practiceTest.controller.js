@@ -23,6 +23,44 @@ const shuffleArray = (array) => {
   return shuffled;
 };
 
+// ✅ COOLDOWN FIX: Helper function to clean up old in-progress attempts
+const cleanupOldInProgressAttempts = async (userId, practiceTestId) => {
+  try {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    
+    const oldAttempts = await TestAttempt.findAll({
+      where: {
+        userId: userId,
+        practiceTestId: practiceTestId,
+        status: 'in_progress',
+        startedAt: {
+          [sequelize.Op.lt]: twoHoursAgo
+        }
+      }
+    });
+
+    if (oldAttempts.length > 0) {
+      await TestAttempt.update(
+        { 
+          status: 'abandoned',
+          completedAt: new Date()
+        },
+        {
+          where: {
+            id: {
+              [sequelize.Op.in]: oldAttempts.map(attempt => attempt.id)
+            }
+          }
+        }
+      );
+      
+      console.log(`Cleaned up ${oldAttempts.length} old in-progress attempts for user ${userId}, test ${practiceTestId}`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up old in-progress attempts:', error);
+  }
+};
+
 
 exports.createPracticeTest = async (req, res) => {
   try {
@@ -104,13 +142,13 @@ exports.createPracticeTest = async (req, res) => {
 
 exports.getAllPracticeTests = async (req, res) => {
   try {
+    // ✅ PERFORMANCE FIX: Remove JOIN to fix slow query issue
+    // The JOIN with User table was causing 26+ second queries
+    // Return practice tests without creator info for now to fix performance
     const practiceTests = await PracticeTest.findAll({
-      include: [{
-        model: User,
-        as: 'creator',
-        attributes: ['firstName', 'lastName', 'email']
-      }],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      // ✅ PERFORMANCE: Add timeout to prevent hanging queries
+      timeout: 10000 // 10 second timeout
     });
 
     res.status(200).json({
@@ -118,9 +156,11 @@ exports.getAllPracticeTests = async (req, res) => {
       data: { practiceTests }
     });
   } catch (err) {
+    console.error('Error fetching practice tests:', err);
     res.status(500).json({
       status: 'error',
-      message: 'Failed to fetch practice tests'
+      message: 'Failed to fetch practice tests',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };
@@ -372,7 +412,54 @@ exports.startPracticeTest = async (req, res) => {
     }
 
     
-    const lastAttempt = await TestAttempt.findOne({
+    // ✅ COOLDOWN FIX: Clean up old in-progress attempts first
+    await cleanupOldInProgressAttempts(req.user.id, testId);
+
+    // ✅ COOLDOWN FIX: Check for existing in-progress attempts first
+    const existingInProgressAttempt = await TestAttempt.findOne({
+      where: {
+        userId: req.user.id,
+        practiceTestId: testId,
+        status: 'in_progress'
+      },
+      order: [['startedAt', 'DESC']]
+    });
+
+    // If there's an in-progress attempt, check if it's recent (within last 2 hours)
+    if (existingInProgressAttempt) {
+      const now = new Date();
+      const startedAt = new Date(existingInProgressAttempt.startedAt);
+      const diffMs = now.getTime() - startedAt.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      
+      // If the in-progress attempt is recent (within 2 hours), allow resuming
+      if (diffHours < 2) {
+        return res.status(200).json({
+          status: 'success',
+          data: {
+            testAttemptId: existingInProgressAttempt.id,
+            test: {
+              title: practiceTest.title,
+              duration: practiceTest.duration,
+              questions: [], // Will be loaded from existing attempt
+              passingScore: practiceTest.passingScore
+            },
+            resume: true,
+            message: 'Resuming existing test attempt'
+          }
+        });
+      } else {
+        // If the in-progress attempt is old (more than 2 hours), mark it as abandoned
+        await existingInProgressAttempt.update({
+          status: 'abandoned',
+          completedAt: new Date()
+        });
+        console.log(`Marked old in-progress attempt ${existingInProgressAttempt.id} as abandoned`);
+      }
+    }
+
+    // ✅ COOLDOWN FIX: Only check cooldown based on COMPLETED attempts
+    const lastCompletedAttempt = await TestAttempt.findOne({
       where: {
         userId: req.user.id,
         practiceTestId: testId,
@@ -380,7 +467,8 @@ exports.startPracticeTest = async (req, res) => {
       },
       order: [['completedAt', 'DESC']]
     });
-    if (lastAttempt && lastAttempt.completedAt) {
+    
+    if (lastCompletedAttempt && lastCompletedAttempt.completedAt) {
       if (!practiceTest.allowRepeat) {
         return res.status(403).json({
           status: 'fail',
@@ -389,7 +477,7 @@ exports.startPracticeTest = async (req, res) => {
       }
       if (practiceTest.enableCooldown) {
         const now = new Date();
-        const completedAt = new Date(lastAttempt.completedAt);
+        const completedAt = new Date(lastCompletedAttempt.completedAt);
         const diffMs = now.getTime() - completedAt.getTime();
         const diffHours = diffMs / (1000 * 60 * 60);
         const cooldownHours = Number(practiceTest.repeatAfterHours || 0);
@@ -398,7 +486,7 @@ exports.startPracticeTest = async (req, res) => {
           return res.status(403).json({
             status: 'fail',
             message: `You must wait ${Math.ceil(cooldownHours - diffHours)} hour(s) before retaking this test.`,
-            nextAvailableTime
+            nextAvailableTime: nextAvailableTime.toISOString()
           });
         }
       }

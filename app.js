@@ -42,9 +42,7 @@ app.set('trust proxy', 1);
 
 const allowedOrigins = [
   'https://iiftl-portal.vercel.app',
-  'https://exim-portal-guardian.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:5173'
+  'http://localhost:8080'
 ];
 
 const corsOptions = {
