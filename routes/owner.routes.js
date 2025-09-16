@@ -146,6 +146,13 @@ router.delete('/admins/:id', async (req, res) => {
     if (!admin || admin.role !== 'admin') {
       return res.status(404).json({ status: 'fail', message: 'Admin not found' });
     }
+    // Prevent deleting the last remaining admin
+    const adminCount = await User.count({ where: { role: 'admin' } });
+    if (adminCount <= 1) {
+      return res.status(400).json({ status: 'fail', message: 'Cannot delete the last admin user. At least one admin must remain.' });
+    }
+    // Kill all sessions for this admin before delete
+    try { await UserSession.killAllUserSessions(admin.id); } catch (_) {}
     await admin.destroy();
     res.status(200).json({ status: 'success', message: 'Admin deleted' });
   } catch (err) {
