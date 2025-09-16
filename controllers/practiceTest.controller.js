@@ -483,10 +483,32 @@ exports.startPracticeTest = async (req, res) => {
         const cooldownHours = Number(practiceTest.repeatAfterHours || 0);
         if (diffHours < cooldownHours) {
           const nextAvailableTime = new Date(completedAt.getTime() + cooldownHours * 60 * 60 * 1000);
+          const remainingHours = Math.ceil(cooldownHours - diffHours);
+          const remainingMinutes = Math.ceil((cooldownHours - diffHours) * 60);
+          
+          // ✅ COOLDOWN FIX: More user-friendly cooldown messages
+          let message;
+          if (remainingHours >= 1) {
+            message = `You must wait ${remainingHours} hour(s) before retaking this test.`;
+          } else {
+            message = `You must wait ${remainingMinutes} minute(s) before retaking this test.`;
+          }
+          
           return res.status(403).json({
             status: 'fail',
-            message: `You must wait ${Math.ceil(cooldownHours - diffHours)} hour(s) before retaking this test.`,
-            nextAvailableTime: nextAvailableTime.toISOString()
+            message: message,
+            nextAvailableTime: nextAvailableTime.toISOString(),
+            remainingTime: {
+              hours: remainingHours,
+              minutes: remainingMinutes,
+              totalMinutes: Math.ceil((cooldownHours - diffHours) * 60)
+            },
+            lastAttemptDate: lastCompletedAttempt.completedAt,
+            cooldownSettings: {
+              cooldownHours: cooldownHours,
+              allowRepeat: practiceTest.allowRepeat,
+              enableCooldown: practiceTest.enableCooldown
+            }
           });
         }
       }
