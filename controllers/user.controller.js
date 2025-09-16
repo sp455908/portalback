@@ -650,7 +650,9 @@ exports.unblockUser = async (req, res) => {
     }
 
     
-    await LoginAttempt.unblockUser(userId, req.user.id);
+    // If the actor is Owner (not present in Users table), avoid FK violation by passing null
+    const actorUserId = req.user && req.user.isOwner === true ? null : req.user.id;
+    await LoginAttempt.unblockUser(userId, actorUserId);
 
     
     await user.update({ isActive: true });
