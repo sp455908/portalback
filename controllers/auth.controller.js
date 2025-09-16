@@ -422,11 +422,11 @@ exports.login = async (req, res, next) => {
         
         // ✅ OWASP SECURITY: Get current failed attempts count after creating the attempt
         // Use both userId and email counters to be robust in case some attempts were recorded without userId binding
-        // Use a strict 10-minute window to satisfy security policy
-        const TEN_MINUTES_MS = 10 * 60 * 1000;
+        // Count all-time failed attempts (large window) to block immediately after 5
+        const ALL_TIME_MS = 10 * 365 * 24 * 60 * 60 * 1000; // ~10 years
         const [failedAttemptsByUser, failedAttemptsByEmail] = await Promise.all([
-          LoginAttempt.getFailedAttemptsCount(user.id, TEN_MINUTES_MS),
-          LoginAttempt.getFailedAttemptsCountByEmail(email, TEN_MINUTES_MS)
+          LoginAttempt.getFailedAttemptsCount(user.id, ALL_TIME_MS),
+          LoginAttempt.getFailedAttemptsCountByEmail(email, ALL_TIME_MS)
         ]);
         const failedAttemptsCount = Math.max(
           typeof failedAttemptsByUser === 'number' ? failedAttemptsByUser : 0,
