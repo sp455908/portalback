@@ -422,9 +422,11 @@ exports.login = async (req, res, next) => {
         
         // ✅ OWASP SECURITY: Get current failed attempts count after creating the attempt
         // Use both userId and email counters to be robust in case some attempts were recorded without userId binding
+        // Use a strict 10-minute window to satisfy security policy
+        const TEN_MINUTES_MS = 10 * 60 * 1000;
         const [failedAttemptsByUser, failedAttemptsByEmail] = await Promise.all([
-          LoginAttempt.getFailedAttemptsCount(user.id),
-          LoginAttempt.getFailedAttemptsCountByEmail(email)
+          LoginAttempt.getFailedAttemptsCount(user.id, TEN_MINUTES_MS),
+          LoginAttempt.getFailedAttemptsCountByEmail(email, TEN_MINUTES_MS)
         ]);
         const failedAttemptsCount = Math.max(
           typeof failedAttemptsByUser === 'number' ? failedAttemptsByUser : 0,
@@ -439,8 +441,10 @@ exports.login = async (req, res, next) => {
           // Block user permanently
           await LoginAttempt.manuallyBlockUser(user.id, email, 'Multiple failed login attempts - Account blocked for security', null);
           
-          // Mark user as inactive
-          await user.update({ isActive: false });
+          // Mark user as inactive immediately
+          try {
+            await user.update({ isActive: false });
+          } catch (_) {}
           
           return res.status(423).json({
             status: 'fail',
