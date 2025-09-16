@@ -1784,10 +1784,10 @@ exports.updateTestSettings = async (req, res) => {
     const { allowRepeat, repeatAfterHours, enableCooldown, marksPerCorrect, enableNegative, negativeMarks } = req.body;
 
     
-    if (req.user.role !== 'admin') {
+    if (!(req.user.role === 'admin' || req.user.role === 'owner' || req.user.isOwner === true)) {
       return res.status(403).json({
         status: 'fail',
-        message: 'Only admins can update test settings'
+        message: 'Only admins or owner can update test settings'
       });
     }
 
@@ -1958,10 +1958,10 @@ exports.bulkUpdateTestSettings = async (req, res) => {
   try {
     const { allowRepeat, repeatAfterHours, enableCooldown } = req.body;
     
-    if (req.user.role !== 'admin') {
+    if (!(req.user.role === 'admin' || req.user.role === 'owner' || req.user.isOwner === true)) {
       return res.status(403).json({
         status: 'fail',
-        message: 'Only admins can bulk update test settings'
+        message: 'Only admins or owner can bulk update test settings'
       });
     }
     
