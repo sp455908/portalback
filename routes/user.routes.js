@@ -35,10 +35,10 @@ router.put('/:id/profile', protect, userController.updateUserProfile);
 // Admin-only endpoints for user management
 router.get('/student/:studentId', protect, userController.getUserByStudentId);
 
-// Admin-only endpoints for login attempt management
-router.get('/admin/blocked', protect, authorize('admin'), userController.getBlockedUsers);
-router.post('/admin/:userId/block', protect, authorize('admin'), userController.blockUser);
-router.post('/admin/:userId/unblock', protect, authorize('admin'), userController.unblockUser);
-router.get('/admin/:userId/login-attempts', protect, authorize('admin'), userController.getUserLoginAttempts);
+// Admin/Owner endpoints for login attempt management
+router.get('/admin/blocked', protect, authorize('admin', 'owner'), userController.getBlockedUsers);
+router.post('/admin/:userId/block', protect, authorize('admin', 'owner'), userController.blockUser);
+router.post('/admin/:userId/unblock', protect, authorize('admin', 'owner'), userController.unblockUser);
+router.get('/admin/:userId/login-attempts', protect, authorize('admin', 'owner'), userController.getUserLoginAttempts);
 
 module.exports = router;
