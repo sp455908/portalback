@@ -78,7 +78,10 @@ const UserSession = sequelize.define('UserSession', {
 
 // Instance methods
 UserSession.prototype.updateActivity = function() {
-  this.lastActivity = new Date();
+  const now = new Date();
+  this.lastActivity = now;
+  // ✅ FIX: Extend session expiration when user is active (rolling expiration)
+  this.expiresAt = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes from now
   return this.save();
 };
 
@@ -145,7 +148,12 @@ UserSession.cleanupExpiredSessions = async function() {
       where: {
         [require('sequelize').Op.or]: [
           { expiresAt: { [require('sequelize').Op.lt]: new Date() } },
-          { isActive: true }
+          { 
+            isActive: true,
+            lastActivity: { 
+              [require('sequelize').Op.lt]: new Date(Date.now() - 30 * 60 * 1000) // 30 minutes ago
+            }
+          }
         ]
       }
     }
@@ -155,6 +163,43 @@ UserSession.cleanupExpiredSessions = async function() {
 UserSession.createSession = async function(sessionData) {
   const session = await this.create(sessionData);
   return session;
+};
+
+// ✅ IMPROVEMENT: Enhanced automatic session cleanup job
+UserSession.startCleanupJob = function() {
+  // Run cleanup every 3 minutes for more responsive cleanup
+  setInterval(async () => {
+    try {
+      const result = await this.cleanupExpiredSessions();
+      if (result[0] > 0) {
+        console.log(`[SESSION CLEANUP] Deactivated ${result[0]} expired sessions`);
+      }
+    } catch (error) {
+      console.error('[SESSION CLEANUP] Error:', error);
+    }
+  }, 3 * 60 * 1000); // 3 minutes
+  
+  // Also run a more comprehensive cleanup every hour
+  setInterval(async () => {
+    try {
+      // Clean up sessions that are older than 7 days (even if not expired)
+      const oldSessions = await this.update(
+        { isActive: false },
+        {
+          where: {
+            isActive: true,
+            createdAt: { [require('sequelize').Op.lt]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+          }
+        }
+      );
+      
+      if (oldSessions[0] > 0) {
+        console.log(`[SESSION CLEANUP] Deactivated ${oldSessions[0]} old sessions (7+ days)`);
+      }
+    } catch (error) {
+      console.error('[SESSION CLEANUP] Error cleaning old sessions:', error);
+    }
+  }, 60 * 60 * 1000); // 1 hour
 };
 
 module.exports = UserSession;

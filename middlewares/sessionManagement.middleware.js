@@ -214,10 +214,28 @@ const trackActivity = async (req, res, next) => {
     if (skipEndpoints.some(endpoint => req.path.startsWith(endpoint))) {
       return next();
     }
-    // Update session activity if session exists
+    
+    // ✅ FIX: Enhanced activity tracking for all authenticated requests
+    if (req.user && req.user.id) {
+      // Try to update session activity using sessionId from header
+      const sessionId = req.headers['x-session-id'];
+      if (sessionId) {
+        await updateSessionActivity(sessionId);
+      } else {
+        // If no sessionId, find and update the most recent active session
+        const activeSessions = await UserSession.findUserActiveSessions(req.user.id);
+        if (activeSessions.length > 0) {
+          // Update the most recent session
+          await activeSessions[0].updateActivity();
+        }
+      }
+    }
+    
+    // Legacy session tracking
     if (req.session && req.session.sessionId) {
       await updateSessionActivity(req.session.sessionId);
     }
+    
     next();
   } catch (error) {
     console.error('Activity tracking error:', error);
@@ -225,22 +243,33 @@ const trackActivity = async (req, res, next) => {
   }
 };
 
-// Session conflict detection middleware
+// ✅ IMPROVEMENT: Enhanced session conflict detection middleware
 const detectSessionConflict = async (req, res, next) => {
   try {
     if (req.user && req.session) {
       const sessionCheck = await checkActiveSessions(req.user.id, req.session.sessionId);
       if (sessionCheck.hasActiveSessions) {
+        // ✅ IMPROVEMENT: More detailed session conflict information
         return res.status(409).json({
           status: 'fail',
           message: 'User is already logged in on another device. Please log out from other sessions or contact administrator.',
           code: 'SESSION_CONFLICT',
-          activeSessions: sessionCheck.activeSessions.map(session => ({
-            id: session.id,
-            lastActivity: session.lastActivity,
-            ipAddress: session.ipAddress,
-            userAgent: session.userAgent
-          }))
+          data: {
+            activeSessions: sessionCheck.activeSessions.map(session => ({
+              id: session.id,
+              sessionId: session.sessionId,
+              lastActivity: session.lastActivity,
+              ipAddress: session.ipAddress,
+              userAgent: session.userAgent,
+              deviceInfo: session.deviceInfo
+            })),
+            currentSession: {
+              id: req.session.id,
+              sessionId: req.session.sessionId,
+              lastActivity: req.session.lastActivity
+            },
+            totalActiveSessions: sessionCheck.activeSessions.length + 1
+          }
         });
       }
     }

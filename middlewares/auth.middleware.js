@@ -71,6 +71,44 @@ exports.protect = async (req, res, next) => {
       if (!owner || owner.isActive === false) {
         return res.status(401).json({ status: 'fail', message: 'Owner not found or inactive' });
       }
+      
+      // ✅ FIX: Apply session validation to owner tokens as well
+      if (sessionId) {
+        // Validate the session for owner tokens too
+        const session = await UserSession.findActiveSession(ownerId, sessionId);
+        
+        if (!session) {
+          return res.status(401).json({
+            status: 'fail',
+            message: 'Invalid or expired session. Please login again.',
+            code: 'SESSION_INVALID'
+          });
+        }
+        
+        // Check if session is idle (30 minutes of inactivity)
+        if (session.isIdle(30)) {
+          await UserSession.update({ isActive: false }, { where: { sessionId } });
+          return res.status(401).json({
+            status: 'fail',
+            message: 'Session expired due to inactivity. Please login again.',
+            code: 'SESSION_IDLE_TIMEOUT'
+          });
+        }
+        
+        // Check if session is expired
+        if (session.isExpired()) {
+          await UserSession.update({ isActive: false }, { where: { sessionId } });
+          return res.status(401).json({
+            status: 'fail',
+            message: 'Session has expired. Please login again.',
+            code: 'SESSION_EXPIRED'
+          });
+        }
+        
+        // Update session activity
+        await session.updateActivity();
+      }
+      
       req.user = {
         id: owner.id,
         email: owner.email,
@@ -103,63 +141,50 @@ exports.protect = async (req, res, next) => {
       });
     }
     
-    if (sessionId) {
-      // Validate the session only when provided
-      const session = await UserSession.findActiveSession(user.id, sessionId);
-      
-      if (!session) {
-        return res.status(401).json({
-          status: 'fail',
-          message: 'Invalid or expired session. Please login again.',
-          code: 'SESSION_INVALID'
-        });
-      }
-      
-      // Check if session is idle (30 minutes of inactivity)
-      if (session.isIdle(30)) {
-        await UserSession.update({ isActive: false }, { where: { sessionId } });
-        return res.status(401).json({
-          status: 'fail',
-          message: 'Session expired due to inactivity. Please login again.',
-          code: 'SESSION_IDLE_TIMEOUT'
-        });
-      }
-      
-      // Check if session is expired
-      if (session.isExpired()) {
-        await UserSession.update({ isActive: false }, { where: { sessionId } });
-        return res.status(401).json({
-          status: 'fail',
-          message: 'Session has expired. Please login again.',
-          code: 'SESSION_EXPIRED'
-        });
-      }
-      
-      // Update session activity
-      await session.updateActivity();
+    // ✅ IMPROVEMENT: Make session validation mandatory for all authenticated requests
+    if (!sessionId) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Session ID required for authentication. Please login again.',
+        code: 'SESSION_ID_REQUIRED'
+      });
     }
 
-    // If no explicit sessionId header, validate against accessToken if tracked
-    if (!sessionId && isValidBearer(req.headers.authorization)) {
-      try {
-        const matchingSessions = await UserSession.findAll({ where: { userId: user.id, accessToken: token } });
-        if (matchingSessions && matchingSessions.length > 0) {
-          const anyActive = matchingSessions.some(s => s.isActive && new Date(s.expiresAt) > new Date());
-          if (!anyActive) {
-            return res.status(401).json({
-              status: 'fail',
-              message: 'Session has been terminated. Please login again.',
-              code: 'SESSION_TERMINATED'
-            });
-          }
-          // Optionally update lastActivity on the most recent session
-          const latest = matchingSessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))[0];
-          if (latest) await latest.updateActivity();
-        }
-      } catch (_) {
-        // non-fatal
-      }
+    // Validate the session
+    const session = await UserSession.findActiveSession(user.id, sessionId);
+    
+    if (!session) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Invalid or expired session. Please login again.',
+        code: 'SESSION_INVALID'
+      });
     }
+    
+    // Check if session is idle (30 minutes of inactivity)
+    if (session.isIdle(30)) {
+      await UserSession.update({ isActive: false }, { where: { sessionId } });
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Session expired due to inactivity. Please login again.',
+        code: 'SESSION_IDLE_TIMEOUT'
+      });
+    }
+    
+    // Check if session is expired
+    if (session.isExpired()) {
+      await UserSession.update({ isActive: false }, { where: { sessionId } });
+      return res.status(401).json({
+        status: 'fail',
+        message: 'Session has expired. Please login again.',
+        code: 'SESSION_EXPIRED'
+      });
+    }
+    
+    // Update session activity
+    await session.updateActivity();
+
+    // ✅ IMPROVEMENT: Session validation is now mandatory above, so this redundant code is removed
     
     // Maintenance mode check: block all non-admin/owner access
     try {

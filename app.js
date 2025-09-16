@@ -13,6 +13,7 @@ const maintenanceGate = require('./middlewares/maintenance.middleware');
 const { securityLogging } = require('./middlewares/securityLogging.middleware');
 const { generateCSRFToken, verifyCSRFToken } = require('./middlewares/csrf.middleware');
 const { sequelize } = require('./config/database');
+const { UserSession } = require('./models');
 
 
 const authRoutes = require('./routes/auth.routes');
@@ -225,5 +226,9 @@ app.get('/health', (req, res) => {
 
 
 app.use(errorHandler);
+
+// ✅ FIX: Start session cleanup job
+UserSession.startCleanupJob();
+console.log('[SESSION CLEANUP] Started automatic session cleanup job (every 5 minutes)');
 
 module.exports = app;
