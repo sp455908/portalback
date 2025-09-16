@@ -261,6 +261,22 @@ exports.protect = async (req, res, next) => {
     // Attach user to request
     req.user = user;
 
+    // Elevate to owner if this user's email matches the active Owner record
+    try {
+      if (user && user.email) {
+        const ownerRecord = await Owner.findOne({ where: { email: user.email.toLowerCase().trim(), isActive: true } });
+        if (ownerRecord) {
+          req.user = {
+            id: ownerRecord.id,
+            email: ownerRecord.email,
+            role: 'owner',
+            isOwner: true,
+            isActive: ownerRecord.isActive
+          };
+        }
+      }
+    } catch (_) {}
+
     // If token came from Authorization header, also set an httpOnly cookie to support new-tab downloads
     try {
       if (!req.cookies?.token && isValidBearer(req.headers.authorization)) {
