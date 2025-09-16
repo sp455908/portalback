@@ -29,32 +29,32 @@ const upload = multer({
   }
 });
 
-// Admin routes (admin only)
-router.post('/', protect, authorize('admin'), practiceTestController.createPracticeTest);
-router.get('/admin', protect, authorize('admin'), practiceTestController.getAllPracticeTests);
-router.get('/admin/:testId', protect, authorize('admin'), practiceTestController.getPracticeTestById);
-router.get('/admin/:testId/statistics', protect, authorize('admin'), practiceTestController.getTestStatistics);
-router.put('/admin/:testId', protect, authorize('admin'), practiceTestController.updatePracticeTest);
-router.delete('/admin/:testId', protect, authorize('admin'), practiceTestController.deletePracticeTest);
-router.post('/admin/:testId/reset', protect, authorize('admin'), practiceTestController.resetQuestionUsage);
-router.delete('/admin/:userId/:testId/reset-cooldown', protect, authorize('admin'), practiceTestController.resetUserTestCooldown);
-router.post('/admin/:userId/:testId/set-cooldown', protect, authorize('admin'), practiceTestController.setUserCooldown);
-router.get('/admin/:testId/users', protect, authorize('admin'), practiceTestController.getTestUsers);
-router.put('/admin/:testId/settings', protect, authorize('admin'), practiceTestController.updateTestSettings);
-router.put('/admin/:testId/question/:questionIndex', protect, authorize('admin'), practiceTestController.updateTestQuestion);
-router.patch('/admin/:testId/active-status', protect, authorize('admin'), practiceTestController.updateTestActiveStatus);
+// Admin routes (admin and owner)
+router.post('/', protect, authorize('admin', 'owner'), practiceTestController.createPracticeTest);
+router.get('/admin', protect, authorize('admin', 'owner'), practiceTestController.getAllPracticeTests);
+router.get('/admin/:testId', protect, authorize('admin', 'owner'), practiceTestController.getPracticeTestById);
+router.get('/admin/:testId/statistics', protect, authorize('admin', 'owner'), practiceTestController.getTestStatistics);
+router.put('/admin/:testId', protect, authorize('admin', 'owner'), practiceTestController.updatePracticeTest);
+router.delete('/admin/:testId', protect, authorize('admin', 'owner'), practiceTestController.deletePracticeTest);
+router.post('/admin/:testId/reset', protect, authorize('admin', 'owner'), practiceTestController.resetQuestionUsage);
+router.delete('/admin/:userId/:testId/reset-cooldown', protect, authorize('admin', 'owner'), practiceTestController.resetUserTestCooldown);
+router.post('/admin/:userId/:testId/set-cooldown', protect, authorize('admin', 'owner'), practiceTestController.setUserCooldown);
+router.get('/admin/:testId/users', protect, authorize('admin', 'owner'), practiceTestController.getTestUsers);
+router.put('/admin/:testId/settings', protect, authorize('admin', 'owner'), practiceTestController.updateTestSettings);
+router.put('/admin/:testId/question/:questionIndex', protect, authorize('admin', 'owner'), practiceTestController.updateTestQuestion);
+router.patch('/admin/:testId/active-status', protect, authorize('admin', 'owner'), practiceTestController.updateTestActiveStatus);
 
-// JSON import routes (admin only)
-router.post('/admin/import-json', protect, authorize('admin'), practiceTestController.importQuestionsFromJSON);
-router.put('/admin/:testId/update-json', protect, authorize('admin'), practiceTestController.updateTestWithJSON);
+// JSON import routes (admin and owner)
+router.post('/admin/import-json', protect, authorize('admin', 'owner'), practiceTestController.importQuestionsFromJSON);
+router.put('/admin/:testId/update-json', protect, authorize('admin', 'owner'), practiceTestController.updateTestWithJSON);
 
-// Excel import routes (admin only)
-router.post('/admin/import-excel', protect, authorize('admin'), upload.single('excelFile'), practiceTestController.importQuestionsFromExcel);
-router.put('/admin/:testId/update-excel', protect, authorize('admin'), upload.single('excelFile'), practiceTestController.updateTestWithExcel);
-router.post('/admin/parse-excel', protect, authorize('admin'), upload.single('excelFile'), practiceTestController.parseExcelPreview);
+// Excel import routes (admin and owner)
+router.post('/admin/import-excel', protect, authorize('admin', 'owner'), upload.single('excelFile'), practiceTestController.importQuestionsFromExcel);
+router.put('/admin/:testId/update-excel', protect, authorize('admin', 'owner'), upload.single('excelFile'), practiceTestController.updateTestWithExcel);
+router.post('/admin/parse-excel', protect, authorize('admin', 'owner'), upload.single('excelFile'), practiceTestController.parseExcelPreview);
 
-// Bulk update test settings (admin only)
-router.put('/admin/bulk-settings', protect, authorize('admin'), practiceTestController.bulkUpdateTestSettings);
+// Bulk update test settings (admin and owner)
+router.put('/admin/bulk-settings', protect, authorize('admin', 'owner'), practiceTestController.bulkUpdateTestSettings);
 
 // Route to get available tests (requires authentication to filter by user type)
 router.get('/available', practiceTestRateLimit, protect, authorize('student', 'corporate', 'government'), practiceTestController.getAvailablePracticeTests);

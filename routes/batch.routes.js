@@ -21,8 +21,8 @@ router.get('/test', (req, res) => {
 // Health check endpoint (no auth required)
 router.get('/health', batchController.batchHealthCheck);
 
-// Admin-only routes - MUST BE AFTER student routes
-router.use(protect, authorize('admin'));
+// Admin and Owner routes - MUST BE AFTER student routes
+router.use(protect, authorize('admin', 'owner'));
 
 // Batch CRUD operations
 router.post('/', batchController.createBatch);
@@ -32,7 +32,7 @@ router.put('/:batchId', batchController.updateBatch);
 router.delete('/:batchId', batchController.deleteBatch);
 
 // Batch statistics (MUST come before parameterized routes)
-router.get('/stats', protect, authorize('admin'), batchController.getDashboardStats);
+router.get('/stats', protect, authorize('admin', 'owner'), batchController.getDashboardStats);
 
 // Individual batch statistics
 router.get('/:batchId/stats', batchController.getBatchStats);
