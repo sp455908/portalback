@@ -100,11 +100,11 @@ const User = sequelize.define('User', {
   hooks: {
     beforeCreate: async (user) => {
       const Counter = require('./counter.model');
-      // Check single admin rule
+      // Enforce max admin users rule (max 5)
       if (user.role === 'admin') {
         const adminCount = await User.count({ where: { role: 'admin' } });
-        if (adminCount > 0) {
-          throw new Error('Only one admin user is allowed in the system');
+        if (adminCount >= 5) {
+          throw new Error('Maximum of 5 admin users are allowed in the system');
         }
       }
       
@@ -128,16 +128,16 @@ const User = sequelize.define('User', {
       }
     },
     beforeUpdate: async (user) => {
-      // Check single admin rule when updating role to admin
+      // Enforce max admin users rule (max 5) when updating role to admin
       if (user.changed('role') && user.role === 'admin') {
         const adminCount = await User.count({ 
           where: { 
             role: 'admin',
-            id: { [Op.ne]: user.id } // Exclude current user
+            id: { [Op.ne]: user.id }
           } 
         });
-        if (adminCount > 0) {
-          throw new Error('Only one admin user is allowed in the system');
+        if (adminCount >= 5) {
+          throw new Error('Maximum of 5 admin users are allowed in the system');
         }
       }
       

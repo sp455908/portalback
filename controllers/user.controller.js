@@ -125,16 +125,24 @@ exports.updateUser = async (req, res) => {
           id: { [Op.ne]: userId } 
         } 
       });
-      if (adminCount > 0) {
+      if (adminCount >= 5) {
         return res.status(400).json({
           status: 'fail',
-          message: 'Only one admin user is allowed in the system. Cannot create additional admin users.'
+          message: 'Maximum of 5 admin users are allowed in the system.'
         });
       }
     }
 
     
     if (updates.password) {
+      // Enforce strong password policy
+      const isStrongPassword = (v) => typeof v === 'string' && v.length >= 10 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /\d/.test(v) && /[^A-Za-z0-9]/.test(v);
+      if (!isStrongPassword(updates.password)) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Password does not meet complexity requirements.'
+        });
+      }
       updates.password = await bcrypt.hash(updates.password, 12);
     }
 

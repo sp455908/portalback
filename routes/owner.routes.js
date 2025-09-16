@@ -106,13 +106,13 @@ router.get('/admins', async (req, res) => {
   }
 });
 
-// Create an admin user (single-admin policy)
+// Create an admin user (max 5 admins policy)
 router.post('/admins', ownerMutationLimiter, async (req, res) => {
   try {
-    // Enforce only one admin user can exist at a time
+    // Enforce max 5 admin users
     const adminCount = await User.count({ where: { role: 'admin' } });
-    if (adminCount > 0) {
-      return res.status(409).json({ status: 'fail', message: 'Admin user already exists. Only one admin is allowed.' });
+    if (adminCount >= 5) {
+      return res.status(409).json({ status: 'fail', message: 'Maximum of 5 admin users are allowed in the system.' });
     }
 
     const { firstName, lastName, email, password } = req.body || {};
