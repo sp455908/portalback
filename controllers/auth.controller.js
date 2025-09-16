@@ -420,45 +420,43 @@ exports.login = async (req, res, next) => {
           attemptTime: new Date()
         });
         
-        // ✅ OWASP SECURITY: Get current failed attempts count after creating the attempt
-        // Use both userId and email counters to be robust in case some attempts were recorded without userId binding
-        // Count all-time failed attempts (large window) to block immediately after 5
-        const ALL_TIME_MS = 10 * 365 * 24 * 60 * 60 * 1000; // ~10 years
-        const [failedAttemptsByUser, failedAttemptsByEmail] = await Promise.all([
-          LoginAttempt.getFailedAttemptsCount(user.id, ALL_TIME_MS),
-          LoginAttempt.getFailedAttemptsCountByEmail(email, ALL_TIME_MS)
-        ]);
-        const failedByUserNum = Number(failedAttemptsByUser) || 0;
-        const failedByEmailNum = Number(failedAttemptsByEmail) || 0;
-        const failedAttemptsCount = Math.max(failedByUserNum, failedByEmailNum);
+        // ✅ SECURITY: Count failures strictly within last 10 minutes for blocking decision
+        const TEN_MINUTES_MS = 10 * 60 * 1000;
+        const failedAttemptsCount = Number(await LoginAttempt.getFailedAttemptsCount(user.id, TEN_MINUTES_MS)) || 0;
         
         // ✅ OWASP SECURITY: Track failed login with security monitor
         securityMonitor.trackFailedLogin(ipAddress, email, user.id, userAgent);
         
         // ✅ OWASP SECURITY: Check if user should be blocked (5 or more failed attempts)
         if (failedAttemptsCount >= 5 && user.role !== 'admin') {
-          // Block user permanently
-          await LoginAttempt.manuallyBlockUser(
-            user.id,
-            email,
-            'Multiple failed login attempts - Account blocked for security',
-            null
-          );
-
-          // Ensure the user is marked inactive in a robust way
+          // Atomically create a permanent block and deactivate user + sessions
           try {
-            // Try a direct update first (more reliable than instance update under some hook/validation scenarios)
-            const [rowsUpdated] = await User.update(
-              { isActive: false },
-              { where: { id: user.id, isActive: true } }
-            );
+            const { sequelize } = require('../config/database');
+            await sequelize.transaction(async (t) => {
+              // Create permanent block record
+              await LoginAttempt.manuallyBlockUser(
+                user.id,
+                email,
+                'Multiple failed login attempts - Account blocked for security',
+                null
+              );
 
-            // Fallback to instance update if no rows were affected (e.g., stale instance state)
-            if (!rowsUpdated) {
-              try { await user.update({ isActive: false }); } catch (_) {}
-            }
+              // Deactivate user
+              await User.update(
+                { isActive: false },
+                { where: { id: user.id }, transaction: t }
+              );
+
+              // Deactivate all active sessions for this user
+              try {
+                await UserSession.update(
+                  { isActive: false },
+                  { where: { userId: user.id, isActive: true }, transaction: t }
+                );
+              } catch (_) {}
+            });
           } catch (_) {
-            // Non-fatal: even if DB flag fails, the login response below still blocks access
+            // If transaction fails, still proceed to return 423; subsequent requests will re-check
           }
 
           return res.status(423).json({
@@ -474,7 +472,7 @@ exports.login = async (req, res, next) => {
           });
         }
         
-        // ✅ FIX: Return failed attempts count for non-blocked users
+        // ✅ FIX: Return failed attempts count for non-blocked users (10-min window)
         return res.status(401).json({
           status: 'fail',
           message: 'Incorrect email or password',
