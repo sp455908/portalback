@@ -397,6 +397,20 @@ exports.getOverviewAnalytics = async (req, res) => {
     });
     const exams = recentAttempts.map(e => ({ exam: e.test?.category || 'General', passed: e.passed, failed: e.failed, total: e.total }));
 
+    // Average progress approximation: average score of completed attempts in last 60 days
+    const recentScores = await TestAttempt.findAll({
+      where: {
+        completedAt: { [Op.gte]: since60 },
+        status: 'completed'
+      },
+      attributes: ['score']
+    });
+    const avgProgress = recentScores.length
+      ? Math.round(
+          (recentScores.reduce((acc, a) => acc + (Number(a.score) || 0), 0) / recentScores.length)
+        )
+      : 0;
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -405,6 +419,7 @@ exports.getOverviewAnalytics = async (req, res) => {
           activeCourses: totalCourses,
           activePracticeTests,
           completionRate,
+          avgProgress,
           totalBatches
         },
         enrollmentData: enrollments,
