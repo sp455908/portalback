@@ -393,9 +393,23 @@ exports.getOverviewAnalytics = async (req, res) => {
         as: 'test',
         attributes: ['category']
       }],
-      group: ['test.category']
+      group: ['test.id', 'test.category']
     });
-    const exams = recentAttempts.map(e => ({ exam: e.test?.category || 'General', passed: e.passed, failed: e.failed, total: e.total }));
+    const examsByCategory = new Map();
+    recentAttempts.forEach((e) => {
+      const cat = e.test?.category || 'General';
+      const prev = examsByCategory.get(cat) || { exam: cat, passed: 0, failed: 0, total: 0 };
+      const total = Number(e.get('total')) || 0;
+      const passed = Number(e.get('passed')) || 0;
+      const failed = Number(e.get('failed')) || 0;
+      examsByCategory.set(cat, {
+        exam: cat,
+        passed: prev.passed + passed,
+        failed: prev.failed + failed,
+        total: prev.total + total
+      });
+    });
+    const exams = Array.from(examsByCategory.values());
 
     // Average progress approximation: average score of completed attempts in last 60 days
     const recentScores = await TestAttempt.findAll({
