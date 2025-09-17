@@ -116,12 +116,14 @@ exports.getAllPracticeTests = catchAsync(async (req, res, next) => {
 
   res.json({
     status: 'success',
-    data: practiceTests.rows,
-    pagination: {
-      total: practiceTests.count,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      pages: Math.ceil(practiceTests.count / limit)
+    data: {
+      practiceTests: practiceTests.rows,
+      pagination: {
+        total: practiceTests.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(practiceTests.count / limit)
+      }
     }
   });
 });
@@ -487,12 +489,14 @@ exports.getAvailablePracticeTests = catchAsync(async (req, res, next) => {
 
   res.json({
     status: 'success',
-    data: practiceTests.rows,
-    pagination: {
-      total: practiceTests.count,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      pages: Math.ceil(practiceTests.count / limit)
+    data: {
+      practiceTests: practiceTests.rows,
+      pagination: {
+        total: practiceTests.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(practiceTests.count / limit)
+      }
     }
   });
 });
