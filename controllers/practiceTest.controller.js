@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const { validationResult } = require('express-validator');
+const XLSX = require('xlsx');
 
 // Helper function to calculate score
 const calculateScore = (answers, questionsAsked) => {
@@ -31,6 +32,83 @@ const calculateScore = (answers, questionsAsked) => {
 const getRandomQuestions = (questions, count) => {
   const shuffled = [...questions].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
+};
+
+// Helper function to parse Excel file and extract questions
+const parseExcelQuestions = (buffer) => {
+  try {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Convert to JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    if (jsonData.length < 2) {
+      throw new Error('Excel file must have at least a header row and one data row');
+    }
+    
+    const headers = jsonData[0];
+    const questions = [];
+    
+    // Expected headers: Question, Option A, Option B, Option C, Option D, Correct Answer, Explanation (optional)
+    const expectedHeaders = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer'];
+    
+    // Check if headers match expected format
+    const hasRequiredHeaders = expectedHeaders.every(header => 
+      headers.some(h => h && h.toString().toLowerCase().includes(header.toLowerCase()))
+    );
+    
+    if (!hasRequiredHeaders) {
+      throw new Error(`Excel file must contain columns: ${expectedHeaders.join(', ')}`);
+    }
+    
+    // Find column indices
+    const questionIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('question'));
+    const optionAIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('option a'));
+    const optionBIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('option b'));
+    const optionCIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('option c'));
+    const optionDIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('option d'));
+    const correctAnswerIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('correct answer'));
+    const explanationIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('explanation'));
+    
+    // Process data rows
+    for (let i = 1; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      
+      // Skip empty rows
+      if (!row[questionIndex] || !row[optionAIndex] || !row[optionBIndex] || !row[optionCIndex] || !row[optionDIndex]) {
+        continue;
+      }
+      
+      const question = {
+        question: row[questionIndex].toString().trim(),
+        options: [
+          row[optionAIndex].toString().trim(),
+          row[optionBIndex].toString().trim(),
+          row[optionCIndex].toString().trim(),
+          row[optionDIndex].toString().trim()
+        ],
+        correctAnswer: parseInt(row[correctAnswerIndex]) - 1, // Convert to 0-based index
+        explanation: explanationIndex >= 0 && row[explanationIndex] ? row[explanationIndex].toString().trim() : undefined
+      };
+      
+      // Validate correct answer
+      if (isNaN(question.correctAnswer) || question.correctAnswer < 0 || question.correctAnswer > 3) {
+        throw new Error(`Invalid correct answer in row ${i + 1}. Must be 1, 2, 3, or 4.`);
+      }
+      
+      questions.push(question);
+    }
+    
+    if (questions.length === 0) {
+      throw new Error('No valid questions found in Excel file');
+    }
+    
+    return questions;
+  } catch (error) {
+    throw new Error(`Failed to parse Excel file: ${error.message}`);
+  }
 };
 
 // Admin routes
@@ -114,18 +192,8 @@ exports.getAllPracticeTests = catchAsync(async (req, res, next) => {
     order: [['createdAt', 'DESC']]
   });
 
-  res.json({
-    status: 'success',
-    data: {
-      practiceTests: practiceTests.rows,
-      pagination: {
-        total: practiceTests.count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(practiceTests.count / limit)
-      }
-    }
-  });
+  // Return data in the same format as course controller for consistency
+  res.json(practiceTests.rows);
 });
 
 exports.getPracticeTestById = catchAsync(async (req, res, next) => {
@@ -427,27 +495,109 @@ exports.updateTestWithJSON = catchAsync(async (req, res, next) => {
 
 // Excel import routes
 exports.importQuestionsFromExcel = catchAsync(async (req, res, next) => {
-  // This would need Excel parsing logic
-  res.status(501).json({
-    status: 'error',
-    message: 'Excel import not implemented yet'
-  });
+  if (!req.file) {
+    return next(new AppError('Excel file is required', 400));
+  }
+
+  try {
+    const questions = parseExcelQuestions(req.file.buffer);
+    
+    const {
+      title,
+      description,
+      category,
+      questionsPerTest,
+      duration,
+      passingScore,
+      targetUserType
+    } = req.body;
+
+    if (!title || !category || !targetUserType) {
+      return next(new AppError('Title, category, and targetUserType are required', 400));
+    }
+
+    const practiceTest = await PracticeTest.create({
+      title,
+      description: description || '',
+      category,
+      questions,
+      totalQuestions: questions.length,
+      questionsPerTest: parseInt(questionsPerTest) || 10,
+      duration: parseInt(duration) || 60,
+      passingScore: parseInt(passingScore) || 70,
+      targetUserType,
+      createdBy: req.user.id
+    });
+
+    res.status(201).json({
+      status: 'success',
+      data: practiceTest
+    });
+  } catch (error) {
+    return next(new AppError(error.message, 400));
+  }
 });
 
 exports.updateTestWithExcel = catchAsync(async (req, res, next) => {
-  // This would need Excel parsing logic
-  res.status(501).json({
-    status: 'error',
-    message: 'Excel update not implemented yet'
-  });
+  const { testId } = req.params;
+  
+  if (!req.file) {
+    return next(new AppError('Excel file is required', 400));
+  }
+
+  try {
+    const questions = parseExcelQuestions(req.file.buffer);
+    
+    const practiceTest = await PracticeTest.findByPk(testId);
+    if (!practiceTest) {
+      return next(new AppError('Practice test not found', 404));
+    }
+
+    const updateData = { questions, totalQuestions: questions.length };
+    
+    // Update other fields if provided
+    if (req.body.questionsPerTest) updateData.questionsPerTest = parseInt(req.body.questionsPerTest);
+    if (req.body.duration) updateData.duration = parseInt(req.body.duration);
+    if (req.body.passingScore) updateData.passingScore = parseInt(req.body.passingScore);
+
+    await practiceTest.update(updateData);
+
+    res.json({
+      status: 'success',
+      data: practiceTest
+    });
+  } catch (error) {
+    return next(new AppError(error.message, 400));
+  }
 });
 
 exports.parseExcelPreview = catchAsync(async (req, res, next) => {
-  // This would need Excel parsing logic
-  res.status(501).json({
-    status: 'error',
-    message: 'Excel preview not implemented yet'
-  });
+  if (!req.file) {
+    return next(new AppError('Excel file is required', 400));
+  }
+
+  try {
+    const questions = parseExcelQuestions(req.file.buffer);
+    
+    // Return preview with limited data
+    const preview = questions.slice(0, 5).map(q => ({
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctAnswer + 1, // Convert back to 1-based for display
+      explanation: q.explanation
+    }));
+
+    res.json({
+      status: 'success',
+      data: {
+        questions: preview,
+        totalQuestions: questions.length,
+        message: questions.length > 5 ? `Showing first 5 of ${questions.length} questions` : `Found ${questions.length} questions`
+      }
+    });
+  } catch (error) {
+    return next(new AppError(error.message, 400));
+  }
 });
 
 exports.bulkUpdateTestSettings = catchAsync(async (req, res, next) => {
@@ -587,7 +737,7 @@ exports.getAttemptDetails = catchAsync(async (req, res, next) => {
     include: [
       {
         model: PracticeTest,
-        as: 'practiceTest',
+        as: 'test',
         attributes: ['title', 'duration', 'passingScore']
       }
     ]
@@ -685,7 +835,7 @@ exports.getUserTestAttempts = catchAsync(async (req, res, next) => {
     include: [
       {
         model: PracticeTest,
-        as: 'practiceTest',
+        as: 'test',
         attributes: ['title', 'category']
       }
     ],
