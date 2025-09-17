@@ -22,13 +22,9 @@ console.log('✅ Environment variables validated successfully');
 console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Set' : 'Missing'} (${process.env.JWT_SECRET?.length || 0} chars)`);
 console.log(`🗄️  Database URL: ${process.env.DATABASE_URL ? 'Set' : 'Missing'}`);
 
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://localhost:8080",
-  "https://iiftl-portal.vercel.app",
-  "https://your-frontend-domain.onrender.com" 
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? 
+  process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) : 
+  [];
 
 const PORT = process.env.PORT || 3000;
 let isConnected = false;

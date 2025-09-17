@@ -1188,38 +1188,32 @@ exports.createInitialAdmin = async (req, res, next) => {
       });
     }
 
+    // Check if Owner user already exists - use that instead of creating duplicate admin
+    const existingOwner = await Owner.findOne({ where: { isActive: true } });
     
-    const hashedPassword = await bcrypt.hash('sunVexpress#0912', 12);
-    const adminUser = await User.create({
-      firstName: 'IIFTL',
-      lastName: 'Administrator',
-      email: 'iiftladmin@iiftl.com',
-      password: hashedPassword,
-      role: 'admin',
-      userType: 'corporate',
-      isActive: true
-    });
+    if (existingOwner) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'Owner user already exists. Use owner credentials to login.',
+        data: {
+          user: {
+            id: existingOwner.id,
+            email: existingOwner.email,
+            role: 'owner',
+            userType: 'owner',
+            firstName: 'IIFTL',
+            lastName: 'SuperAdmin'
+          }
+        },
+        note: 'Login with your existing owner credentials'
+      });
+    }
 
-    devLog('🎉 Initial admin user created successfully:', adminUser.email);
-
-    res.status(201).json({
-      status: 'success',
-      message: 'Initial admin user created successfully',
-      data: {
-        user: {
-          id: adminUser.id,
-          email: adminUser.email,
-          role: adminUser.role,
-          userType: adminUser.userType,
-          firstName: adminUser.firstName,
-          lastName: adminUser.lastName
-        }
-      },
-      credentials: {
-        email: 'iiftladmin@iiftl.com',
-        password: 'sunVexpress#0912'
-      },
-      note: 'Please change the default password after first login'
+    // If no owner exists, suggest using proper admin creation through owner panel
+    return res.status(400).json({
+      status: 'fail',
+      message: 'No owner user found. Please set up the system properly through the owner registration process.',
+      note: 'Contact system administrator for proper setup'
     });
 
   } catch (err) {

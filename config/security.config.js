@@ -2,7 +2,7 @@
 const securityConfig = {
   // JWT Configuration
   jwt: {
-    secret: process.env.JWT_SECRET || 'fallback-secret-change-in-production',
+    secret: process.env.JWT_SECRET || (() => { throw new Error('JWT_SECRET environment variable is required for security') })(),
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     cookieExpiresIn: process.env.JWT_COOKIE_EXPIRES_IN || 7,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
@@ -29,13 +29,7 @@ const securityConfig = {
 
   // CORS Configuration
   cors: {
-    allowedOrigins: [
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'https://iiftl-frontend.vercel.app',
-      'https://exim-portal-guardian.vercel.app',
-      'https://iiftl-portal.vercel.app'
-    ],
+    allowedOrigins: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) : [],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: [
@@ -132,7 +126,7 @@ const securityConfig = {
 
   // CSRF Configuration
   csrf: {
-    secret: process.env.CSRF_SECRET || process.env.JWT_SECRET || 'csrf-secret-change-in-production',
+    secret: process.env.CSRF_SECRET || process.env.JWT_SECRET || (() => { throw new Error('CSRF_SECRET or JWT_SECRET environment variable is required') })(),
     tokenLength: 32,
     cookieName: 'csrf-token',
     headerName: 'x-csrf-token',
@@ -148,7 +142,7 @@ const securityConfig = {
   environment: {
     development: {
       cors: {
-        allowedOrigins: ['http://localhost:3000', 'http://localhost:5173']
+        allowedOrigins: process.env.DEV_ALLOWED_ORIGINS ? process.env.DEV_ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) : []
       },
       logging: {
         level: 'debug',
@@ -157,11 +151,7 @@ const securityConfig = {
     },
     production: {
       cors: {
-        allowedOrigins: [
-          'https://iiftl-frontend.vercel.app',
-          'https://exim-portal-guardian.vercel.app',
-          'https://iiftl-portal.vercel.app'
-        ]
+        allowedOrigins: process.env.PROD_ALLOWED_ORIGINS ? process.env.PROD_ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) : []
       },
       logging: {
         level: 'error',

@@ -154,7 +154,7 @@ exports.verifyCaptcha = async (req, res) => {
 exports.getCaptchaId = async (req, res) => {
   try {
     
-    res.setTimeout(2000, () => {
+    res.setTimeout(5000, () => {
       if (!res.headersSent) {
         res.status(500).json({
           status: 'error',
@@ -183,7 +183,7 @@ exports.getCaptchaId = async (req, res) => {
         delete entry.plainText;
         captchaStore.set(captchaId, entry);
       }
-    }, 30 * 1000);
+    }, 5 * 1000);
 
     res.status(200).json({
       status: 'success',
