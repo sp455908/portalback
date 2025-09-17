@@ -106,7 +106,7 @@ exports.getAllPracticeTests = catchAsync(async (req, res, next) => {
       {
         model: User,
         as: 'creator',
-        attributes: ['id', 'name', 'email']
+        attributes: ['id', 'firstName', 'lastName', 'email']
       }
     ],
     limit: parseInt(limit),
@@ -139,7 +139,7 @@ exports.getPracticeTestById = catchAsync(async (req, res, next) => {
       {
         model: User,
         as: 'creator',
-        attributes: ['id', 'name', 'email']
+        attributes: ['id', 'firstName', 'lastName', 'email']
       }
     ]
   });
@@ -293,7 +293,7 @@ exports.getTestUsers = catchAsync(async (req, res, next) => {
       {
         model: User,
         as: 'user',
-        attributes: ['id', 'name', 'email']
+        attributes: ['id', 'firstName', 'lastName', 'email']
       }
     ],
     attributes: ['userId', 'score', 'passed', 'status', 'createdAt'],
