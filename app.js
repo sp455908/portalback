@@ -41,9 +41,10 @@ const app = express();
 app.set('trust proxy', 1);
 
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS ? 
-  process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) : 
-  [];
+const allowedOrigins = [
+  'https://iiftl-portal.vercel.app',
+  'http://localhost:8080'
+];
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -158,9 +159,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); 
 app.use(cookieParser()); 
 app.use(sanitizeRequest);
-
-// Serve static security files
-app.use(express.static('public'));
 
 // CSRF Protection - Generate token for all requests
 app.use(generateCSRFToken); 

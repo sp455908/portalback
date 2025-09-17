@@ -106,27 +106,25 @@ router.get('/me', protect, (req, res) => {
   });
 });
 
-// Test endpoint to verify cookie setting (development only)
-if (process.env.NODE_ENV === 'development') {
-  router.get('/test-cookies', (req, res) => {
-    res.cookie('test-cookie', 'test-value', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 60 * 1000 // 1 minute
-    });
-    
-    res.json({
-      status: 'success',
-      message: 'Test cookie set',
-      cookies: req.cookies,
-      headers: {
-        origin: req.headers.origin,
-        'user-agent': req.headers['user-agent']
-      }
-    });
+// Test endpoint to verify cookie setting
+router.get('/test-cookies', (req, res) => {
+  res.cookie('test-cookie', 'test-value', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 60 * 1000 // 1 minute
   });
-}
+  
+  res.json({
+    status: 'success',
+    message: 'Test cookie set',
+    cookies: req.cookies,
+    headers: {
+      origin: req.headers.origin,
+      'user-agent': req.headers['user-agent']
+    }
+  });
+});
 
 // CSP reporting endpoint
 router.post('/security/csp-report', (req, res) => {
