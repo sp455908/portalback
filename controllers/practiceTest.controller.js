@@ -55,13 +55,14 @@ const parseExcelQuestions = (buffer) => {
     // Expected headers: Question, Option A, Option B, Option C, Option D, Correct Answer, Explanation (optional)
     const expectedHeaders = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer'];
     
-    // Check if headers match expected format
+    // Check if headers match expected format (more flexible matching)
     const hasRequiredHeaders = expectedHeaders.every(header => 
       headers.some(h => h && h.toString().toLowerCase().includes(header.toLowerCase()))
     );
     
     if (!hasRequiredHeaders) {
-      throw new Error(`Excel file must contain columns: ${expectedHeaders.join(', ')}`);
+      const foundHeaders = headers.filter(h => h && h.toString().trim()).map(h => h.toString().trim());
+      throw new Error(`Excel file must contain columns: ${expectedHeaders.join(', ')}. Found: ${foundHeaders.join(', ')}`);
     }
     
     // Find column indices
@@ -82,22 +83,48 @@ const parseExcelQuestions = (buffer) => {
         continue;
       }
       
+      // Validate question and options are not empty
+      const questionText = row[questionIndex].toString().trim();
+      const optionA = row[optionAIndex].toString().trim();
+      const optionB = row[optionBIndex].toString().trim();
+      const optionC = row[optionCIndex].toString().trim();
+      const optionD = row[optionDIndex].toString().trim();
+      
+      if (!questionText || !optionA || !optionB || !optionC || !optionD) {
+        throw new Error(`Incomplete question data in row ${i + 1}. All fields (Question, Option A, Option B, Option C, Option D) must be filled.`);
+      }
+      
       const question = {
-        question: row[questionIndex].toString().trim(),
-        options: [
-          row[optionAIndex].toString().trim(),
-          row[optionBIndex].toString().trim(),
-          row[optionCIndex].toString().trim(),
-          row[optionDIndex].toString().trim()
-        ],
+        question: questionText,
+        options: [optionA, optionB, optionC, optionD],
         correctAnswer: parseInt(row[correctAnswerIndex]) - 1, // Convert to 0-based index
         explanation: explanationIndex >= 0 && row[explanationIndex] ? row[explanationIndex].toString().trim() : undefined
       };
       
-      // Validate correct answer
-      if (isNaN(question.correctAnswer) || question.correctAnswer < 0 || question.correctAnswer > 3) {
-        throw new Error(`Invalid correct answer in row ${i + 1}. Must be 1, 2, 3, or 4.`);
+      // Validate correct answer with better error handling and multiple formats
+      const rawCorrectAnswer = row[correctAnswerIndex];
+      if (rawCorrectAnswer === null || rawCorrectAnswer === undefined || rawCorrectAnswer === '') {
+        throw new Error(`Missing correct answer in row ${i + 1}. Please provide a value (1, 2, 3, 4, A, B, C, or D).`);
       }
+      
+      let correctAnswerNum;
+      const answerStr = rawCorrectAnswer.toString().trim().toUpperCase();
+      
+      // Handle different formats: A/B/C/D or 1/2/3/4
+      if (['A', 'B', 'C', 'D'].includes(answerStr)) {
+        correctAnswerNum = answerStr.charCodeAt(0) - 65 + 1; // A=1, B=2, C=3, D=4
+      } else {
+        correctAnswerNum = parseInt(answerStr);
+        if (isNaN(correctAnswerNum)) {
+          throw new Error(`Invalid correct answer in row ${i + 1}. Found "${rawCorrectAnswer}". Must be 1, 2, 3, 4, A, B, C, or D.`);
+        }
+      }
+      
+      if (correctAnswerNum < 1 || correctAnswerNum > 4) {
+        throw new Error(`Invalid correct answer in row ${i + 1}. Found "${rawCorrectAnswer}". Must be 1, 2, 3, 4, A, B, C, or D.`);
+      }
+      
+      question.correctAnswer = correctAnswerNum - 1; // Convert to 0-based index
       
       questions.push(question);
     }
