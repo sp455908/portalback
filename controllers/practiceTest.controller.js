@@ -192,8 +192,18 @@ exports.getAllPracticeTests = catchAsync(async (req, res, next) => {
     order: [['createdAt', 'DESC']]
   });
 
-  // Return data in the same format as course controller for consistency
-  res.json(practiceTests.rows);
+  res.json({
+    status: 'success',
+    data: {
+      practiceTests: practiceTests.rows,
+      pagination: {
+        total: practiceTests.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(practiceTests.count / limit)
+      }
+    }
+  });
 });
 
 exports.getPracticeTestById = catchAsync(async (req, res, next) => {
