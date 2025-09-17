@@ -766,7 +766,7 @@ exports.submitPracticeTest = catchAsync(async (req, res, next) => {
     include: [
       {
         model: PracticeTest,
-        as: 'practiceTest'
+        as: 'test'
       }
     ]
   });
@@ -846,12 +846,14 @@ exports.getUserTestAttempts = catchAsync(async (req, res, next) => {
 
   res.json({
     status: 'success',
-    data: attempts.rows,
-    pagination: {
-      total: attempts.count,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      pages: Math.ceil(attempts.count / limit)
+    data: {
+      testAttempts: attempts.rows,
+      pagination: {
+        total: attempts.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(attempts.count / limit)
+      }
     }
   });
 });
@@ -883,7 +885,7 @@ exports.downloadAttemptPDF = catchAsync(async (req, res, next) => {
     include: [
       {
         model: PracticeTest,
-        as: 'practiceTest'
+        as: 'test'
       }
     ]
   });
