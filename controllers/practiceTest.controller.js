@@ -1190,18 +1190,40 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
+    console.log(`Starting Excel processing for file size: ${(req.file.size / 1024 / 1024).toFixed(2)}MB`);
     
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    // Optimize XLSX reading for large files
+    const workbook = XLSX.read(req.file.buffer, { 
+      type: 'buffer',
+      cellDates: false,
+      cellNF: false,
+      cellText: false,
+      cellHTML: false,
+      cellStyles: false,
+      sheetStubs: false,
+      bookDeps: false,
+      bookProps: false,
+      bookSheets: false,
+      bookVBA: false,
+      password: '',
+      WTF: false
+    });
+    
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
+    // Process data in chunks for large files
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1,
+      defval: '',
+      blankrows: false,
+      raw: false
+    });
     
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-    
+    console.log(`Excel file contains ${jsonData.length} rows`);
     
     const questions = [];
     const headers = jsonData[0];
-    
     
     const requiredHeaders = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer'];
     const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
@@ -1213,54 +1235,71 @@ exports.importQuestionsFromExcel = async (req, res) => {
       });
     }
 
+    // Process rows in batches for better performance
+    const batchSize = 1000;
+    const totalRows = jsonData.length - 1; // Exclude header
+    let processedRows = 0;
     
-    for (let i = 1; i < jsonData.length; i++) {
-      const row = jsonData[i];
-      if (row.length < 6) continue; 
+    console.log(`Processing ${totalRows} rows in batches of ${batchSize}`);
+    
+    for (let start = 1; start < jsonData.length; start += batchSize) {
+      const end = Math.min(start + batchSize, jsonData.length);
+      const batch = jsonData.slice(start, end);
       
-      const question = row[headers.indexOf('Question')];
-      const optionA = row[headers.indexOf('Option A')];
-      const optionB = row[headers.indexOf('Option B')];
-      const optionC = row[headers.indexOf('Option C')];
-      const optionD = row[headers.indexOf('Option D')];
-      const correctAnswer = row[headers.indexOf('Correct Answer')];
-      
-      
-      if (!question || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
-        continue; 
+      for (let i = 0; i < batch.length; i++) {
+        const row = batch[i];
+        if (row.length < 6) continue; 
+        
+        const question = row[headers.indexOf('Question')];
+        const optionA = row[headers.indexOf('Option A')];
+        const optionB = row[headers.indexOf('Option B')];
+        const optionC = row[headers.indexOf('Option C')];
+        const optionD = row[headers.indexOf('Option D')];
+        const correctAnswer = row[headers.indexOf('Correct Answer')];
+        
+        if (!question || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
+          continue; 
+        }
+        
+        let correctAnswerIndex;
+        const answerStr = correctAnswer.toString().toLowerCase().trim();
+        
+        if (answerStr === 'a' || answerStr === '1') {
+          correctAnswerIndex = 0;
+        } else if (answerStr === 'b' || answerStr === '2') {
+          correctAnswerIndex = 1;
+        } else if (answerStr === 'c' || answerStr === '3') {
+          correctAnswerIndex = 2;
+        } else if (answerStr === 'd' || answerStr === '4') {
+          correctAnswerIndex = 3;
+        } else {
+          continue; 
+        }
+        
+        questions.push({
+          question: question.toString().trim(),
+          options: [
+            optionA.toString().trim(),
+            optionB.toString().trim(),
+            optionC.toString().trim(),
+            optionD.toString().trim()
+          ],
+          correctAnswer: correctAnswerIndex,
+          explanation: '',
+          category: category,
+          difficulty: 'medium',
+          marks: 1,
+          negativeMarks: 0
+        });
       }
       
+      processedRows += batch.length;
+      console.log(`Processed ${processedRows}/${totalRows} rows (${Math.round((processedRows/totalRows)*100)}%)`);
       
-      let correctAnswerIndex;
-      const answerStr = correctAnswer.toString().toLowerCase().trim();
-      
-      if (answerStr === 'a' || answerStr === '1') {
-        correctAnswerIndex = 0;
-      } else if (answerStr === 'b' || answerStr === '2') {
-        correctAnswerIndex = 1;
-      } else if (answerStr === 'c' || answerStr === '3') {
-        correctAnswerIndex = 2;
-      } else if (answerStr === 'd' || answerStr === '4') {
-        correctAnswerIndex = 3;
-      } else {
-        continue; 
+      // Allow event loop to process other requests
+      if (start % (batchSize * 5) === 0) {
+        await new Promise(resolve => setImmediate(resolve));
       }
-      
-      questions.push({
-        question: question.toString().trim(),
-        options: [
-          optionA.toString().trim(),
-          optionB.toString().trim(),
-          optionC.toString().trim(),
-          optionD.toString().trim()
-        ],
-        correctAnswer: correctAnswerIndex,
-        explanation: '',
-        category: category,
-        difficulty: 'medium',
-        marks: 1,
-        negativeMarks: 0
-      });
     }
 
     
@@ -1432,7 +1471,6 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
-    
     const practiceTest = await PracticeTest.findByPk(testId);
     if (!practiceTest) {
       return res.status(404).json({
@@ -1441,18 +1479,40 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
+    console.log(`Starting Excel update processing for file size: ${(req.file.size / 1024 / 1024).toFixed(2)}MB`);
     
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    // Optimize XLSX reading for large files
+    const workbook = XLSX.read(req.file.buffer, { 
+      type: 'buffer',
+      cellDates: false,
+      cellNF: false,
+      cellText: false,
+      cellHTML: false,
+      cellStyles: false,
+      sheetStubs: false,
+      bookDeps: false,
+      bookProps: false,
+      bookSheets: false,
+      bookVBA: false,
+      password: '',
+      WTF: false
+    });
+    
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
+    // Process data in chunks for large files
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1,
+      defval: '',
+      blankrows: false,
+      raw: false
+    });
     
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-    
+    console.log(`Excel file contains ${jsonData.length} rows`);
     
     const questions = [];
     const headers = jsonData[0];
-    
     
     const requiredHeaders = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer'];
     const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
@@ -1464,53 +1524,71 @@ exports.updateTestWithExcel = async (req, res) => {
       });
     }
 
+    // Process rows in batches for better performance
+    const batchSize = 1000;
+    const totalRows = jsonData.length - 1; // Exclude header
+    let processedRows = 0;
     
-    for (let i = 1; i < jsonData.length; i++) {
-      const row = jsonData[i];
-      if (row.length < 6) continue; 
+    console.log(`Processing ${totalRows} rows in batches of ${batchSize}`);
+    
+    for (let start = 1; start < jsonData.length; start += batchSize) {
+      const end = Math.min(start + batchSize, jsonData.length);
+      const batch = jsonData.slice(start, end);
       
-      const question = row[headers.indexOf('Question')];
-      const optionA = row[headers.indexOf('Option A')];
-      const optionB = row[headers.indexOf('Option B')];
-      const optionC = row[headers.indexOf('Option C')];
-      const optionD = row[headers.indexOf('Option D')];
-      const correctAnswer = row[headers.indexOf('Correct Answer')];
-      
-      
-      if (!question || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
-        continue; 
+      for (let i = 0; i < batch.length; i++) {
+        const row = batch[i];
+        if (row.length < 6) continue; 
+        
+        const question = row[headers.indexOf('Question')];
+        const optionA = row[headers.indexOf('Option A')];
+        const optionB = row[headers.indexOf('Option B')];
+        const optionC = row[headers.indexOf('Option C')];
+        const optionD = row[headers.indexOf('Option D')];
+        const correctAnswer = row[headers.indexOf('Correct Answer')];
+        
+        if (!question || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
+          continue; 
+        }
+        
+        let correctAnswerIndex;
+        const answerStr = correctAnswer.toString().toLowerCase().trim();
+        
+        if (answerStr === 'a' || answerStr === '1') {
+          correctAnswerIndex = 0;
+        } else if (answerStr === 'b' || answerStr === '2') {
+          correctAnswerIndex = 1;
+        } else if (answerStr === 'c' || answerStr === '3') {
+          correctAnswerIndex = 2;
+        } else if (answerStr === 'd' || answerStr === '4') {
+          correctAnswerIndex = 3;
+        } else {
+          continue; 
+        }
+        
+        questions.push({
+          question: question.toString().trim(),
+          options: [
+            optionA.toString().trim(),
+            optionB.toString().trim(),
+            optionC.toString().trim(),
+            optionD.toString().trim()
+          ],
+          correctAnswer: correctAnswerIndex,
+          explanation: '',
+          category: practiceTest.category,
+          difficulty: 'medium',
+          marks: 1,
+          negativeMarks: 0
+        });
       }
       
+      processedRows += batch.length;
+      console.log(`Processed ${processedRows}/${totalRows} rows (${Math.round((processedRows/totalRows)*100)}%)`);
       
-      let correctAnswerIndex;
-      const answerStr = correctAnswer.toString().toLowerCase().trim();
-      
-      if (answerStr === 'a' || answerStr === '1') {
-        correctAnswerIndex = 0;
-      } else if (answerStr === 'b' || answerStr === '2') {
-        correctAnswerIndex = 1;
-      } else if (answerStr === 'c' || answerStr === '3') {
-        correctAnswerIndex = 2;
-      } else if (answerStr === 'd' || answerStr === '4') {
-        correctAnswerIndex = 3;
-      } else {
-        continue; 
+      // Allow event loop to process other requests
+      if (start % (batchSize * 5) === 0) {
+        await new Promise(resolve => setImmediate(resolve));
       }
-      
-      questions.push({
-        question: question.toString().trim(),
-        options: [
-          optionA.toString().trim(),
-          optionB.toString().trim(),
-          optionC.toString().trim(),
-          optionD.toString().trim()
-        ],
-        correctAnswer: correctAnswerIndex,
-        explanation: '',
-        category: practiceTest.category,
-        difficulty: 'medium',
-        marks: 1
-      });
     }
 
     
